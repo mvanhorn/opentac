@@ -40,7 +40,10 @@ docs = ["mkdocs-material"]
 opentac = "opentac.cli:main"
 
 [dependency-groups]
-dev = ["pytest"]
+dev = [
+    "httpx==0.28.1",
+    "pytest",
+]
 
 [build-system]
 requires = ["hatchling"]

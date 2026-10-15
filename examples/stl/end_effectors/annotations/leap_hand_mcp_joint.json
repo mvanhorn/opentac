@@ -1,0 +1,104 @@
+{
+ "outline": [
+  [
+   -11.300000190734863,
+   -9.000000476837156
+  ],
+  [
+   11.300000190734867,
+   -9.00000047683716
+  ],
+  [
+   11.300000190734867,
+   9.00000047683716
+  ],
+  [
+   -11.30000019073486,
+   9.00000047683716
+  ],
+  [
+   -11.30000019073486,
+   6.499999523162844
+  ],
+  [
+   -9.99999904632568,
+   6.499999523162844
+  ],
+  [
+   -9.999999046325687,
+   3.299999952316284
+  ],
+  [
+   -11.300000190734867,
+   3.299999952316286
+  ]
+ ],
+ "stl_name": "leap_hand/mcp_joint.stl",
+ "selection_mode": "curved",
+ "curvature_tolerance_deg": 10,
+ "max_growth_radius_mm": null,
+ "auto_seam": true,
+ "click_order": [
+  {
+   "faceIndex": 28236,
+   "regionId": null,
+   "triangles": [
+    28236,
+    28235
+   ]
+  },
+  {
+   "faceIndex": 29276,
+   "regionId": null,
+   "triangles": [
+    29276,
+    29271,
+    29275,
+    29274,
+    29273,
+    29272
+   ]
+  },
+  {
+   "faceIndex": 31330,
+   "regionId": null,
+   "triangles": [
+    31330,
+    31331
+   ]
+  }
+ ],
+ "manual_seam_triangles": [],
+ "chain_overrides": {
+  "0": [
+   [
+    14761,
+    15235
+   ],
+   [
+    14446,
+    15179
+   ]
+  ],
+  "1": [
+   [
+    14448,
+    15922
+   ],
+   [
+    14763,
+    15927
+   ]
+  ]
+ },
+ "patch_points": null,
+ "patch_loop_vertices": null,
+ "patch_side_index": null,
+ "patch_smooth": null,
+ "fold_lines": [],
+ "unfold_size_mm": [
+  22.600000381469734,
+  18.00000095367432
+ ],
+ "captured_at": "2026-08-25T23:37:07.955Z"
+}

@@ -1,0 +1,981 @@
+:root {
+  --bg: #0f1418;
+  --panel: #1a2129;
+  --panel-2: #232d38;
+  --line: #33414f;
+  --text: #e6edf3;
+  --muted: #92a3b3;
+  --accent: #4f9dff;
+  --accent-2: #2d7d46;
+  --danger: #cc4444;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.topbar h1 { font-size: 18px; margin: 0; font-weight: 600; flex: none; }
+.tag {
+  font-size: 11px; background: var(--accent); color: #001; padding: 1px 6px;
+  border-radius: 4px; vertical-align: middle; margin-left: 4px;
+}
+
+.topnav { display: flex; gap: 4px; flex: 1; }
+button.linklike {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding: 5px 10px;
+  font-size: 12px;
+}
+button.linklike:hover:not(:disabled) { color: var(--text); border-color: var(--line); }
+
+.health { font-size: 12px; padding: 3px 10px; border-radius: 12px; }
+.health--unknown { background: #3a3a1a; color: #d8d38a; }
+.health--ok { background: #123; color: #6fd08a; }
+.health--down { background: #311; color: #e88; }
+
+.app-view[hidden] { display: none; }
+
+/* No align-items: start — the default `stretch` lets the controls panel run
+   the full height of the row, so its box ends level with the PCB preview's
+   bottom instead of stopping wherever its own content happens to end. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(420px, 33vw) 1fr;
+  gap: 14px;
+  padding: 14px;
+}
+
+/* ---- landing page ---- */
+.landing {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 28px 18px 40px;
+}
+.landing-hero { padding: 24px; text-align: center; }
+.landing-hero h2 { margin: 0 0 10px; font-size: 22px; }
+.landing-hero p { margin: 0 auto 16px; max-width: 640px; color: var(--muted); line-height: 1.5; }
+.landing-hero__actions { justify-content: center; }
+.landing-modes__label {
+  margin: 26px 0 12px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  text-align: center;
+}
+.landing-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.mode-card { padding: 18px; display: flex; flex-direction: column; }
+.mode-card h2 { font-size: 16px; margin: 0 0 8px; }
+.mode-card p { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 14px; flex: 1; }
+.mode-card__cta { align-self: flex-start; }
+
+/* ---- landing: mini glossary ---- */
+.landing-glossary { margin-top: 14px; padding: 14px 18px; font-size: 13px; }
+.landing-glossary strong { display: block; margin-bottom: 8px; }
+.landing-glossary dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 18px;
+  margin: 0;
+}
+.landing-glossary dt { color: var(--accent); font-weight: 600; }
+.landing-glossary dd { margin: 0 0 4px; color: var(--muted); line-height: 1.45; }
+
+/* ---- landing: example design gallery ---- */
+.landing-section-sub {
+  max-width: 720px;
+  margin: -4px auto 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.landing-examples {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.example-card { padding: 14px; display: flex; flex-direction: column; }
+.example-card__thumb {
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  padding: 8px;
+}
+.example-card__thumb svg { max-width: 100%; max-height: 100%; width: auto; height: 94px; }
+.example-card h2 { font-size: 15px; margin: 0 0 6px; }
+.example-card p { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 0 0 10px; flex: 1; }
+.example-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.example-card__foot button { flex: none; white-space: nowrap; }
+.example-card__facts { font-size: 11px; color: var(--muted); line-height: 1.35; }
+
+/* ---- landing: real robot end-effector gallery ---- */
+.stl-example-filter { display: flex; justify-content: center; margin-bottom: 14px; }
+.stl-example-filter label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--muted);
+}
+.stl-example-filter select {
+  font: inherit;
+  padding: 5px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+.landing-stl-examples {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.stl-example-card {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stl-example-card[hidden] { display: none; }
+.stl-example-card__thumb {
+  background: #0c1116;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stl-example-card__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.stl-example-card__body { flex: 1; }
+.stl-example-card h3 { font-size: 13px; margin: 0 0 2px; }
+.stl-example-card__part { font-size: 12.5px; color: var(--text); margin: 0 0 3px; }
+.stl-example-card__meta { font-size: 11px; color: var(--muted); margin: 0; line-height: 1.35; }
+.stl-example-card button { width: 100%; }
+
+/* ---- landing: local install + Claude Code guides ---- */
+.landing-guides {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.guide-card { padding: 18px; font-size: 13px; }
+.guide-card h2 { font-size: 16px; margin: 0 0 8px; }
+.guide-card p { color: var(--muted); line-height: 1.55; margin: 0 0 10px; }
+.guide-card ol { margin: 0 0 10px; padding-left: 20px; color: var(--text); }
+.guide-card li { margin-bottom: 8px; line-height: 1.5; }
+.guide-card a { color: var(--accent); }
+.guide-card code {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+.guide-card__note { font-size: 12px; }
+
+/* ---- in-tool mode switcher ---- */
+.mode-switcher {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.mode-switcher__label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+
+/* ---- sensorize-zone toolbar toggle ---- */
+.cad-target-toggle {
+  display: flex;
+  gap: 4px;
+  padding-right: 8px;
+  margin-right: 4px;
+  border-right: 1px solid var(--line);
+}
+
+/* ---- cable-edge confirmation banner ---- */
+.cable-edge-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid #6b5200;
+  border-radius: 4px;
+  background: #4a3b0d;
+  color: #ffe9a8;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.cable-edge-banner[hidden] { display: none; }
+.cable-edge-banner button {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #ffe9a8;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+/* ---- parameter panel grouping ---- */
+.params-subhead {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}
+.params-subhead:first-of-type { margin-top: 4px; }
+.help-link {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--accent);
+  text-decoration: none;
+  margin-left: 4px;
+}
+.help-link:hover { text-decoration: underline; }
+.params--emphasis .check-field { font-size: 13px; color: var(--text); font-weight: 600; }
+details.advanced { margin-top: 10px; }
+details.advanced summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--accent);
+  padding: 4px 0;
+  list-style: none;
+}
+details.advanced summary::-webkit-details-marker { display: none; }
+details.advanced summary::before { content: "▸ "; }
+details.advanced[open] summary::before { content: "▾ "; }
+details.advanced .params { margin-top: 8px; }
+
+/* ---- pixel footprint preview ---- */
+.pixel-preview {
+  margin-top: 8px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.pixel-preview svg { width: 100%; max-width: 220px; height: auto; }
+.pixel-preview .pixel-info {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+}
+
+/* ---- help page ---- */
+.help {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px 18px 40px;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.help-nav {
+  position: sticky;
+  top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  font-size: 13px;
+}
+.help-nav strong { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.help-nav a { color: var(--text); text-decoration: none; }
+.help-nav a:hover { color: var(--accent); }
+.help-content { display: flex; flex-direction: column; gap: 14px; }
+.help-section { padding: 18px; }
+.help-section h2 { margin-top: 0; font-size: 16px; }
+.help-section h3 { font-size: 13px; color: var(--accent); margin: 14px 0 4px; }
+.help-section p, .help-section li { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.help-section strong { color: var(--text); }
+.help-glossary dt { color: var(--text); font-weight: 600; font-size: 13px; margin-top: 10px; }
+.help-glossary dd { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 2px 0 0; }
+
+/* ---- interactive tour ---- */
+.tour-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(6, 9, 12, 0.6);
+}
+.tour-overlay.is-active { display: block; }
+.tour-spotlight {
+  position: fixed;
+  display: none;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 0 0 4000px rgba(6, 9, 12, 0.6);
+  pointer-events: none;
+  transition: left .18s ease, top .18s ease, width .18s ease, height .18s ease;
+}
+.tour-card {
+  position: fixed;
+  z-index: 1000;
+  width: min(320px, calc(100vw - 28px));
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.tour-card__step { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.tour-card h3 { margin: 6px 0 8px; font-size: 15px; }
+.tour-card p { margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.tour-card__actions { align-items: center; margin-top: 0; }
+.tour-card__spacer { flex: 1; }
+/* Purely a JS bookkeeping marker (which elements to un-highlight on step
+   change) — the visible highlight itself is the .tour-spotlight cutout, not
+   this class, so it deliberately carries no z-index. Elevating the target
+   element's z-index to "poke through" the dim overlay would put it in the
+   same root stacking context as .tour-overlay and let it cover the tour
+   card/buttons — a real bug caught via end-to-end testing. */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+/* Stretched by the grid to the row's full height (see .layout). The old
+   viewport-height cap is gone: it made the panel scroll inside itself and
+   end well above the preview column's bottom edge. overflow-y stays for the
+   case where this column is the taller one. */
+.controls { padding: 4px 14px 14px; overflow-y: auto; }
+
+.group { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.group:last-child { border-bottom: none; }
+.group h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+
+.hint { font-size: 12px; color: var(--muted); margin: 0 0 8px; line-height: 1.4; }
+.mini { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 1em; }
+
+#outline-canvas {
+  width: 100%;
+  max-width: 780px;
+  height: auto;
+  background: #0c1116;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: crosshair;
+  display: block;
+  touch-action: none;
+}
+#outline-canvas.space-pan { cursor: grab; }
+#outline-canvas.is-panning { cursor: grabbing; }
+.outline-editor {
+  width: min(100%, 820px);
+  margin: 0 auto;
+}
+.outline-editor .row {
+  justify-content: center;
+}
+.cad-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.cad-toolbar button {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.cad-fields {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(72px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cad-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.cad-fields input {
+  font: inherit;
+  padding: 5px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #0c1116;
+  color: var(--text);
+}
+.cad-fields .check-field {
+  justify-content: end;
+  flex-direction: row;
+  align-items: center;
+}
+.cad-fields .check-field input {
+  width: auto;
+}
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+button {
+  font: inherit;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--accent); color: #001; border-color: var(--accent); font-weight: 600; }
+button.secondary { background: transparent; }
+button.mode-button.active {
+  background: #214f78;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.params { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.params label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 3px; }
+.params input {
+  font: inherit; padding: 5px 7px; border-radius: 5px;
+  border: 1px solid var(--line); background: #0c1116; color: var(--text);
+}
+/* A value the backend solved and wrote back, not one the user types — see
+   showSolvedGridSize in app.js (rows/cols sensor grid mode). */
+.params input.is-derived {
+  background: #0a0d11; color: var(--muted); border-style: dashed; cursor: default;
+}
+.stl-curved-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.stl-connections { margin-top: 8px; display: grid; gap: 6px; }
+.stl-connections .chain-preview {
+  width: 100%;
+  height: auto;
+  background: #0c1116;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.stl-connections .chain-dims { font-size: 12px; color: var(--muted); }
+.stl-connections .chain-actions { display: flex; justify-content: flex-end; }
+.stl-connections .conn-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 8px;
+  background: #0c1116;
+}
+.stl-connections .conn-row.warn { border-color: #8a6a2c; }
+.stl-connections .conn-row.pending {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.stl-connections .conn-row.pending .conn-kind { color: var(--accent); }
+.stl-connections .conn-row .conn-kind { color: var(--text); }
+.stl-connections button { flex-shrink: 0; }
+.stl-curved-controls label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--muted);
+  gap: 3px;
+}
+.stl-curved-controls .check-field {
+  flex-direction: row;
+  align-items: center;
+}
+.stl-curved-controls input {
+  font: inherit;
+  padding: 5px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #0c1116;
+  color: var(--text);
+}
+.stl-curved-controls .check-field input {
+  width: auto;
+  padding: 0;
+}
+.stl-patch-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+.stl-patch-controls[hidden] { display: none; }
+.dev-example-row[hidden] { display: none; }
+.dev-example-row label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--muted);
+  gap: 3px;
+  flex: 1;
+}
+.dev-example-row select {
+  font: inherit;
+  padding: 5px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #0c1116;
+  color: var(--text);
+}
+.stl-patch-controls .hint { flex: 1 1 100%; margin: 0; }
+.stl-patch-controls .check-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.connector-upsize {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  flex-wrap: wrap;
+}
+.connector-upsize[hidden] { display: none; }
+.connector-upsize label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.connector-upsize .hint { margin: 0; font-size: 11px; }
+.connector-upsize select {
+  font: inherit; padding: 5px 7px; border-radius: 5px;
+  border: 1px solid var(--line); background: #0c1116; color: var(--text);
+}
+
+#stats { margin-top: 10px; font-size: 12px; }
+#stats table { width: 100%; border-collapse: collapse; }
+#stats td { padding: 2px 0; color: var(--muted); }
+#stats td:last-child { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.stats-details { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+.stats-details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.stats-details summary:hover { color: var(--text); }
+.stats-details table { margin-top: 6px; }
+/* The generated board no longer matches the outline on the canvas. */
+.pcb-preview--stale svg { opacity: 0.35; filter: grayscale(0.6); }
+.drc-details {
+  margin-top: 8px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+.drc-details strong { color: var(--text); font-weight: 600; }
+.drc-details ul { margin: 4px 0 0; padding-left: 16px; }
+.drc-details li { margin: 2px 0; line-height: 1.3; }
+
+/* Workflow order top to bottom: Board Outline, Generate, PCB Preview.
+   Flex rather than grid-template-rows, so the panel that should absorb spare
+   height says so itself (.view--grow) rather than it depending on sibling
+   position — panels here get added and reordered. */
+.views { display: flex; flex-direction: column; gap: 14px; min-height: calc(100vh - 90px); }
+.view { display: flex; flex-direction: column; padding: 12px 14px; min-height: 0; }
+/* min-height keeps the 420px floor the old minmax(420px, 1fr) track gave the
+   preview — .pcb-preview itself is min-height:0 so it would otherwise collapse.
+   MUST stay below .view: same specificity, so .view's own `min-height: 0` wins
+   on order if this rule comes first, and with flex-basis 0 the panel then
+   collapses to nothing instead of holding its floor. */
+.view--grow { flex: 1 1 0; min-height: clamp(420px, 58vh, 760px); }
+.view__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
+.view__head h2 { font-size: 14px; margin: 0; }
+.generate-panel {
+  padding: 12px 14px;
+}
+.generate-panel__body {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.generate-actions {
+  margin-top: 0;
+}
+/* The download step, as its own panel at the foot of the views column. flex:none
+   so it keeps its natural height and does not compete with .view--grow above. */
+.download-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  flex: 0 0 auto;
+}
+.download-bar__status { margin-top: 0; margin-right: auto; }
+
+/* Base name for every file this design produces. Sits at the left of the bar so
+   it reads as a property of the design rather than of one button. */
+.download-bar__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.download-bar__name .mini { margin: 0; white-space: nowrap; }
+.download-bar__hint {
+  margin: 0;
+  white-space: nowrap;
+  color: #a05a00;
+  cursor: help;
+}
+.download-bar__name input {
+  width: 22ch;
+  min-width: 0;
+  margin: 0;
+  padding: 5px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+/* ---- Optional shear-bump sheet (a second, 3D-printed part) ---- */
+.bump-panel { padding: 12px 14px; flex: 0 0 auto; }
+.bump-head { display: flex; align-items: center; gap: 6px; }
+.bump-panel .check-field {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font-size: 13px; color: var(--text); font-weight: 600;
+}
+.bump-panel .check-field input { width: auto; margin: 0; }
+.bump-body { margin-top: 10px; }
+.bump-fields {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px; margin-bottom: 10px;
+}
+.bump-fields label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 3px; }
+.bump-fields input {
+  font: inherit; padding: 5px 7px; border-radius: 5px;
+  border: 1px solid var(--line); background: #0c1116; color: var(--text);
+}
+.bump-advanced { margin: 0 0 10px; }
+.bump-advanced .bump-fields { margin: 8px 0 0; }
+.bump-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Fixed height rather than flex:1 — this panel sits in a scrolling column, so
+   an auto-sized canvas collapses to nothing. */
+.bump-container { height: clamp(280px, 42vh, 520px); margin-top: 10px; flex: none; }
+.bump-stats { margin-top: 10px; }
+.bump-stats dl.bump-stats, dl.bump-stats { display: grid; gap: 5px; margin: 0; }
+dl.bump-stats > div { display: grid; grid-template-columns: 130px 1fr; gap: 10px; }
+dl.bump-stats dt { color: var(--muted); }
+dl.bump-stats dd { margin: 0; color: var(--text); }
+.bump-warnings { margin: 8px 0 0; padding-left: 18px; color: #d8a33c; }
+.generate-panel #gen-status {
+  margin-top: 8px;
+}
+
+.route-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.route-tools button { padding: 5px 8px; font-size: 12px; }
+.pcb-view-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pcb-view-tools button {
+  min-width: 32px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.tool-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.tool-field input {
+  width: 58px;
+  font: inherit;
+  padding: 4px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #0c1116;
+  color: var(--text);
+}
+.tail-extension-panel {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #121922;
+}
+.tail-extension-panel__head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.tail-extension-panel__head strong { font-size: 13px; }
+.tail-extension-panel__head span { color: var(--muted); font-size: 12px; }
+.tail-extension-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(90px, 1fr));
+  gap: 8px;
+}
+.tail-extension-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.tail-extension-fields input {
+  font: inherit;
+  padding: 5px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #0c1116;
+  color: var(--text);
+}
+.tail-extension-preview {
+  fill: none;
+  stroke: #111;
+  stroke-width: 0.3;
+  stroke-dasharray: 1,0.5;
+  pointer-events: none;
+}
+.tail-connector-preview {
+  pointer-events: none;
+}
+.tail-connector-preview__body {
+  fill: rgba(255, 190, 64, 0.16);
+  stroke: #8a5a00;
+  stroke-width: 0.18;
+  stroke-dasharray: 0.8,0.35;
+}
+.tail-connector-preview__ear {
+  fill: rgba(255, 190, 64, 0.2);
+  stroke: #8a5a00;
+  stroke-width: 0.18;
+}
+.tail-connector-preview__label {
+  fill: #111;
+  font-size: 1.2px;
+  font-family: sans-serif;
+}
+
+.pcb-preview {
+  position: relative;
+  flex: 1; min-height: 0; overflow: auto; background: #fff; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; padding: 8px;
+}
+/* Fit the whole board to the panel, both axes. The generated SVG carries an
+   intrinsic width/height (800x770-ish) alongside its viewBox, so constraining
+   width alone let `height: auto` render it at full height inside a shorter
+   panel: it overflowed, got centre-cropped by the flex centering, and looked
+   zoomed in — with Reset View powerless, since the viewBox was never wrong.
+   Capping both axes with auto sizing keeps the aspect ratio and scales to
+   whichever constraint binds. Zoomed-in states still scroll via .pcb-preview's
+   own overflow. */
+.pcb-preview svg { max-width: 100%; max-height: 100%; width: auto; height: auto; }
+.tail-extension-prompt {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(360px, calc(100% - 24px));
+  padding: 8px 10px;
+  border: 1px solid #111;
+  border-radius: 4px;
+  background: #ffd84d;
+  color: #111;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+.tail-extension-prompt[hidden] {
+  display: none;
+}
+.tail-extension-prompt button {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #111;
+  border-radius: 50%;
+  background: #111;
+  color: #ffd84d;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 18px;
+}
+.route-editor-svg {
+  cursor: grab;
+  touch-action: none;
+}
+.route-editor-svg:active {
+  cursor: grabbing;
+}
+.route-editor-svg .editable-route {
+  cursor: grab;
+  pointer-events: stroke;
+  stroke-width: 0.24;
+}
+.route-editor-svg .editable-route:hover,
+.route-editor-svg .route-edit-selected {
+  filter: drop-shadow(0 0 0.12px #111);
+  stroke-width: 0.24;
+}
+.route-handle {
+  fill: #fff;
+  stroke: #111;
+  stroke-width: 0.08;
+  cursor: grab;
+}
+.route-handle--selected {
+  fill: #ffd45a;
+  stroke: #111;
+}
+
+.fold-line {
+  stroke: #ff9f43;
+  stroke-width: 1.5;
+  stroke-dasharray: 7 5;
+  fill: none;
+}
+
+.stl-container {
+  flex: 1; min-height: 240px; position: relative; border-radius: 6px; overflow: hidden;
+  background: #0c1116; border: 1px solid var(--line);
+}
+/* Sized in vh so it grows with the window instead of staying at a fixed 240px,
+   which was too small to pick faces in. Capped so it can't push the parameters
+   below it off-screen on a tall display, and floored for short ones. */
+.stl-container--sidebar {
+  height: clamp(320px, 58vh, 680px);
+  margin-top: 8px;
+  flex: none;
+}
+.stl-container canvas { display: block; width: 100% !important; height: 100% !important; }
+
+.placeholder { color: #667; font-size: 13px; text-align: center; margin: auto; padding: 20px; }
+.pcb-preview .placeholder { color: #889; }
+
+.error { color: var(--danger); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .views { min-height: auto; }
+  .generate-panel__body { grid-template-columns: 1fr; }
+  .cad-fields { grid-template-columns: 1fr 1fr; }
+  .landing-modes { grid-template-columns: 1fr; }
+  .landing-examples { grid-template-columns: 1fr; }
+  .landing-stl-examples { grid-template-columns: repeat(2, 1fr); }
+  .landing-guides { grid-template-columns: 1fr; }
+  .landing-glossary dl { grid-template-columns: 1fr; }
+  .help { grid-template-columns: 1fr; }
+  .help-nav { position: static; flex-direction: row; flex-wrap: wrap; }
+  .tour-card { width: min(280px, calc(100vw - 24px)); }
+  .topbar { flex-wrap: wrap; }
+  .topnav { order: 3; width: 100%; justify-content: center; }
+}
+
+/* ---- Describe mode: the plain-English chat panel (chat-panel.js) --------
+   Sized to sit in the controls sidebar next to Draw/DXF/STL, so the
+   conversation and the board stay visible at the same time. */
+.chat-log {
+  max-height: 340px;
+  overflow-y: auto;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chat-log:empty { display: none; }
+.chat-msg__who {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  margin-bottom: 2px;
+}
+.chat-msg__body { white-space: pre-wrap; font-size: 13px; line-height: 1.45; }
+.chat-msg--user .chat-msg__body { opacity: 0.85; font-style: italic; }
+.chat-msg--error .chat-msg__body { color: #c0392b; }
+.chat-tools { margin-top: 5px; font-size: 12px; }
+.chat-tools summary { cursor: pointer; opacity: 0.65; }
+.chat-tools pre {
+  overflow-x: auto;
+  font-size: 11px;
+  margin: 5px 0 0;
+  padding: 6px;
+  line-height: 1.35;
+}
+.chat-form { display: flex; gap: 6px; margin-bottom: 6px; }
+.chat-form input { flex: 1; min-width: 0; }
+.chat-status { flex: 1; }
+
+
+/* Two-piece case panel. Reuses the bump-panel styling; only the top-piece
+   chooser and the preview selector are new. */
+.case-top-choice {
+  border: 1px solid var(--line, #ddd);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem 0.65rem;
+  margin: 0 0 0.75rem;
+}
+.case-top-choice legend {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+  padding: 0 0.35rem;
+}
+.case-show-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.case-show-field select { margin-left: 0.15rem; }

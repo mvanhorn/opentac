@@ -1,0 +1,47 @@
+{
+ "outline": [
+  [
+   -9.52499837450936,
+   -7
+  ],
+  [
+   9.52499837450936,
+   -7
+  ],
+  [
+   9.52499837450936,
+   7
+  ],
+  [
+   -9.52499837450936,
+   7
+  ]
+ ],
+ "stl_name": "robotiq_2f85/inner_finger.stl",
+ "selection_mode": "single",
+ "curvature_tolerance_deg": 18,
+ "max_growth_radius_mm": null,
+ "auto_seam": true,
+ "click_order": [
+  {
+   "faceIndex": 1124,
+   "regionId": 411,
+   "triangles": [
+    1124,
+    1125
+   ]
+  }
+ ],
+ "manual_seam_triangles": [],
+ "chain_overrides": {},
+ "patch_points": null,
+ "patch_loop_vertices": null,
+ "patch_side_index": null,
+ "patch_smooth": null,
+ "fold_lines": [],
+ "unfold_size_mm": [
+  19.04999674901872,
+  14
+ ],
+ "captured_at": "2026-08-25T23:47:10.453Z"
+}

@@ -1,0 +1,47 @@
+{
+ "outline": [
+  [
+   -10,
+   -17.500000017133427
+  ],
+  [
+   10,
+   -17.500000017133427
+  ],
+  [
+   10,
+   17.500000017133427
+  ],
+  [
+   -10,
+   17.500000017133427
+  ]
+ ],
+ "stl_name": "robotiq_2f85/pad.stl",
+ "selection_mode": "single",
+ "curvature_tolerance_deg": 18,
+ "max_growth_radius_mm": null,
+ "auto_seam": true,
+ "click_order": [
+  {
+   "faceIndex": 2,
+   "regionId": 1,
+   "triangles": [
+    2,
+    3
+   ]
+  }
+ ],
+ "manual_seam_triangles": [],
+ "chain_overrides": {},
+ "patch_points": null,
+ "patch_loop_vertices": null,
+ "patch_side_index": null,
+ "patch_smooth": null,
+ "fold_lines": [],
+ "unfold_size_mm": [
+  20,
+  35.000000034266854
+ ],
+ "captured_at": "2026-08-25T23:47:19.827Z"
+}

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Cube unfolding smoke test</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "../vendor/three/three.module.js"
+    }
+  }
+  </script>
+  <style>
+    body { font: 16px system-ui; padding: 24px; background: #10151a; color: #e6edf3; }
+    .pass { color: #70db8c; }
+    .fail { color: #ff7070; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Cube unfolding smoke test</h1>
+  <div id="result">Running…</div>
+  <pre id="details"></pre>
+  <script type="module">
+    import * as THREE from "three";
+    import { buildSurfaceModel, unfoldSelectedRegions } from "../face-select.js";
+
+    const resultEl = document.getElementById("result");
+    const detailsEl = document.getElementById("details");
+
+    function area(points) {
+      let sum = 0;
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i], b = points[(i + 1) % points.length];
+        sum += a[0] * b[1] - b[0] * a[1];
+      }
+      return Math.abs(sum / 2);
+    }
+
+    try {
+      const indexed = new THREE.BoxGeometry(20, 20, 20);
+      const geometry = indexed.toNonIndexed();
+      indexed.dispose();
+      const model = buildSurfaceModel(geometry);
+      const selected = new Set(model.regions.map((region) => region.id));
+      const unfolded = unfoldSelectedRegions(model, selected, 0);
+      const unfoldedArea = area(unfolded.outline);
+      const expectedArea = 6 * 20 * 20;
+      const checks = {
+        planarFaces: model.regions.length === 6,
+        selectedFaces: unfolded.faceCount === 6,
+        spanningTreeFolds: unfolded.foldLines.length === 5,
+        areaPreserved: Math.abs(unfoldedArea - expectedArea) < 1e-5,
+        closedOutline: unfolded.outline.length >= 8,
+      };
+      const passed = Object.values(checks).every(Boolean);
+      resultEl.textContent = passed ? "PASS" : "FAIL";
+      resultEl.className = passed ? "pass" : "fail";
+      detailsEl.textContent = JSON.stringify({
+        checks,
+        planarFaceCount: model.regions.length,
+        foldLineCount: unfolded.foldLines.length,
+        outlineVertexCount: unfolded.outline.length,
+        unfoldedArea,
+        expectedArea,
+        dimensions: [unfolded.w, unfolded.h],
+        outline: unfolded.outline,
+      }, null, 2);
+      document.title = passed ? "PASS cube unfolding" : "FAIL cube unfolding";
+      geometry.dispose();
+    } catch (error) {
+      resultEl.textContent = "FAIL";
+      resultEl.className = "fail";
+      detailsEl.textContent = error.stack || error.message;
+      document.title = "FAIL cube unfolding";
+    }
+  </script>
+</body>
+</html>

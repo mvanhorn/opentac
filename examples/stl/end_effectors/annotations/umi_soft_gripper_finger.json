@@ -1,0 +1,47 @@
+{
+ "outline": [
+  [
+   -12.899999618530273,
+   -59.682334899902344
+  ],
+  [
+   12.899999618530273,
+   -59.682334899902344
+  ],
+  [
+   12.899999618530273,
+   59.682334899902344
+  ],
+  [
+   -12.899999618530273,
+   59.682334899902344
+  ]
+ ],
+ "stl_name": "umi/soft_gripper_finger.stl",
+ "selection_mode": "single",
+ "curvature_tolerance_deg": 18,
+ "max_growth_radius_mm": null,
+ "auto_seam": true,
+ "click_order": [
+  {
+   "faceIndex": 728,
+   "regionId": 65,
+   "triangles": [
+    728,
+    729
+   ]
+  }
+ ],
+ "manual_seam_triangles": [],
+ "chain_overrides": {},
+ "patch_points": null,
+ "patch_loop_vertices": null,
+ "patch_side_index": null,
+ "patch_smooth": null,
+ "fold_lines": [],
+ "unfold_size_mm": [
+  25.799999237060547,
+  119.36466979980469
+ ],
+ "captured_at": "2026-08-26T03:46:08.530Z"
+}

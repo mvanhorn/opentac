@@ -1,0 +1,57 @@
+{
+ "outline": [
+  [
+   -13.899999618530273,
+   -31.174452376911137
+  ],
+  [
+   -7.5,
+   -31.174452376911137
+  ],
+  [
+   -7.5,
+   -22.03514918601803
+  ],
+  [
+   13.899999618530273,
+   -22.03514918601803
+  ],
+  [
+   13.899999618530273,
+   31.17445237691114
+  ],
+  [
+   -13.899999618530273,
+   31.17445237691114
+  ]
+ ],
+ "stl_name": "schunk_sdh/finger_tip.stl",
+ "selection_mode": "single",
+ "curvature_tolerance_deg": 18,
+ "max_growth_radius_mm": null,
+ "auto_seam": true,
+ "click_order": [
+  {
+   "faceIndex": 13,
+   "regionId": 3,
+   "triangles": [
+    12,
+    13,
+    14,
+    15
+   ]
+  }
+ ],
+ "manual_seam_triangles": [],
+ "chain_overrides": {},
+ "patch_points": null,
+ "patch_loop_vertices": null,
+ "patch_side_index": null,
+ "patch_smooth": null,
+ "fold_lines": [],
+ "unfold_size_mm": [
+  27.799999237060547,
+  62.34890475382228
+ ],
+ "captured_at": "2026-08-25T23:47:35.286Z"
+}

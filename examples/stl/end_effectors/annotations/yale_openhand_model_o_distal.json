@@ -1,0 +1,97 @@
+{
+ "outline": [
+  [
+   -23.057701799752103,
+   -5.884683959788367
+  ],
+  [
+   -14.119543148005945,
+   -19.15530263098133
+  ],
+  [
+   23.057701799752103,
+   5.884683959788366
+  ],
+  [
+   14.119543148005945,
+   19.15530263098133
+  ]
+ ],
+ "stl_name": "yale_openhand/model_o_distal.stl",
+ "selection_mode": "curved",
+ "curvature_tolerance_deg": 30,
+ "max_growth_radius_mm": null,
+ "auto_seam": true,
+ "click_order": [
+  {
+   "faceIndex": 1001,
+   "regionId": 215,
+   "triangles": [
+    1000,
+    1001
+   ]
+  },
+  {
+   "faceIndex": 1001,
+   "regionId": null,
+   "triangles": [
+    1001,
+    1000,
+    1002,
+    999,
+    1003,
+    998,
+    1004,
+    997,
+    1005,
+    996,
+    1006,
+    995,
+    1007,
+    994,
+    1008,
+    993,
+    1009,
+    992,
+    1010,
+    991,
+    1011,
+    990,
+    1012,
+    989,
+    1013,
+    988,
+    1014,
+    987,
+    1015,
+    986,
+    1016,
+    985,
+    1017,
+    984,
+    1018,
+    983,
+    1019,
+    981,
+    982,
+    1020,
+    980,
+    1021,
+    1022,
+    1023
+   ]
+  }
+ ],
+ "manual_seam_triangles": [],
+ "chain_overrides": {},
+ "patch_points": null,
+ "patch_loop_vertices": null,
+ "patch_side_index": null,
+ "patch_smooth": null,
+ "fold_lines": [],
+ "unfold_size_mm": [
+  46.115403599504205,
+  38.31060526196266
+ ],
+ "captured_at": "2026-08-25T23:58:44.243Z"
+}

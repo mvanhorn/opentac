@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenTactileCAD — v2</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Resolve bare "three" imports (used by the vendored addons) to the local build -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>OpenTactileCAD <span class="tag">v2</span></h1>
+    <nav class="topnav" aria-label="Primary">
+      <button id="nav-home" type="button" class="linklike">Home</button>
+      <button id="nav-tool" type="button" class="linklike">Tool</button>
+      <button id="nav-help" type="button" class="linklike">Help</button>
+      <button id="nav-tour" type="button" class="linklike">Tutorial</button>
+    </nav>
+    <div id="health" class="health health--unknown">backend: checking…</div>
+  </header>
+
+  <!-- ================= Landing ================= -->
+  <section id="view-landing" class="app-view">
+    <div class="landing">
+      <div class="panel landing-hero">
+        <h2>Custom tactile sensors, wrapped around any real part</h2>
+        <p>
+          OpenTactileCAD designs custom piezoresistive tactile sensor arrays — for robot
+          grippers, prosthetic hands, wearables, or any surface that needs to feel
+          contact — and turns them into a fully routed, manufacturable PCB: sensor
+          pixels, wiring, connector, DRC-checked routing, and KiCad/Gerber files,
+          generated automatically from a shape you draw, import, or scan. No PCB
+          design experience required.
+        </p>
+        <div class="row landing-hero__actions">
+          <button id="landing-tour-btn" type="button" class="primary">Take the guided tour</button>
+          <button id="landing-help-btn" type="button" class="secondary">Browse the help reference</button>
+        </div>
+      </div>
+
+      <div class="panel landing-glossary">
+        <strong>New here? Four words cover almost everything:</strong>
+        <dl>
+          <dt>Taxel</dt>
+          <dd>one pressure-sensing spot — a "touch pixel". A sensor is a grid of them, like camera pixels for touch.</dd>
+          <dt>Pitch</dt>
+          <dd>the spacing between taxel centers. Smaller pitch = more taxels packed into the same shape.</dd>
+          <dt>Cable edge</dt>
+          <dd>the edge of your shape (shown orange) where a flat ribbon cable exits to plug into your electronics.</dd>
+          <dt>DRC</dt>
+          <dd>design-rule check — an automatic inspection that confirms no wires touch or run too close. 0 violations = manufacturable.</dd>
+        </dl>
+      </div>
+
+      <h3 class="landing-modes__label">Start from an example</h3>
+      <p class="landing-section-sub">
+        Each card is a real, finished design — including two unfolded from 3D models of
+        actual robot gripper parts. One click loads it fully generated: look at the wiring,
+        tweak any parameter (taxel size, spacing, cable edge), and download manufacturing
+        files. Everything stays editable, exactly like a design you drew yourself.
+      </p>
+      <div class="landing-examples" id="landing-examples"></div>
+
+      <h3 class="landing-modes__label">Or start from a real robot part</h3>
+      <p class="landing-section-sub">
+        Surfaces of actual robot hands, grippers, and feet — each one already unwrapped
+        flat at true scale, ready to become a sensor. The orange area on each model is the
+        surface the sensor covers. Pick one, choose where its cable should exit, and
+        generate.
+      </p>
+      <div class="stl-example-filter">
+        <label>Show
+          <select id="stl-example-filter"></select>
+        </label>
+      </div>
+      <div class="landing-stl-examples" id="landing-stl-examples"></div>
+
+      <h3 class="landing-modes__label">Choose how to start</h3>
+      <div class="landing-modes">
+        <article class="panel mode-card">
+          <h2>Draw a shape</h2>
+          <p>Sketch your board outline directly on screen — with the same precision as a real CAD tool, typing exact edge lengths and angles, not just dragging by eye.</p>
+          <button type="button" class="primary mode-card__cta" data-mode="draw">Start drawing</button>
+        </article>
+        <article class="panel mode-card">
+          <h2>Import a DXF</h2>
+          <p>Already have a shape from AutoCAD, Fusion 360, or similar? Upload a closed 2D outline (.dxf) and we'll turn it into your board.</p>
+          <button type="button" class="primary mode-card__cta" data-mode="dxf">Upload DXF</button>
+        </article>
+        <article class="panel mode-card">
+          <h2>Import an STL</h2>
+          <p>Have a 3D model of the actual part — a gripper jaw, a fingertip, a prosthetic socket? Upload it and unfold its surface at true scale, like unwrapping paper from the part, so your sensor fits exactly.</p>
+          <button type="button" class="primary mode-card__cta" data-mode="stl">Upload STL</button>
+        </article>
+        <article class="panel mode-card">
+          <h2>Continue a saved design</h2>
+          <p>Already downloaded a design from here? Open that ZIP again to pick up where you left off &mdash; the board comes back exactly as it was, hand-moved routes included, ready to edit and re-download.</p>
+          <button type="button" class="primary mode-card__cta" data-mode="open">Open a design</button>
+        </article>
+        <article class="panel mode-card">
+          <h2>Describe it in words</h2>
+          <p>Not sure where to start? Say what you want in plain English — the size, the shape, how fine the sensing needs to be — and an assistant designs it with the real generator, then hands it to you here to edit.</p>
+          <button type="button" class="primary mode-card__cta" data-mode="chat">Describe a sensor</button>
+        </article>
+      </div>
+
+      <h3 class="landing-modes__label">Two more ways to use OpenTactileCAD</h3>
+      <div class="landing-guides">
+        <article class="panel guide-card">
+          <h2>Run it on your own computer — much faster</h2>
+          <p>
+            This website runs on a free server that falls asleep when idle, so your first
+            Generate of the day can wait up to a minute for it to wake. The exact same app
+            runs locally with none of that — designs generate in a second or two, and your
+            shapes never leave your machine.
+          </p>
+          <ol>
+            <li>
+              Install <strong>Python 3.12 or newer</strong> from
+              <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>.
+              On Windows, tick <em>"Add python.exe to PATH"</em> in the installer.
+            </li>
+            <li>
+              Download the code: on
+              <a href="https://github.com/OpenTactileCAD/OpenTactileCAD" target="_blank" rel="noopener">the project's GitHub page</a>,
+              click the green <strong>Code</strong> button → <strong>Download ZIP</strong>, and unzip it
+              anywhere (or <code>git clone</code> it if you use git).
+            </li>
+            <li>
+              Open the unzipped folder and double-click
+              <strong><code>Start_OpenTactileCAD.bat</code></strong> (Windows) or
+              <strong><code>Start_OpenTactileCAD.command</code></strong> (Mac).
+              The first run installs what it needs into its own private folder — a few
+              minutes, one time only. After that it starts in seconds and opens this same
+              app in your browser.
+            </li>
+          </ol>
+          <p class="guide-card__note">
+            Mac: if double-clicking is blocked, open Terminal, type <code>bash&nbsp;</code>
+            (with a trailing space), drag <code>Start_OpenTactileCAD.command</code> onto the
+            window, and press Enter. On Linux, run that same command.
+          </p>
+        </article>
+        <article class="panel guide-card">
+          <h2>Or describe your sensor in plain English</h2>
+          <p>
+            The project includes a skill for
+            <a href="https://claude.com/claude-code" target="_blank" rel="noopener">Claude Code</a>
+            (Anthropic's AI coding agent). Instead of drawing anything, you describe the sensor —
+            <em>"a tactile sensor shaped like a size-9 shoe insole with the cable at the heel"</em> —
+            and it works out real dimensions, builds the outline, runs this same design pipeline on
+            your computer, and hands back the finished manufacturing files.
+          </p>
+          <ol>
+            <li>Do steps 1–2 on the left (install Python, download the code).</li>
+            <li>Install Claude Code from
+              <a href="https://claude.com/claude-code" target="_blank" rel="noopener">claude.com/claude-code</a>.</li>
+            <li>Open a terminal in the downloaded folder and run <code>claude</code>.</li>
+            <li>Describe the sensor you want, in your own words. Mention the shape, the size,
+              and where the cable should come out — it will ask about anything else it needs.</li>
+          </ol>
+          <p class="guide-card__note">
+            Good for shapes that are easier to describe than to draw — an insole, a glove
+            fingertip, a sensor matched to a part whose drawing or 3D model you already have
+            (it reads DXF and STL files too).
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Tool ================= -->
+  <section id="view-tool" class="app-view" hidden>
+    <main class="layout">
+      <!-- ================= Controls ================= -->
+      <aside class="panel controls">
+        <div class="mode-switcher" role="group" aria-label="Input mode">
+          <span class="mode-switcher__label">Mode:</span>
+          <button type="button" class="mode-button" data-mode="draw" id="mode-btn-draw">Draw</button>
+          <button type="button" class="mode-button" data-mode="dxf" id="mode-btn-dxf">DXF</button>
+          <button type="button" class="mode-button" data-mode="stl" id="mode-btn-stl">STL</button>
+          <button type="button" class="mode-button" data-mode="chat" id="mode-btn-chat">Describe</button>
+          <button type="button" class="mode-button" data-mode="open" id="mode-btn-open">Open</button>
+        </div>
+
+        <section class="group chat-sidebar-group" id="chat-sidebar-group" hidden>
+          <h2>1 · Describe your sensor</h2>
+          <p class="hint">
+            Say what you need in plain English — "a 40 × 40 mm square sensor with
+            2 mm taxel pitch, cable at the bottom". The assistant designs it with
+            the real generator and loads the result here, fully editable. Ask for
+            changes the same way: "make the pitch 1.5 mm", "move the connector to
+            the top".
+          </p>
+          <div id="chat-log" class="chat-log"></div>
+          <form id="chat-form" class="chat-form" autocomplete="off">
+            <input id="chat-input" type="text" placeholder="Describe a sensor…" />
+            <button id="chat-send" type="submit" class="primary">Send</button>
+          </form>
+          <div class="row">
+            <span id="chat-status" class="hint chat-status"></span>
+            <button id="chat-reset" type="button" class="secondary">New conversation</button>
+          </div>
+        </section>
+
+        <section class="group stl-sidebar-group" id="stl-sidebar-group">
+          <h2>1 · 3D Model (STL)</h2>
+          <p class="hint">
+            Upload an STL, select connected planar or curved surfaces, then unfold them into the board outline.
+          </p>
+          <div class="row dev-example-row" id="dev-example-row" hidden>
+            <label>Example STL (dev)
+              <select id="example-stl-select"><option value="">Choose an example…</option></select>
+            </label>
+          </div>
+          <div class="row">
+            <button id="upload-stl" type="button" class="primary">Upload STL</button>
+            <button id="select-single" type="button" class="mode-button active" disabled>Single face</button>
+            <button id="select-multiple" type="button" class="mode-button" disabled>Multiple faces</button>
+            <button id="select-curved" type="button" class="mode-button" disabled>Curved surface</button>
+            <button id="select-patch" type="button" class="mode-button" disabled
+              title="Draw your sensor's boundary directly on the 3D surface: click corner points, close the loop, and the enclosed patch is selected — bumps and texture inside are smoothed out.">Draw patch</button>
+            <button id="select-all-faces" type="button" class="secondary" disabled>Select all</button>
+            <button id="unfold-faces" type="button" class="primary" disabled>Unfold selection</button>
+            <button id="clear-face" type="button" class="secondary" disabled>Clear selection</button>
+            <button id="reset-view" type="button" class="secondary" disabled>Reset view</button>
+            <button id="capture-example" type="button" class="secondary" hidden
+              title="Dev (localhost only): save the current selection + unfold as an example-gallery annotation JSON">Save as example</button>
+            <input id="stl-input" type="file" accept=".stl,model/stl,application/sla" hidden />
+          </div>
+          <div class="stl-curved-controls">
+            <label>Normal angle <input id="curvature-tolerance" type="number" min="1" max="90" step="1" value="18" disabled /></label>
+            <label>Max growth radius <input id="curved-max-radius" type="number" min="0" step="1" placeholder="auto" disabled /></label>
+            <label class="check-field"><input id="auto-seam" type="checkbox" checked disabled /> Auto seam</label>
+            <button id="set-seam" type="button" class="secondary" disabled>Set seam</button>
+          </div>
+          <div class="stl-patch-controls" id="stl-patch-controls" hidden>
+            <span class="hint" id="patch-hint">Click points on the surface to outline your sensor; click the first point again to close the loop. Click the last point to undo it.</span>
+            <label class="check-field" title="Relax the surface inside your outline before flattening, so tread patterns, ribs, and other texture don't distort the sensor's shape — the outline you drew keeps its true dimensions.">
+              <input id="patch-smooth" type="checkbox" checked /> Smooth out texture
+            </label>
+            <button id="patch-flip" type="button" class="secondary" disabled
+              title="The loop cuts the model in two — swap which side is the sensor patch.">Flip side</button>
+          </div>
+          <div id="stl-container" class="stl-container stl-container--sidebar">
+            <p class="placeholder">Upload an <code>.stl</code> file to view it in 3D.</p>
+          </div>
+          <p class="hint">
+            Drag to orbit · scroll to zoom · select planar faces or smooth curved patches.
+          </p>
+          <div id="stl-info" class="mini"></div>
+          <div id="stl-connections" class="stl-connections" hidden></div>
+        </section>
+
+        <section class="group" id="dxf-import-group" hidden>
+          <h2>1 · Import DXF</h2>
+          <p class="hint">
+            Upload a closed 2D outline (<code>.dxf</code>). We'll automatically pick the largest closed shape in the file.
+          </p>
+          <div class="row">
+            <button id="upload-dxf" type="button" class="primary">Upload DXF</button>
+            <input id="dxf-input" type="file" accept=".dxf" hidden />
+          </div>
+          <div id="dxf-info" class="mini"></div>
+        </section>
+
+        <section class="group" id="design-import-group" hidden>
+          <h2>1 &middot; Open a saved design</h2>
+          <p class="hint">
+            Pick the <code>.zip</code> you downloaded before &mdash; no need to unzip it.
+            The board comes back exactly as you left it, including any routes you
+            moved by hand, and stays fully editable. A loose
+            <code>design.json</code> or <code>manifest.json</code> works too.
+          </p>
+          <div class="row">
+            <button id="open-design" type="button" class="primary">Open design file</button>
+            <input id="design-input" type="file" accept=".zip,.json,application/json,application/zip" hidden />
+          </div>
+          <div id="design-import-info" class="mini"></div>
+        </section>
+
+        <section class="group" id="params-group">
+          <h2 id="params-heading">2 · Parameters (mm)</h2>
+
+          <h3 class="params-subhead">Sensor grid</h3>
+          <div class="params params--emphasis">
+            <label class="check-field" title="Set the taxel size and pitch directly; how many fit is whatever the outline allows.">
+              <input type="radio" name="grid_mode" value="size" checked />
+              Set taxel size
+            </label>
+            <label class="check-field" title="Ask for a specific grid; the taxel size needed to fit it is calculated from your outline. Pitch equals the taxel size, so taxels tile edge to edge. Grow-board mode only.">
+              <input type="radio" name="grid_mode" value="count" />
+              Set rows &amp; columns
+            </label>
+          </div>
+          <div class="params" id="grid-count-fields" hidden>
+            <label>Columns <input id="target_cols" type="number" min="1" step="1" value="8" /></label>
+            <label>Rows <input id="target_rows" type="number" min="1" step="1" value="8" /></label>
+          </div>
+          <p class="hint" id="grid-count-hint" hidden>
+            Taxel size is solved from your outline, minus the edge keepout. Requires
+            <em>Grow board to fit wiring</em> board mode.
+          </p>
+          <div class="params" id="grid-size-fields">
+            <label title="Width of one taxel (sensing spot).">Taxel W <input id="pixel_w_mm" type="number" step="0.1" value="4.0" /></label>
+            <label title="Height of one taxel (sensing spot).">Taxel H <input id="pixel_h_mm" type="number" step="0.1" value="4.0" /></label>
+            <label title="Horizontal spacing between taxel centers. Never smaller than the taxel width.">Pitch X <input id="pitch_x_mm" type="number" step="0.1" value="4.2" /></label>
+            <label title="Vertical spacing between taxel centers. Never smaller than the taxel height.">Pitch Y <input id="pitch_y_mm" type="number" step="0.1" value="4.2" /></label>
+          </div>
+          <p class="hint" id="grid-size-note" hidden>
+            Solved from your outline on Generate — the footprint preview below updates to match.
+          </p>
+          <div class="params">
+            <label>Edge keepout <input id="edge_keepout_mm" type="number" step="0.1" value="0.5" /></label>
+          </div>
+
+          <!-- Anchor holes: not shipping yet. Hidden, not deleted; drop `hidden`
+               to bring the section back. The unchecked box sends anchor_holes=false. -->
+          <div id="anchor-holes-section" hidden>
+          <h3 class="params-subhead">Bump anchor holes</h3>
+          <p class="hint">
+            Cuts a hole clean through the board under every shear bump, so the bump
+            sheet's posts key the cover to the board across the whole array instead of
+            only at the skirt &mdash; the cover can no longer slide under strong shear.
+            The taxel pitch grows to make room; the wider pitch is worked out from the
+            column bus that runs past each hole, not typed in.
+          </p>
+          <label class="check-field" title="Adds Edge.Cuts cutouts at every 2x2 taxel block centre, directly under each bump.">
+            <input id="anchor_holes" type="checkbox" />
+            <span>Add anchor holes under bumps</span>
+          </label>
+          <div id="anchor-holes-body" hidden>
+            <div class="params">
+              <label title="Cutout diameter. Sets how much the pitch has to grow.">Hole &oslash; <input id="anchor_hole_dia_mm" type="number" step="0.1" min="0.2" value="1.5" /></label>
+              <label title="Copper-to-cutout-edge clearance. 0.4mm suits a milled internal cutout.">Clearance <input id="anchor_hole_clearance_mm" type="number" step="0.05" min="0" value="0.4" /></label>
+            </div>
+            <label class="radio-field" title="Widens every taxel gap, even though only one gap in two carries a cutout. Simplest, fewest taxels.">
+              <input type="radio" name="anchor_hole_lattice" value="uniform" checked />
+              <span>Uniform pitch &mdash; every gap widened</span>
+            </label>
+            <label class="radio-field" title="Widens only the intra-block gap that actually carries a cutout; blocks stay at the tight taxel spacing. Same holes, denser array.">
+              <input type="radio" name="anchor_hole_lattice" value="paired" />
+              <span>Paired pitch &mdash; only the gap with a hole in it</span>
+            </label>
+            <label class="check-field" title="Only X has to grow: the row bus already clears the cutout. Growing Y to match keeps the 2x2 block square and the bump round, so shear response stays the same in both axes. Uncheck for more taxels and an oval bump.">
+              <input id="anchor_hole_square_cells" type="checkbox" checked />
+              <span>Keep blocks square (round bump, isotropic shear)</span>
+            </label>
+          </div>
+          </div>
+
+          <h3 class="params-subhead">Routing &amp; clearance</h3>
+          <div class="params">
+            <label>Trace W <input id="trace_w_mm" type="number" step="0.05" value="0.2" /></label>
+            <label>Gap <input id="gap_mm" type="number" step="0.05" value="0.2" /></label>
+            <label>Clearance <input id="clearance_mm" type="number" step="0.05" value="0.2" /></label>
+            <label title="Minimum routing distance from the outer board edge. Higher values keep red/blue traces farther inside.">
+              Route edge padding
+              <input id="board_edge_clear_mm" type="number" min="0" step="0.1" value="0.2" />
+            </label>
+          </div>
+
+          <h3 class="params-subhead">Taxel footprint (one sensing spot's copper)</h3>
+          <div class="params">
+            <label title="Clearance from each taxel's own outer edge to its interdigitated fingers — not to be confused with Edge keepout above, which is the board-level margin from the outline.">
+              Taxel edge clearance
+              <input id="edge_clear_mm" type="number" min="0" step="0.05" value="0.1" />
+            </label>
+            <label title="Clearance from the taxel's center line, limiting how far each finger reaches toward the opposite pad.">
+              Taxel center clearance
+              <input id="center_clear_mm" type="number" min="0" step="0.05" value="0.2" />
+            </label>
+            <label title="Drill diameter of the via connecting this taxel's top-layer pad to its routed trace.">
+              Via drill
+              <input id="via_drill_mm" type="number" min="0.05" step="0.01" value="0.15" />
+            </label>
+            <label title="Copper pad diameter of the via.">
+              Via diameter
+              <input id="via_dia_mm" type="number" min="0.1" step="0.01" value="0.35" />
+            </label>
+          </div>
+          <div id="pixel-preview" class="pixel-preview" aria-label="Live preview of one sensor pixel's interdigitated footprint"></div>
+
+          <h3 class="params-subhead">Board sizing <a href="#" class="help-link" data-help-target="help-board-sizing" title="What do these do?">(?)</a></h3>
+          <div class="params params--emphasis">
+            <label class="check-field" title="Columns on the top copper, rows on the bottom copper. Every wire runs around the sensor field to the connector.">
+              <input type="radio" name="copper_layers" value="2" checked />
+              2 copper layers: wiring runs around the sensor field
+            </label>
+            <label class="check-field" title="Rows are wired on two inner copper layers instead: In1 carries each row to the connector, In2 the links across notches. Rows need no wiring band around the field, so a fixed outline keeps more taxels. Costs more to fabricate.">
+              <input type="radio" name="copper_layers" value="4" />
+              4 copper layers: rows wired underneath, on inner layers
+            </label>
+          </div>
+          <div class="params params--emphasis">
+            <label class="check-field" title="Keep the sensor grid at max density and grow the final board outline outward until every wire fits.">
+              <input type="radio" name="board_mode" value="expand" checked />
+              Grow board to fit wiring
+            </label>
+            <label class="check-field" title="Keep the outline exactly as drawn: reserve a wiring keep-out band inside it and drop the sensor pixels that reach into that band.">
+              <input type="radio" name="board_mode" value="fixed_keepout" />
+              Keep outline fixed, shrink sensor grid
+            </label>
+            <label class="check-field" title="New router: wires hug the sensor field instead of walking a grid. Rows/columns cut apart by a concavity stay one net where possible, bridged by a trace around the concavity. In fixed-outline mode the wiring keep-out band is sized exactly from the routing plan. Uncheck to compare against the original router.">
+              <input id="hug_router" type="checkbox" checked />
+              Hug routing (new): wires follow the sensor shape
+            </label>
+          </div>
+          <details class="advanced">
+            <summary>Advanced board-shape controls</summary>
+            <div class="params">
+              <label title="Extra board margin used for routing when Preserve sensors and Auto-expand board are enabled.">
+                Routing margin
+                <input id="routing_margin_mm" type="number" min="0" step="0.5" value="3.0" />
+              </label>
+              <label class="check-field" title="Make the final main-board outline follow the outer sensor layout and routed traces instead of a rectangular expansion.">
+                <input id="follow_main_padding" type="checkbox" checked />
+                Follow layout/routes
+              </label>
+              <label title="Distance from the outermost main layout or route to the final board edge. On 4 copper layers it is only added where wires run at the edge (mostly by the connector); elsewhere the board keeps the shape you drew. Tail dimensions remain separate.">
+                Follow padding
+                <input id="follow_main_padding_mm" type="number" min="0" step="0.1" value="2.0" />
+              </label>
+              <label class="check-field" title="Smooth the followed final board edge around route bundles instead of preserving sharp buffered corners.">
+                <input id="smooth_follow_padding" type="checkbox" checked />
+                Smooth follow edge
+              </label>
+            </div>
+          </details>
+        </section>
+
+        <section class="group">
+          <h2>Tail</h2>
+          <p class="hint">Controls the connector/cable tail attached to the orange cable edge.</p>
+          <p class="hint">Leave Tail width blank for the connector tip width default. Smaller manual widths are allowed.</p>
+          <div class="params">
+            <label>Tail length <input id="cable_length_mm" type="number" min="0.1" step="0.1" value="12.0" /></label>
+            <label title="Leave blank or use 0 for automatic connector width.">
+              Tail width
+              <input id="tail_width_mm" type="number" min="0" step="0.1" placeholder="auto" />
+            </label>
+            <label>Tail side padding <input id="tail_side_padding_mm" type="number" min="0" step="0.1" value="0.0" /></label>
+          </div>
+        </section>
+
+      </aside>
+
+      <!-- ================= Views =================
+           Ordered to follow the workflow top to bottom: draw the outline, press
+           Generate, then read the result. The PCB Preview panel is last because
+           it is the output of the two panels above it. -->
+      <section class="views">
+        <div class="panel view">
+          <div class="view__head">
+            <h2>1 · Board Outline</h2>
+          </div>
+          <p class="hint">
+            Use Line, Rectangle, or Arc to draw the outline, then select the edge
+            where the connector tail should exit and press <strong>Set cable edge</strong>
+            (required before Generate).
+          </p>
+          <div id="cable-edge-banner" class="cable-edge-banner" hidden>
+            <span>Choose where the connector tail exits: click an edge below and press <strong>Set cable edge</strong>. Generate stays blocked until the cable edge is set.</span>
+            <button id="cable-edge-banner-close" type="button" aria-label="Dismiss cable edge reminder">×</button>
+          </div>
+          <div class="outline-editor">
+            <div class="cad-toolbar" aria-label="Board outline tools">
+              <div class="cad-target-toggle" role="group" aria-label="Drawing target">
+                <button id="cad-target-outline" type="button" class="mode-button active">Board outline</button>
+                <button id="cad-target-fill" type="button" class="mode-button" disabled title="Draw a board outline first">Sensorize zone</button>
+              </div>
+              <button id="cad-select" type="button" class="mode-button active">Select</button>
+              <button id="cad-line" type="button" class="mode-button">Line</button>
+              <button id="cad-rect" type="button" class="mode-button">Rectangle</button>
+              <button id="cad-hline" type="button" class="mode-button">H</button>
+              <button id="cad-vline" type="button" class="mode-button">V</button>
+              <button id="cad-arc" type="button" class="mode-button">Arc</button>
+              <button id="cad-undo" type="button" class="secondary" disabled>Undo</button>
+              <button id="cad-redo" type="button" class="secondary" disabled>Redo</button>
+              <button id="cad-delete" type="button" class="secondary" disabled>Delete</button>
+              <button id="cad-set-angle-ref" type="button" class="secondary" disabled>Set angle ref</button>
+              <button id="cad-set-cable" type="button" class="secondary" disabled>Set cable edge</button>
+              <button id="cad-mirror-h" type="button" class="secondary" disabled
+                      title="Flip the design left-to-right, in place. Use it to turn a left-hand part into the matching right-hand one. The cable edge stays the same edge.">Mirror &#8646;</button>
+              <button id="cad-mirror-v" type="button" class="secondary" disabled
+                      title="Flip the design top-to-bottom, in place. The cable edge stays the same edge.">Mirror &#8645;</button>
+              <button id="cad-zoom-out" type="button" class="secondary" title="Zoom out">−</button>
+              <button id="cad-zoom-in" type="button" class="secondary" title="Zoom in">+</button>
+              <button id="cad-fit" type="button" class="secondary" title="Fit outline to view">Fit</button>
+            </div>
+            <p class="hint" id="fill-zone-hint" hidden>
+              Optional: this shape controls <em>where sensors get packed</em> inside your board — it won't change your board's outer edge or connector.
+            </p>
+            <div class="cad-fields">
+              <label>Length <input id="cad-length" type="number" step="0.1" placeholder="mm" /></label>
+              <label>Angle <input id="cad-angle-value" type="number" step="1" value="0" /></label>
+              <label>Width <input id="cad-width" type="number" step="0.1" placeholder="mm" /></label>
+              <label>Height <input id="cad-height" type="number" step="0.1" placeholder="mm" /></label>
+              <label>Grid <input id="cad-grid" type="number" min="0.1" step="0.1" value="1" /></label>
+              <label class="check-field"><input id="cad-snap" type="checkbox" checked /> Snap</label>
+            </div>
+            <canvas id="outline-canvas" width="640" height="420"></canvas>
+            <div class="row">
+              <button id="preset-square" type="button">Square 40×40</button>
+              <button id="preset-rect" type="button">Rect 50×30</button>
+              <button id="preset-L" type="button" title="L-shape — one concave corner">L</button>
+              <button id="preset-C" type="button" title="C-shape — a notch splits 10 of 14 columns">C</button>
+              <button id="preset-deepC" type="button" title="Deeper, wider C notch">Deep C</button>
+              <button id="preset-U" type="button" title="U — the notch opens onto the cable edge, cutting rows">U</button>
+              <button id="preset-T" type="button" title="T — narrow stem into a wide top">T</button>
+              <button id="preset-eight" type="button" title="Two lobes joined by a waist">Eight</button>
+              <button id="preset-foot" type="button" title="Foot/insole-like asymmetric outline">Foot</button>
+              <button id="clear-outline" type="button" class="secondary">Clear outline</button>
+            </div>
+            <div id="outline-info" class="mini">0 outline vertices</div>
+          </div>
+        </div>
+
+        <div class="panel generate-panel">
+          <div class="view__head">
+            <h2>3 · Generate</h2>
+          </div>
+          <div class="generate-panel__body">
+            <div class="row generate-actions">
+              <button id="generate" type="button" class="primary">Generate PCB</button>
+            </div>
+            <div id="gen-status" class="mini"></div>
+            <div id="connector-upsize" class="connector-upsize" hidden>
+              <label>
+                Need a bigger connector?
+                <span class="hint">e.g. to slot into a different, larger readout board</span>
+                <select id="connector-upsize-select"></select>
+              </label>
+              <label title="Rounds the Edge.Cuts step where the wider connector body meets the narrower cable/tail, instead of leaving a sharp 90° notch. 0 disables.">
+                Shoulder fillet (mm)
+                <input id="connector_shoulder_fillet_mm" type="number" min="0" step="0.1" value="1.0" />
+              </label>
+              <button id="connector-upsize-btn" type="button" class="secondary">Use this size</button>
+            </div>
+            <div id="stats"></div>
+          </div>
+        </div>
+
+        <div class="panel view view--grow" id="pcb-preview-panel">
+          <div class="view__head">
+            <h2>PCB Preview</h2>
+            <div id="pcb-view-tools" class="pcb-view-tools" hidden>
+              <button id="pcb-zoom-out" type="button" class="secondary" title="Zoom out">−</button>
+              <button id="pcb-zoom-in" type="button" class="secondary" title="Zoom in">+</button>
+              <button id="pcb-zoom-reset" type="button" class="secondary" title="Reset view">Reset</button>
+            </div>
+            <div id="route-tools" class="route-tools" hidden>
+              <button id="route-undo" type="button" class="secondary" disabled>Undo</button>
+              <button id="route-reset" type="button" class="secondary" disabled>Reset route</button>
+              <button id="route-reset-all" type="button" class="secondary" disabled>Reset all</button>
+              <button id="route-redo-padding" type="button" class="secondary" disabled>Redo padding</button>
+              <button id="tail-extension-toggle" type="button" class="secondary" disabled>Tail extension</button>
+              <label class="tool-field">Chamfer
+                <input id="route-chamfer-mm" type="number" min="0.1" step="0.1" value="0.5" />
+              </label>
+              <button id="route-chamfer" type="button" class="secondary" disabled>Apply</button>
+              <button id="route-check-drc" type="button" class="secondary" disabled>Check DRC</button>
+            </div>
+          </div>
+          <div id="pcb-preview" class="pcb-preview">
+            <div id="tail-extension-prompt" class="tail-extension-prompt" hidden>
+              <span>Optional: need the cable to be longer, or to bend around your part? Press <strong>Tail extension</strong> above to draw a custom tail path.</span>
+              <button id="tail-extension-prompt-close" type="button" aria-label="Close tail extension prompt">×</button>
+            </div>
+            <p class="placeholder">Draw an outline and press <em>Generate PCB</em>.</p>
+          </div>
+          <div id="tail-extension-panel" class="tail-extension-panel" hidden>
+            <div class="tail-extension-panel__head">
+              <strong>Tail Extension</strong>
+              <span>Draw dimensioned segments from the current pinout line.</span>
+            </div>
+            <div class="tail-extension-fields">
+              <label>Length <input id="tail-extension-length" type="number" min="0.1" step="0.1" value="20" /></label>
+              <label>Angle <input id="tail-extension-angle" type="number" step="1" value="-90" /></label>
+              <label>Width <input id="tail-extension-width" type="number" min="0.1" step="0.1" /></label>
+            </div>
+            <div class="row">
+              <button id="tail-extension-add" type="button" class="primary">Add segment</button>
+              <button id="tail-extension-dir-down" type="button" class="secondary" title="Down (-90°)">↓</button>
+              <button id="tail-extension-dir-up" type="button" class="secondary" title="Up (90°)">↑</button>
+              <button id="tail-extension-dir-right" type="button" class="secondary" title="Right (0°)">→</button>
+              <button id="tail-extension-dir-left" type="button" class="secondary" title="Left (180°)">←</button>
+              <button id="tail-extension-dir-down-right" type="button" class="secondary" title="Down-right (-45°)">↘</button>
+              <button id="tail-extension-dir-down-left" type="button" class="secondary" title="Down-left (-135°)">↙</button>
+              <button id="tail-extension-dir-up-right" type="button" class="secondary" title="Up-right (45°)">↗</button>
+              <button id="tail-extension-dir-up-left" type="button" class="secondary" title="Up-left (135°)">↖</button>
+              <button id="tail-extension-undo" type="button" class="secondary">Undo</button>
+              <button id="tail-extension-reset" type="button" class="secondary">Reset</button>
+              <button id="tail-extension-apply" type="button" class="primary">Apply</button>
+            </div>
+            <div id="tail-extension-info" class="mini"></div>
+          </div>
+          <div id="route-edit-status" class="mini"></div>
+        </div>
+
+        <!-- Last panel in the column, below the preview: you generate, inspect
+             the board above, and only then download it. -->
+        <!-- Shear bumps: an optional second, 3D-printed part. Off by default,
+             because most sensors only need normal force and the sheet is extra
+             work to print and fit. -->
+        <div class="panel bump-panel" id="bump-panel">
+          <div class="bump-head">
+            <label class="check-field" title="Adds a printable TPU overlay: one bump over each 2x2 group of sensors. Pressing sideways tilts the bump, so those four sensors read differently and you can tell which way the surface was pushed.">
+              <input id="bump-enable" type="checkbox" />
+              Add shear-sensing bumps (separate 3D-printed part)
+            </label>
+            <a href="#" class="help-link" data-help-target="help-bumps" title="What is this?">(?)</a>
+          </div>
+          <div class="bump-body" id="bump-body" hidden>
+            <p class="hint">
+              A soft sheet that snaps over the finished sensor. Each bump covers
+              a block of four sensors; slits between the bumps stop one bump
+              from dragging its neighbours. Blocks the board edge cuts short
+              still get a bump, so no sensor is left uncovered.
+            </p>
+            <div class="bump-fields">
+              <label title="How tall each bump stands above the sheet.">
+                Bump height
+                <input id="bump-height" type="number" min="0.4" max="10" step="0.2" value="2.0" />
+              </label>
+              <label title="Thickness of your finished PCB. The sheet has a pocket this deep so the sensor sits flush inside it.">
+                Sensor thickness
+                <input id="bump-recess" type="number" min="0.2" max="5" step="0.1" value="1.0" />
+              </label>
+              <label title="Thickness of the flexible sheet itself. Thinner is more compliant; under about 0.6mm gets hard to print.">
+                Sheet thickness
+                <input id="bump-sheet" type="number" min="0.4" max="3" step="0.1" value="0.8" />
+              </label>
+              <label title="Width of the solid rim around the sensor. This is the part you glue or clamp.">
+                Skirt width
+                <input id="bump-skirt" type="number" min="1" max="12" step="0.5" value="3.0" />
+              </label>
+            </div>
+            <details class="advanced bump-advanced">
+              <summary>Fine tuning</summary>
+              <div class="bump-fields">
+                <label title="Extra clearance cut around the board edge so the sensor slides into the pocket. Larger is easier to fit but lets the sensor shift; smaller grips by friction. 0.2mm suits a printer in good calibration.">
+                  Fit tolerance
+                  <input id="bump-tolerance" type="number" min="0" max="1.5" step="0.05" value="0.2" />
+                </label>
+                <label title="Width of the little bridges that hold neighbouring bumps together. Narrower lets each bump move more freely, so shear reads more cleanly — but too narrow and the tabs tear.">
+                  Tab width
+                  <input id="bump-tab-width" type="number" min="0.4" max="5" step="0.1" value="1.2" />
+                </label>
+                <label title="How many bridges span each cut between two bumps. More tabs make the sheet stiffer and more robust; fewer let each bump move more independently.">
+                  Tabs per edge
+                  <input id="bump-tabs" type="number" min="1" max="4" step="1" value="1" />
+                </label>
+                <label title="Bump base diameter as a percentage of the 2x2 block it covers. 100% means neighbouring bumps touch each other.">
+                  Bump width (% of block)
+                  <input id="bump-base-pct" type="number" min="30" max="100" step="5" value="80" />
+                </label>
+                <label title="Bump top diameter as a percentage of its base. Lower is a more pointed cone, which tips more readily; 100% is a straight-sided post.">
+                  Bump taper (top % of base)
+                  <input id="bump-top-pct" type="number" min="20" max="100" step="5" value="70" />
+                </label>
+              </div>
+            </details>
+            <div class="bump-actions">
+              <button id="bump-generate" type="button" class="primary" disabled>Generate bump sheet</button>
+              <button id="bump-download" type="button" class="secondary" disabled>Download STL</button>
+              <button id="bump-reset-view" type="button" class="secondary" disabled>Reset view</button>
+            </div>
+            <div id="bump-status" class="mini"></div>
+            <div id="bump-container" class="stl-container bump-container" hidden></div>
+            <div id="bump-stats" class="mini" hidden></div>
+          </div>
+        </div>
+
+
+        <!-- Two-piece printed case. The shear bumps are a version of the TOP
+             piece, not a separate part: flat lid or bumped lid. -->
+        <div class="panel bump-panel" id="case-panel">
+          <div class="bump-head">
+            <label class="check-field" title="A printed TPU case in two halves: a bottom with a pocket the sensor drops into, and a lid held on by a ribbed perimeter joint. No glue and no screws.">
+              <input id="case-enable" type="checkbox" />
+              Add a printed case (two 3D-printed parts)
+            </label>
+          </div>
+          <div class="bump-body" id="case-body" hidden>
+            <p class="hint">
+              The bottom piece has a shallow pocket for the flex and the Velostat.
+              The lid drops on and is held by a rib that runs round the perimeter,
+              broken at intervals — every gap in the rib is a bridge that keeps the
+              lid a single piece. Both halves stop at the cable edge, so the tail
+              leaves through the open side.
+            </p>
+
+            <fieldset class="case-top-choice">
+              <legend>Top piece</legend>
+              <label class="radio-field" title="A plain flat lid. Reads normal force only.">
+                <input type="radio" name="case-top" value="flat" checked />
+                <span>Flat</span>
+              </label>
+              <label class="radio-field" title="Shallow grooves along the boundaries between sensors, cut from the top so the underside stays flat. Full-thickness material stays over every sensor, so there is still something to push on it, but the lid bends much more easily between them — a press lands where you put it instead of spreading to the neighbours.">
+                <input type="radio" name="case-top" value="hatch" />
+                <span>Hatched — sharper spatial resolution</span>
+              </label>
+              <label class="radio-field" title="One bump over each 2x2 group of sensors. Pressing sideways tilts the bump, so those four sensors read differently and you can tell which way the surface was pushed.">
+                <input type="radio" name="case-top" value="bumps" />
+                <span>Shear-sensing bumps</span>
+              </label>
+            </fieldset>
+
+            <div id="case-hatch-fields" hidden>
+              <label class="check-field" title="Cut the boundaries all the way through, leaving small tabs to hold the lid together. This decouples neighbouring sensors far better than a groove, which only thins the boundary and still carries load across it. Uncheck for a groove: a sealed lid with nothing to tear, but much less isolation.">
+                <input id="case-hatch-through" type="checkbox" checked />
+                <span>Cut through (tabs hold it together)</span>
+              </label>
+              <div class="bump-fields">
+                <label title="How wide each cut is.">
+                  Cut width
+                  <input id="case-hatch-width" type="number" min="0.3" max="3" step="0.1" value="0.90" />
+                </label>
+                <label title="Width of the little bridges that keep the lid in one piece. Narrower isolates each sensor better; too narrow and they tear.">
+                  Tab width
+                  <input id="case-hatch-tab" type="number" min="0.4" max="4" step="0.1" value="1.20" />
+                </label>
+                <label title="Groove depth, used only when 'Cut through' is off. What is left underneath is the web.">
+                  Groove depth
+                  <input id="case-hatch-depth" type="number" min="0.1" max="2" step="0.1" value="0.40" />
+                </label>
+              </div>
+              <label class="check-field" title="A small raised bump on top of each sensor's tile. Against a finger or any curved object the bumps are what it touches, so the load concentrates into individual tiles instead of spreading across the plate. The underside stays flat.">
+                <input id="case-hatch-bumps" type="checkbox" />
+                <span>Small bump on each sensor</span>
+              </label>
+              <div class="bump-fields" id="case-hatch-bump-fields" hidden>
+                <label title="Bump diameter. Must fit inside the tile with clearance from the cut around it.">
+                  Bump &oslash;
+                  <input id="case-hatch-bump-dia" type="number" min="0.4" max="6" step="0.1" value="1.80" />
+                </label>
+                <label title="How far each bump stands above the lid. Small — this is a contact point, not a shear bump.">
+                  Bump height
+                  <input id="case-hatch-bump-height" type="number" min="0.2" max="4" step="0.1" value="0.60" />
+                </label>
+              </div>
+            </div>
+
+            <div class="bump-fields" id="case-bump-fields" hidden>
+              <label title="How tall each bump stands above the lid.">
+                Bump height
+                <input id="case-bump-height" type="number" min="0.4" max="10" step="0.2" value="2.0" />
+              </label>
+              <label title="Bump base diameter as a percentage of the 2x2 block it covers.">
+                Bump width (% of block)
+                <input id="case-bump-base" type="number" min="30" max="100" step="5" value="80" />
+              </label>
+              <label title="Bump top diameter as a percentage of its base. Lower is more pointed, which tips more readily.">
+                Bump taper (top % of base)
+                <input id="case-bump-top" type="number" min="20" max="100" step="5" value="70" />
+              </label>
+            </div>
+
+            <div class="bump-fields">
+              <label title="Depth of the pocket in the bottom piece: the flex (~0.1mm) plus the Velostat (~0.1mm), not the whole board. At a 0.2mm layer height this is one layer, so there is no finer setting to print — shim under the board instead.">
+                Pocket depth
+                <input id="case-recess" type="number" min="0.1" max="4" step="0.05" value="0.20" />
+              </label>
+              <label title="Thickness of the floor under the sensor.">
+                Floor thickness
+                <input id="case-plate" type="number" min="0.3" max="4" step="0.1" value="0.60" />
+              </label>
+              <label title="Thickness of the lid. The rib passes through a slot in this, so thicker is less likely to tear.">
+                Lid thickness
+                <input id="case-lid" type="number" min="0.4" max="4" step="0.1" value="0.80" />
+              </label>
+              <label title="Width of the rim around the sensor. The rib runs down the middle of it. With shear bumps the rim also has to fit the slit that decouples them, so do not go below about 4mm.">
+                Skirt width
+                <input id="case-skirt" type="number" min="1.5" max="12" step="0.5" value="4.0" />
+              </label>
+            </div>
+
+            <details class="advanced bump-advanced">
+              <summary>Rib pattern</summary>
+              <div class="bump-fields">
+                <label title="One rib segment plus one gap. Shorter means more segments — and more segment ends, which is where the lid tears from.">
+                  Period
+                  <input id="case-period" type="number" min="6" max="60" step="1" value="20" />
+                </label>
+                <label title="How much of each period is gap rather than rib. Every gap is a bridge holding the lid together; more gap means a stiffer lid and less grip.">
+                  Gap
+                  <input id="case-gap" type="number" min="2" max="40" step="0.5" value="10" />
+                </label>
+                <label title="Extra clearance cut around the board edge so it drops into the pocket.">
+                  Fit tolerance
+                  <input id="case-tolerance" type="number" min="0" max="1.5" step="0.05" value="0.20" />
+                </label>
+              </div>
+            </details>
+
+            <div class="bump-actions">
+              <button id="case-generate" type="button" class="primary" disabled>Generate case</button>
+              <label class="mini case-show-field">Preview
+                <select id="case-show" disabled>
+                  <option value="bottom">Bottom piece</option>
+                  <option value="top">Top piece</option>
+                </select>
+              </label>
+              <button id="case-dl-bottom" type="button" class="secondary" disabled>Download bottom</button>
+              <button id="case-dl-top" type="button" class="secondary" disabled>Download top</button>
+            </div>
+            <div id="case-status" class="mini"></div>
+            <div id="case-container" class="stl-container bump-container" hidden></div>
+            <div id="case-stats" class="mini" hidden></div>
+          </div>
+        </div>
+
+        <div class="panel download-bar">
+          <label class="download-bar__name" for="design-name">
+            <span class="mini">Name</span>
+            <input id="design-name" type="text" spellcheck="false"
+                   autocomplete="off"
+                   title="Base name for every file you download from this design, and the label printed on the front silkscreen just above the connector. Defaults to the file you started from, or the date and time if you drew it from scratch.">
+          </label>
+          <span id="design-name-hint" class="mini download-bar__hint" hidden
+                title="The silkscreen label is drawn into the Gerbers when the board is generated. The downloaded files will use the new name, but the printed board still carries the old one.">Regenerate to print this name</span>
+          <span id="pdf-status" class="mini download-bar__status"></span>
+          <button id="download-pdf" type="button" class="secondary" disabled
+                  title="A 1:1 printable outline. Print it at 100%, cut it out and hold it against the real part to check the fit before ordering boards.">Download printable PDF</button>
+          <button id="download-velostat-dxf" type="button" class="secondary" disabled
+                  title="The Velostat piece as a DXF in millimetres, for a laser cutter. Covers the sensor area only, not the tail.">Velostat DXF</button>
+          <button id="download-velostat-pdf" type="button" class="secondary" disabled
+                  title="The Velostat shape printed twice, mirrored across a fold line. Fold the paper with the Velostat inside and cut both together.">Velostat fold PDF</button>
+          <button id="download" type="button" class="primary" disabled>Download ZIP</button>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <!-- ================= Help ================= -->
+  <section id="view-help" class="app-view" hidden>
+    <div class="help">
+      <nav class="panel help-nav" aria-label="Help sections">
+        <strong>On this page</strong>
+        <a href="#" data-help-target="help-modes">Getting a board shape</a>
+        <a href="#" data-help-target="help-fill">Sensorize zone</a>
+        <a href="#" data-help-target="help-board-sizing">Parameters glossary</a>
+        <a href="#" data-help-target="help-routes">Route editing</a>
+        <a href="#" data-help-target="help-mirror">Mirroring a design</a>
+        <a href="#" data-help-target="help-export">Exporting</a>
+        <a href="#" data-help-target="help-bumps">Shear-sensing bumps</a>
+        <a href="#" data-help-target="help-faq">FAQ / troubleshooting</a>
+      </nav>
+      <div class="help-content">
+        <section id="help-modes" class="panel help-section">
+          <h2>Getting a board shape</h2>
+          <p>Every design starts the same way: get a closed 2D outline into the Board Outline canvas. There are three ways to do that — mix and match, or switch mid-project using the Mode switcher.</p>
+          <h3>Draw</h3>
+          <p>Use the Line, Rectangle, H/V, and Arc tools to sketch your outline directly. When you're done, <strong>select the edge where the connector tail should exit and click Set cable edge</strong> (it turns orange) — Generate is blocked until this is set, so a stray first stroke can never silently become the connector edge. This isn't just freehand: select a vertex or edge and type an exact <strong>Length</strong> and <strong>Angle</strong> in the fields above the canvas to dimension it precisely, like a real CAD program.</p>
+          <h3>DXF</h3>
+          <p>Upload a closed 2D outline exported from AutoCAD, Fusion 360, or similar CAD tools. We automatically pick the <strong>largest closed shape</strong> in the file (in case it contains extra reference geometry) and scale it to millimeters using the file's unit metadata. A DXF outline has no inherent cable edge — confirm or change it with <strong>Set cable edge</strong> after import.</p>
+          <h3>STL</h3>
+          <p>Upload a 3D model, then click a face (or several connected faces, or a smoothly curved patch) to select the surface your sensor will cover — or use <strong>Draw patch</strong> to click points directly on the surface and outline your sensor by hand, letting the app smooth away texture like tread patterns. <strong>Unfold selection</strong> flattens the result into a 2D outline using a true-scale unfolding algorithm — like unwrapping a physical piece of paper from the part. The result lands in the same Board Outline canvas, where you can still hand-edit it. Like a DXF import, an unfolded outline has no inherent cable edge — confirm or change it with <strong>Set cable edge</strong> once it loads.</p>
+          <p>If your selection spans surfaces that don't share a mesh edge (say, a fingertip's front face plus its two sides), the button changes to <strong>Join surfaces…</strong> and the viewer walks you through the join, one cut at a time: it shows numbered marker dots along each surface's boundary, and you click <strong>two matching corner pairs</strong> — "this corner attaches to that one" — for each cut. Only after every cut is resolved does the 2D preview appear, with <strong>Use this shape</strong> handing it to the outline canvas. Picking the corners yourself is deliberate: you can see the real part, so you know which corners truly touch.</p>
+        </section>
+
+        <section id="help-mirror" class="panel help-section">
+          <h2>Mirroring a design</h2>
+          <p>Grippers come in pairs. Once you have a sensor for the left jaw, <strong>Mirror &#8646;</strong> in the drawing toolbar flips it into the right-hand version &mdash; and <strong>Mirror &#8645;</strong> flips it top-to-bottom.</p>
+          <p>The flip happens <em>in place</em>: the shape keeps its exact size and position, so every dimension you typed stays what it was. It moves the whole design together &mdash; outline, sensorize zone and any fold lines &mdash; so they do not come apart.</p>
+          <p><strong>Your cable edge survives the flip.</strong> It stays the same physical edge of the shape, just on the other side, so you do not have to set it again. (Under the hood a mirror reverses which way a shape winds, which would otherwise move the connector to a different edge without any visible sign; the flip corrects for that.)</p>
+          <p>Mirror is undoable like any other edit, and mirroring twice returns you exactly where you started.</p>
+        </section>
+
+        <section id="help-fill" class="panel help-section">
+          <h2>Sensorize zone</h2>
+          <p>The sensorize zone is an optional second shape you can draw <em>inside</em> your board outline. It constrains <strong>where sensor pixels get packed</strong> — it does not change your board's outer edge, connector, or routing bounds.</p>
+          <p>Use it when only part of your board should be sensing area — for example, leaving a clear margin around a mounting hole, or concentrating sensors on a fingertip while leaving the rest of the outline as structural board.</p>
+          <p>To use it: draw a board outline first (the toggle unlocks once you have one), switch the toolbar target to <strong>Sensorize zone</strong>, and draw a smaller shape with the same tools. It renders as a dashed green overlay so it's never confused with the board outline.</p>
+        </section>
+
+        <section id="help-board-sizing" class="panel help-section">
+          <h2>Parameters glossary</h2>
+          <p>Most parameters are straightforward (pixel size, spacing, trace width). Two groups deserve more explanation: the pixel footprint (what each individual sensor looks like) and board sizing (four related but distinct mechanisms for making room for the wiring that connects every sensor pixel to the connector).</p>
+          <h3>Sensor grid: size or count</h3>
+          <p>The sensor grid can be specified from either end:</p>
+          <dl>
+            <dt>Set taxel size</dt>
+            <dd>You give Pixel W/H and Pitch X/Y; how many fit is whatever your outline allows. The original behaviour.</dd>
+            <dt>Set rows &amp; columns</dt>
+            <dd>You give the grid you want and the taxel size needed to fit it is calculated from your outline (its bounding box, minus the edge keepout, divided by the requested counts). Pitch is set equal to the taxel size, so taxels tile edge to edge with no gap. On a non-rectangular outline the taxel size is shrunk in small steps until the requested rows and columns really pack — corners that fall outside the shape are still dropped, so you may get slightly fewer taxels than rows × columns. Available in <em>Grow board to fit wiring</em> mode only: with the outline fixed, the packable area depends on the wiring keep-out band, whose width depends in turn on the row/column counts you are trying to set.</dd>
+          </dl>
+          <h3>Pixel footprint</h3>
+          <p>Each sensor "pixel" is a pair of interdigitated copper electrodes — two interleaved comb-like patterns. A piezoresistive material laminated over the top bridges the fingers, so its resistance drops measurably under pressure. The live preview in the Parameters panel shows exactly what one pixel's electrodes look like as you adjust these:</p>
+          <dl class="help-glossary">
+            <dt>Pixel edge clearance (<code>edge_clear_mm</code>)</dt>
+            <dd>Gap from the pixel's own outer boundary to its fingers. Not the same as <em>Edge keepout</em> above, which is a board-level margin from the outline — this one is local to a single pixel's footprint.</dd>
+            <dt>Pixel center clearance (<code>center_clear_mm</code>)</dt>
+            <dd>How far each finger reaches toward the opposite pad before stopping, controlling the gap down the pixel's center line.</dd>
+            <dt>Via drill / diameter (<code>via_drill_mm</code> / <code>via_dia_mm</code>)</dt>
+            <dd>The plated hole connecting a pixel's top-layer pad to its routed trace underneath.</dd>
+          </dl>
+          <h3>Board sizing</h3>
+          <dl class="help-glossary">
+            <dt>2 or 4 copper layers (<code>copper_layers</code>)</dt>
+            <dd>On 2 layers, columns run on the top copper and rows on the bottom, and every wire travels around the outside of the sensor field to the connector, so the board needs a wiring band around the field. On 4 layers the rows are wired on two inner layers instead: In1 carries each row straight through the field to the connector, in row order, and In2 joins the pieces of rows a notch cuts in two. Rows then need no band, so with a fixed outline more of it holds taxels. Either choice works with either board mode below. A 4-layer board costs more to fabricate, and needs the hug router.</dd>
+            <dt>Grow board to fit wiring (<code>board_mode: "expand"</code>)</dt>
+            <dd>The default. Sensors are packed at maximum density inside the shape you drew, then the final board outline is grown outward until every wire fits. No sensor is ever dropped — but the exported board is larger than the shape you drew.</dd>
+            <dt>Keep outline fixed, shrink sensor grid (<code>board_mode: "fixed_keepout"</code>)</dt>
+            <dd>The shape you drew is exactly the board you get. A wiring keep-out band is reserved just inside the outline — wider on the sides that carry more wires, narrow at the top where few pass — and only the area left over is filled with sensors, so pixels that would reach into the wiring zone are never placed. Because the keep-out is a clean geometric band, the surviving sensors stay a regular rectangular grid rather than a shape with holes punched in it. The band is sized from the actual wiring demand and the result is DRC-verified, falling back to a more conservative band if the dense one does not route cleanly. Trade-off: still fewer sensors than grow mode on the same outline.</dd>
+            <dt>Routing margin (<code>routing_margin_mm</code>)</dt>
+            <dd>The minimum wiring space (mm) reserved on each side before routing starts; the actual amount is sized automatically from how many sensors need wiring out on that side. In grow mode this space is added <em>outside</em> the outline; in fixed mode the same estimate is carved <em>inside</em> it.</dd>
+            <dt>Post-route safety net</dt>
+            <dd>Not a setting you control directly — after wires are actually routed, if any wire still pokes outside the board, the board is grown just enough to contain it. A safety net on top of Routing margin.</dd>
+            <dt>Follow layout/routes (<code>follow_main_padding</code>)</dt>
+            <dd>Instead of a boxy expanded rectangle, shrink-wraps the final board edge to hug the actual sensor grid and wire bundles — a more organic, compact final shape.</dd>
+            <dt>Follow padding (<code>follow_main_padding_mm</code>)</dt>
+            <dd>How much space (mm) to leave between the outermost wire/sensor and the shrink-wrapped edge. On 4 copper layers the rows leave on the inner layers, so wires run at the edge only near the connector (the column fan-out, and any row left on the back): the padding goes there, and everywhere else the board keeps the shape you drew.</dd>
+            <dt>Smooth follow edge (<code>smooth_follow_padding</code>)</dt>
+            <dd>Rounds that shrink-wrapped edge instead of leaving sharp mitered corners.</dd>
+            <dt>Tail extension</dt>
+            <dd>A separate, later step — after you Generate, the PCB Preview toolbar lets you draw a custom path for the cable/connector tail, growing the board along that path.</dd>
+          </dl>
+        </section>
+
+        <section id="help-routes" class="panel help-section">
+          <h2>Route editing</h2>
+          <p>After Generate, the PCB Preview toolbar lets you fine-tune the routed board:</p>
+          <ul>
+            <li><strong>Undo / Reset route / Reset all</strong> — step back or discard route edits.</li>
+            <li><strong>Redo padding</strong> — recompute the board's outer padding after edits, without re-running the full router.</li>
+            <li><strong>Tail extension</strong> — draw a custom path for the connector's cable/tail instead of a straight edge.</li>
+            <li><strong>Chamfer</strong> — cut sharp corners on routed traces to a given size.</li>
+            <li><strong>Check DRC</strong> — re-run the design-rule check (clearance/crossing/board-edge violations) on the current routes.</li>
+          </ul>
+        </section>
+
+        <section id="help-export" class="panel help-section">
+          <h2>Exporting</h2>
+          <p>The downloaded ZIP contains manufacturing files you can send to a PCB fab, or open in KiCad:</p>
+          <ul>
+            <li>A <code>.kicad_pcb</code> board file and pixel/connector footprints.</li>
+            <li>Gerber files (the industry-standard format PCB fabs use).</li>
+            <li>An Excellon drill file for vias.</li>
+            <li><code>manifest.json</code> &mdash; taxel placements and the scan matrix, for driving the sensor from a microcontroller. It also carries a <code>design</code> block with every setting the board was made from.</li>
+            <li><code>design.json</code> &mdash; the design itself, so you can reopen it here later.</li>
+          </ul>
+          <h3>Reopening a design</h3>
+          <p>Keep the ZIP and you can carry on where you left off: <strong>Open</strong> in the mode switcher (or <strong>Continue a saved design</strong> on the front page) takes the ZIP back &mdash; no need to unzip it &mdash; and puts the board and every setting back on screen, including routes you moved by hand.</p>
+          <p>If the app has been updated since you downloaded it, the exact board can no longer be guaranteed, so it is rebuilt from its saved settings instead and you are told so. That rebuild reproduces the same board; only hand edits to individual routes are lost.</p>
+          <p>The connector is auto-selected as the smallest 0.5mm-pitch FPC connector (20 up to 100 positions) that fits your sensor's row and column count. If you need a specific larger size — say, to slot into an existing readout board — a "Need a bigger connector?" control appears next to the stats after Generate, offering larger sizes up to 100-pos.</p>
+          <h3>The printable 1:1 PDF</h3>
+          <p>Both the ZIP (<code>printable_1to1.pdf</code>) and the <strong>Download printable PDF</strong> button next to it give you a full-size paper template of your board. Print it, cut it out, and hold it against the real part <em>before</em> you order boards &mdash; it takes a minute and catches a wrong dimension that would otherwise arrive as a batch of useless PCBs.</p>
+          <p>It draws the board's <strong>real manufactured edge</strong>, including the cable tail and connector &mdash; not the shape you drew, which is smaller. The sensor grid is printed faintly inside so you can see where the sensing spots land.</p>
+          <p><strong>Print it at 100%.</strong> Print dialogs default to "Fit to page" or "Shrink to printable area", which quietly resizes the sheet by a few percent and makes the template wrong. Every page carries a 100&nbsp;mm ruler: measure it with a real ruler after printing. If it is not exactly 100&nbsp;mm, reprint at <em>Actual size</em>. The sheet size used (A4 or A3) is printed at the top &mdash; pick that size in your print dialog.</p>
+          <p>Boards too big for one sheet are split across several, with a dashed overlap line on each: trim to the dashed line and butt the next sheet against it.</p>
+          <p>A bigger connector body can be wider than the cable/tail running into it, which puts a step in the board's cut outline. <strong>Shoulder fillet</strong>, next to that control, rounds that step — both the outward corners at the connector tip and the two inward notches where the tail meets the shoulder — instead of leaving sharp 90° corners that concentrate stress in a flex PCB. Set it to 0 for square corners.</p>
+        </section>
+
+        <section id="help-bumps" class="panel help-section">
+          <h2>Shear-sensing bumps</h2>
+          <p>A flat sensor tells you <em>how hard</em> something pressed, but not <em>which way</em> it slid. The bump sheet is an optional second part — a soft rubbery cover you 3D-print and snap over the finished board — that adds that missing direction.</p>
+          <p>It works by geometry. One bump sits over each group of four sensors. Press straight down and all four read about the same. Push sideways and the bump tips, so it presses harder on the two sensors it leans toward and lighter on the two it leans away from. That difference is the direction of the push.</p>
+          <h3>What you get</h3>
+          <ul>
+            <li>A pocket on the underside, sized to your PCB's thickness, so the sensor drops in and sits flush.</li>
+            <li>A solid rim (the <strong>skirt</strong>) around the outside — the part you glue or clamp down. It stops at the cable, so the connector stays reachable.</li>
+            <li>Narrow slits cut between neighbouring bumps, so pushing one bump doesn't drag the ones next to it. Small tabs hold everything together as one printable piece.</li>
+          </ul>
+          <h3>Settings</h3>
+          <dl class="help-glossary">
+            <dt>Bump height</dt>
+            <dd>How far each bump stands proud of the sheet. Taller tips more for the same sideways push, so it reads shear more strongly — but it also raises the whole surface and is easier to snag.</dd>
+            <dt>Sensor thickness</dt>
+            <dd>The thickness of your finished PCB. The pocket is cut this deep. Get it wrong and the sheet either rocks on the board or won't seat.</dd>
+            <dt>Sheet thickness</dt>
+            <dd>How thick the flexible part is. Thinner transmits force more faithfully; below about 0.6&nbsp;mm it gets difficult to print.</dd>
+            <dt>Skirt width</dt>
+            <dd>How wide the solid rim is. Wider is easier to glue and holds its shape better; narrower keeps the part compact.</dd>
+          </dl>
+          <p>Under <strong>Fine tuning</strong> are the settings you would only change after a test print:</p>
+          <dl class="help-glossary">
+            <dt>Fit tolerance</dt>
+            <dd>Extra clearance cut around the board edge so the sensor slides in. The default 0.2&nbsp;mm suits a well-calibrated printer. Increase it if the sheet won't seat; decrease it if you want the sensor gripped by friction rather than glue.</dd>
+            <dt>Tab width and Tabs per edge</dt>
+            <dd>Together these set how freely one bump moves without dragging its neighbours — the single most important setting for how cleanly shear reads. Narrower or fewer tabs mean more independent bumps and a more delicate part; wider or more tabs mean a tougher part that reads shear more mushily.</dd>
+            <dt>Bump width (% of block)</dt>
+            <dd>How much of its four-sensor block each bump covers. At 100% neighbouring bumps touch, which defeats the slits, so the app warns you.</dd>
+            <dt>Bump taper (top % of base)</dt>
+            <dd>How pointed each bump is. Lower is more cone-like and tips more readily for the same push; 100% is a straight-sided post. Above 100% the bump overhangs its own base and needs print support.</dd>
+          </dl>
+          <h3>Things to know</h3>
+          <ul>
+            <li><strong>Every sensor gets covered.</strong> Bumps are placed on a regular grid of four-sensor blocks. Where the board's edge cuts a block short — an odd row, a curved outline — that block still gets a full-size bump, so part of it hangs over empty space. That is intentional: the sensors that <em>are</em> there stay under the bump and keep reading direction. The panel tells you how many bumps overhang this way.</li>
+            <li><strong>Non-square sensors get oval bumps.</strong> A bump is sized from the block it covers, so a grid of wide sensors gets a bump that is wide to match.</li>
+            <li><strong>Print it in something soft.</strong> TPU (roughly 85–95A) is the usual choice. A rigid plastic will not tip, so it will not read shear.</li>
+            <li><strong>Rebuild it if you rebuild the board.</strong> The sheet is cut to fit one exact board outline. Changing anything and pressing Generate clears the old sheet on purpose.</li>
+          </ul>
+        </section>
+
+        <section id="help-faq" class="panel help-section">
+          <h2>FAQ / troubleshooting</h2>
+          <dl class="help-glossary">
+            <dt>"No pixels packed" / similar errors on Generate</dt>
+            <dd>Your outline is too small for the current pixel size, pitch, and edge keepout. Draw a larger outline or reduce those parameters.</dd>
+            <dt>"Sensor fill region does not overlap the board outline"</dt>
+            <dd>The sensorize zone you drew is fully outside the board outline — make sure it's drawn inside the outline shape.</dd>
+            <dt>"No closed outline found — check for gaps or open ends" (DXF import)</dt>
+            <dd>The DXF file doesn't contain one clean closed loop of geometry — check for gaps, unconnected segments, or stray extra shapes in the source file.</dd>
+            <dt>"backend: unreachable"</dt>
+            <dd>The backend server isn't responding. If this is a hosted deployment, it may be waking up from an idle sleep — wait a few seconds and reload.</dd>
+          </dl>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="design-name.js"></script>
+  <script type="module" src="views.js"></script>
+  <!-- Before app.js on purpose: it captures the #otc= payload synchronously,
+       ahead of the view router in views.js rewriting location.hash. -->
+  <script type="module" src="hash-import.js"></script>
+  <script type="module" src="app.js"></script>
+  <script type="module" src="stl-viewer.js"></script>
+  <script type="module" src="bump-sheet.js"></script>
+  <script type="module" src="case.js"></script>
+  <script type="module" src="dxf-import.js"></script>
+  <script type="module" src="design-import.js"></script>
+  <script type="module" src="landing.js"></script>
+  <script type="module" src="examples.js"></script>
+  <script type="module" src="tour.js"></script>
+  <script type="module" src="chat-panel.js"></script>
+</body>
+</html>
