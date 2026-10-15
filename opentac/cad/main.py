@@ -45,7 +45,8 @@ from opentac.cad.pipeline.route_hug import route_hug_all
 from opentac.cad.pipeline.route_4layer import INNER_LAYERS, copper_layers_of, is_feed, route_for, sync_pads_to_feeds
 from opentac.cad.pipeline.route_rows import make_row_entries_horizontal, route_rows_grid
 from opentac.cad.pipeline.tail_extension import apply_tail_extension, tail_extension_from_layout
-from opentac.cad.pipeline.follow_padding import apply_main_follow_padding, route_containment_mm
+from opentac.cad.pipeline.follow_padding import apply_main_follow_padding, cable_without_landing, route_containment_mm
+from opentac.cad.pipeline.narrow_tail import narrow_routed_tail
 from opentac.cad.pipeline.validate import validate_routes
 from opentac.cad.pipeline.smooth import chamfer_layer, los_simplify_layer, taxel_copper_keepout_mm
 from opentac.cad.pipeline.drc import TaxelCopper, drc_check
@@ -176,6 +177,13 @@ class GenerateRequest(BaseModel):
                     'Grow-board mode ("expand") only.')
     target_rows: int | None = Field(
         None, ge=1, description="Target sensor rows — see target_cols.")
+    narrow_tail: bool = Field(
+        True,
+        description="After routing, cut the cable tail down to the traces it carries, "
+                    "flaring back to the connector's width just before the connector. The "
+                    "taxels and traces are the same either way. False: as wide as the "
+                    "connector. A tail_width_mm or tail side padding wins over both, and a "
+                    "cable too short to flare back keeps the connector's width.")
     readout_board: str = Field(
         "auto",
         description='Which OpenTac readout board the sensor plugs into. "auto" uses the '
@@ -884,7 +892,12 @@ def _layout_from_edit_data(edit_data: dict) -> tuple[Layout, np.ndarray, Params,
         # 1um inflation before the union — edge-contact unions can leave a
         # phantom zero-width seam in the exterior ring; see the comment at
         # layout.py's base_board_poly construction for the observed failure.
-        board_poly = (unary_union([outline_poly, cable_poly.buffer(0.001, join_style=2)])
+        # A narrow tail whose connector moved to a drawn extension leaves its
+        # landing behind (follow_padding.cable_without_landing).
+        board_cable = cable_poly
+        if cable_poly and (layout_data.get("tail_extension") or {}).get("enabled"):
+            board_cable = cable_without_landing(cable_poly, outline_xy, tail_data)
+        board_poly = (unary_union([outline_poly, board_cable.buffer(0.001, join_style=2)])
                       if cable_poly else outline_poly)
         # ...and the shoulder fill that construction adds beside a tail wider
         # than the cable edge. Left out, every edited export of a fixed board
@@ -1049,7 +1062,8 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
             y_start, y_end = -overlap, CONNECTOR_BODY_BELOW_MM
         else:
             p1, p2 = outline_xy[0], outline_xy[1]
-            tail = tail_geometry(layout.outline_poly, p1, p2, layout.connector_pos, params)
+            tail = tail_geometry(layout.outline_poly, p1, p2, layout.connector_pos, params,
+                                 fit_width=(layout.tail or {}).get("fit_width_mm"))
             center, t_hat, n_out = tail["mid"], tail["t_hat"], tail["n_out"]
             y_start = max(0.0, tail["cable_length"] - overlap)
             y_end = tail["total_length"]
@@ -1727,6 +1741,7 @@ def generate(req: GenerateRequest):
             target_rows=req.target_rows,
             design_name=req.design_name,
             readout_board=req.readout_board,
+            narrow_tail=req.narrow_tail,
             copper_layers=req.copper_layers,
         )
         board_mode = _resolve_board_mode(req.board_mode, req.auto_expand_board)
@@ -2097,6 +2112,7 @@ def generate(req: GenerateRequest):
                 fractions=(1.0, 0.65, 0.4, 0.22, 0.12, 0.06, 0.025))
             row_routes = chamfer_layer(
                 row_routes, layout, removed, outline_xy, params, pixel_keepout_mm=row_sensor_gap)
+        narrow_routed_tail(layout, [*col_routes, *row_routes], params)
         _apply_post_route_containment(layout, col_routes, row_routes, params)
         _capture_pre_follow_outline(layout)
         apply_main_follow_padding(layout, [*col_routes, *row_routes], params)

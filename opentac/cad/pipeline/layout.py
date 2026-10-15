@@ -8,7 +8,7 @@ from shapely.ops import unary_union
 from .types import Layout, Params
 from .packing import pack_pixels_in_polygon
 from .geometry import (
-    make_polygon, make_cable_rect, tail_geometry, remove_collinear, remove_collinear_closed,
+    make_polygon, make_tail_poly, tail_geometry, remove_collinear, remove_collinear_closed,
     polygon_buffer, poly_bounds,
 )
 from . import keepout as keepout_mod
@@ -325,9 +325,13 @@ def layout_with_connector(
     # Cable geometry off outline edge 1->2
     p1 = outline_xy[0]
     p2 = outline_xy[1]
+    # Laid out and routed with the connector-width tail even when the board
+    # gets a narrow one: narrow_tail.narrow_routed_tail cuts it down after routing, so
+    # the taxels and wires never depend on it.
     tail = tail_geometry(outline_poly, p1, p2, conn_pos, params)
-    cable_poly = make_cable_rect(
-        p1, p2, tail["t_hat"], tail["n_out"], tail["tail_width"], tail["total_length"])
+    cable_poly = make_tail_poly(
+        tail["mid"], tail["t_hat"], tail["n_out"], tail["tail_width"], tail["connector_width"],
+        tail["cable_length"], tail["total_length"])
 
     # Union robustness: the cable rect's attachment edge lies exactly ON the
     # outline's cable edge, and unioning polygons that touch along a shared

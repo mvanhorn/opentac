@@ -3,7 +3,8 @@
 import math
 
 import numpy as np
-from shapely.geometry import Polygon, Point, MultiPolygon
+from shapely.geometry import LineString, Polygon, Point, MultiPolygon
+from shapely.ops import unary_union
 from shapely import union_all
 
 CONNECTOR_BODY_ABOVE_MM = 2.75
@@ -46,6 +47,26 @@ def round_convex_corners(poly: Polygon, radius: float, quad_segs: int = 16):
     if opened.is_empty or opened.area <= 0:
         return poly
     return opened
+
+
+def fillet_inside_corners(poly, radius: float, near=None):
+    """`poly` with its inside corners rounded to `radius`.
+
+    Adds whole fillet wedges from concave_fillet_infill, skipping the slivers a
+    buffer leaves along an already-curved edge (they are far smaller than the
+    r^2 (1 - pi/4) wedge of a square corner). With `near`, only wedges touching
+    it."""
+    infill = concave_fillet_infill(poly, radius)
+    areas = [g for g in getattr(infill, "geoms", [infill])
+             if g.geom_type == "Polygon" and g.area > 0.05 * radius * radius
+             and (near is None or g.distance(near) < 1e-6)]
+    if not areas:
+        return poly
+    # A wedge meets the edge it rounds tangentially, a hair off the line: the
+    # plain union can keep a zero-width spike along it, which KiCad reads as a
+    # self-intersecting outline. Closing by 10 nm merges it.
+    eps = 1e-5
+    return unary_union([poly, *areas]).buffer(eps, join_style=2).buffer(-eps, join_style=2)
 
 
 def concave_fillet_infill(poly, radius: float, zone=None, quad_segs: int = 16):
@@ -280,16 +301,134 @@ def connector_dimensions(conn_pos: int, pad_pitch_mm: float) -> dict:
     }
 
 
+def fit_tail_width(pad_to_net: dict, conn_pos: int, params, edge_mm: float) -> float | None:
+    """Narrowest tail that carries the connector pads in use.
+
+    The tail and the connector are centred on the same line, and the used pads are
+    packed against the connector's centre, rows on one side and columns on the
+    other, so the block can sit off-centre when rows and columns differ. The tail
+    is symmetric, so it is sized by the used pad furthest from the centre: its wire
+    runs straight into that pad, `edge_mm` from the cut edge. Never wider than the
+    connector's own tab tip; the tail widens back to that at the connector
+    (make_tail_poly).
+    """
+    pads = [int(p) for p in (pad_to_net or {})]
+    if not pads:
+        return None
+    centre = (conn_pos + 1) / 2.0
+    max_off = max(abs(p - centre) for p in pads) * params.pad_pitch_mm
+    return round(min(2.0 * (max_off + edge_mm),
+                     connector_required_tail_width(conn_pos, params.pad_pitch_mm)), 3)
+
+
+# The flare that widens a narrow tail back to the connector's tab: steepest
+# (45 degrees) at its middle, tangent to the cable and to the landing at its ends.
+TAIL_FLARE_MAX_SLOPE = 1.0
+TAIL_FLARE_STEPS = 16
+
+
+def tail_flare_profile(narrow_w: float, wide_w: float, room: float) -> list[tuple[float, float]]:
+    """(distance before the landing, half-width) samples of the flare, from the
+    narrow cable to the full-width landing.
+
+    A half cosine: it leaves the cable and meets the landing without a corner at
+    either end, so there is no sharp inside corner for the flex to tear at. Kept
+    within `room` (the straight cable it replaces), steeper when the cable is short.
+    """
+    dh = max(0.0, (wide_w - narrow_w) / 2.0)
+    length = max(0.1, min(math.pi / 2.0 * dh / TAIL_FLARE_MAX_SLOPE, room))
+    n = TAIL_FLARE_STEPS
+    return [(length * (1.0 - i / n), narrow_w / 2.0 + dh * (1.0 - math.cos(math.pi * i / n)) / 2.0)
+            for i in range(n + 1)]
+
+
+def make_tail_poly(mid, t_hat, n_out, tail_width: float, connector_width: float,
+                   cable_length: float, total_length: float) -> Polygon:
+    """The tail from the board edge to the connector's far end.
+
+    A tail as wide as the connector is a plain rectangle. A narrower one runs at
+    its own width for the cable, then flares (tail_flare_profile) to the
+    connector's tab width so the connector lands on a full-width tab, which the
+    connector footprint's own Edge.Cuts continue from (export
+    stitched_outline_segments). The landing starts at cable_length, ahead of the
+    footprint's open edge.
+    """
+    mid, t_hat, n_out = (np.asarray(v, dtype=float) for v in (mid, t_hat, n_out))
+    w, W = float(tail_width), float(connector_width)
+    if w >= W - 1e-6:
+        return make_cable_rect(mid, mid, t_hat, n_out, w, total_length)
+    prof = tail_flare_profile(w, W, room=max(0.5, cable_length - 1.0))
+    left = [mid - (w / 2) * t_hat]
+    left += [mid - h * t_hat + (cable_length - d) * n_out for d, h in prof]
+    left.append(mid - (W / 2) * t_hat + total_length * n_out)
+    right = [mid + (W / 2) * t_hat + total_length * n_out]
+    right += [mid + h * t_hat + (cable_length - d) * n_out for d, h in reversed(prof)]
+    right.append(mid + (w / 2) * t_hat)
+    return Polygon(left + right)
+
+
+def tail_without_landing(cable_poly, mid, t_hat, n_out, width: float, connector_width: float,
+                         cable_length: float, total_length: float) -> Polygon:
+    """A narrow tail once its connector has moved to the end of a drawn tail
+    extension: the flare and landing (make_tail_poly) belong to the connector,
+    so the plain strip runs on in their place to where the extension starts."""
+    if cable_poly is None or width >= connector_width - 1e-6:
+        return cable_poly
+    mid, t_hat, n_out = (np.asarray(v, dtype=float) for v in (mid, t_hat, n_out))
+    start = cable_length - tail_flare_profile(width, connector_width, max(0.5, cable_length - 1.0))[0][0]
+    big = 1e4
+    before = Polygon([mid - big * t_hat - big * n_out, mid + big * t_hat - big * n_out,
+                      mid + big * t_hat + start * n_out, mid - big * t_hat + start * n_out])
+    strip = make_cable_rect(mid, mid, t_hat, n_out, width, total_length)
+    return unary_union([cable_poly.intersection(before), strip]).buffer(0)
+
+
+def extension_tail_poly(path, width: float, clearance: float, connector_width) -> Polygon:
+    """A drawn tail extension's board: its corridor, ending in a connector landing
+    when the corridor is narrower than the connector (connector_landing_poly)."""
+    path = np.asarray(path, dtype=float)
+    corridor = LineString(path).buffer(width / 2 + clearance, cap_style=2, join_style=2)
+    narrow = width + 2 * clearance
+    W = float(connector_width or 0.0)
+    if len(path) < 2 or W <= narrow + 1e-6:
+        return corridor
+    d = path[-1] - path[-2]
+    seg = float(np.linalg.norm(d))
+    if seg < 1e-9:
+        return corridor
+    n_out = d / seg
+    t_hat = np.array([-n_out[1], n_out[0]])
+    landing = connector_landing_poly(path[-1], t_hat, n_out, narrow, W, room=seg - CONNECTOR_BODY_ABOVE_MM)
+    return unary_union([corridor, landing])
+
+
+def connector_landing_poly(pad_row_center, t_hat, n_out, narrow_w: float, connector_width: float,
+                           room: float) -> Polygon:
+    """The flare and full-width landing alone, for a connector at the end of a
+    drawn tail extension whose corridor is narrower than the connector: the same
+    shape make_tail_poly ends in, placed around the moved pad row."""
+    c, t_hat, n_out = (np.asarray(v, dtype=float) for v in (pad_row_center, t_hat, n_out))
+    prof = tail_flare_profile(narrow_w, connector_width, room=max(0.5, room))
+    W = float(connector_width)
+    land = -CONNECTOR_BODY_ABOVE_MM
+    left = [c - h * t_hat + (land - d) * n_out for d, h in prof]
+    left.append(c - (W / 2) * t_hat + CONNECTOR_BODY_BELOW_MM * n_out)
+    right = [c + (W / 2) * t_hat + CONNECTOR_BODY_BELOW_MM * n_out]
+    right += [c + h * t_hat + (land - d) * n_out for d, h in reversed(prof)]
+    return Polygon(left + right)
+
+
 def resolve_tail_width(p1, p2, conn_pos: int, params) -> float:
     """Resolve manual/automatic tail width."""
     return resolve_tail(params, p1, p2, conn_pos)["width_mm"]
 
 
-def resolve_tail(params, p1, p2, conn_pos: int) -> dict:
+def resolve_tail(params, p1, p2, conn_pos: int, fit_width: float | None = None) -> dict:
     """Resolve tail dimensions.
 
-    The connector table value is the automatic/default tip width. Manual user
-    widths are respected, including values smaller than the connector tip.
+    Automatic width: `fit_width` (the narrow tail that just carries the traces,
+    see fit_tail_width) when given, else the connector's tab tip width. Manual
+    user widths are respected, including values smaller than the connector tip.
     """
     required = connector_required_tail_width(conn_pos, params.pad_pitch_mm)
     dimensions = connector_dimensions(conn_pos, params.pad_pitch_mm)
@@ -308,6 +447,9 @@ def resolve_tail(params, p1, p2, conn_pos: int) -> dict:
     elif side_padding > 0:
         mode = "side_padding"
         width = available
+    elif fit_width is not None:
+        mode = "fit"
+        width = fit_width
     else:
         width = required
 
@@ -322,10 +464,13 @@ def resolve_tail(params, p1, p2, conn_pos: int) -> dict:
         "available_width_mm": available,
         "clamp_reason": clamp_reason,
         "length_mm": params.cable_length_mm,
+        # Frozen with the layout, so every exporter draws the same tail.
+        "fit_width_mm": fit_width,
     }
 
 
-def tail_geometry(outline_poly: Polygon, p1, p2, conn_pos: int, params) -> dict:
+def tail_geometry(outline_poly: Polygon, p1, p2, conn_pos: int, params,
+                  fit_width: float | None = None) -> dict:
     """Compute shared connector-tail geometry.
 
     The tail stays centered on the first outline edge. Edge cuts use
@@ -335,7 +480,7 @@ def tail_geometry(outline_poly: Polygon, p1, p2, conn_pos: int, params) -> dict:
     t_hat, n_out = edge_tangent_and_outward_normal(outline_poly, p1, p2)
     mid = 0.5 * (p1 + p2)
 
-    resolved = resolve_tail(params, p1, p2, conn_pos)
+    resolved = resolve_tail(params, p1, p2, conn_pos, fit_width)
     tail_width = resolved["width_mm"]
     connector_width = resolved["connector_min_width_mm"]
     cable_length = params.cable_length_mm

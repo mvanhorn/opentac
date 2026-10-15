@@ -273,12 +273,21 @@ def test_default_cable_is_long_enough_on_typical_boards():
 
 
 def test_short_cable_is_reported():
-    result = _case_with_cable([[0, 0], [65, 0], [65, 65], [0, 65]], 4.0)
+    result = _case_with_cable([[0, 0], [65, 0], [65, 65], [0, 65]], 2.0)
     warn = _cable_warning(result)
     assert warn, result.warnings
     assert "PAST the end of the board" in warn[0]
     assert result.stats["tail_free_mm"] < 0
     assert result.stats["tail_short_by_mm"] > 0
+
+
+def test_case_over_the_connector_is_reported():
+    """Board end clear of the case, but the case still sits on the connector body."""
+    result = _case_with_cable([[0, 0], [65, 0], [65, 65], [0, 65]], 4.0)
+    warn = _cable_warning(result)
+    assert warn, result.warnings
+    assert result.stats["tail_flex_mm"] <= 0
+    assert "connector cannot plug in" in warn[0]
 
 
 def test_the_shortfall_we_report_actually_fixes_it():

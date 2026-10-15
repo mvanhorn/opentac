@@ -457,6 +457,11 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
                 f"The case extends {-tail_free:.1f}mm PAST the end of the board — the connector "
                 f"would be sealed inside it. Lengthen the cable by at least {tail_short:.1f}mm, "
                 f"or draw a tail extension at least {tail_short:.1f}mm long.")
+        elif tail_flex <= 0:
+            warnings.append(
+                f"The case covers {min(conn_body, -tail_flex):.1f}mm of the {conn_body:.0f}mm "
+                f"connector body, so the connector cannot plug in. Lengthen the cable by at "
+                f"least {tail_short:.1f}mm, or draw a tail extension at least {tail_short:.1f}mm long.")
         else:
             warnings.append(
                 f"Only {tail_flex:.1f}mm of flexible cable clears the case before the "

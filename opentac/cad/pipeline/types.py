@@ -67,6 +67,10 @@ class Params:
     # grid fits 15x15, else 60-pin), "30pin", "60pin", or "any" connector size.
     # connector_pos_override, when set, wins over this.
     readout_board: str = "auto"
+    # Cable tail only as wide as the traces it carries (widening to the connector
+    # with a fillet at the end), instead of as wide as the connector. A manual
+    # tail_width_mm wins.
+    narrow_tail: bool = True
 
 
 # Params keys that saved designs (edit_data, design.json) may still carry from

@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import zipfile
+from unittest import mock
 
 
 from shapely.geometry import LineString, Point, Polygon
@@ -41,9 +42,13 @@ def _client():
 
 
 def _generate(name, **extra):
+    """Exported through the Python Gerber writer, the path every hosted export
+    takes: with kicad-cli installed the export plots through KiCad instead,
+    which draws an empty silk layer and its own glyphs."""
     client, main_mod = _client()
     body = {"outline": SQUARE, "design_name": name, **extra}
-    resp = client.post("/generate", json=body)
+    with mock.patch.object(main_mod.shutil, "which", lambda name: None):
+        resp = client.post("/generate", json=body)
     assert resp.status_code == 200, resp.text
     data = resp.json()
     zf = zipfile.ZipFile(io.BytesIO(base64.b64decode(data["zip_b64"])))

@@ -57,7 +57,8 @@ def connector_pose(layout, outline_xy, params):
             np.array(tail_ext["pad1_world"], dtype=float),
         )
 
-    tail = tail_geometry(layout.outline_poly, outline_xy[0], outline_xy[1], layout.connector_pos, params)
+    tail = tail_geometry(layout.outline_poly, outline_xy[0], outline_xy[1], layout.connector_pos, params,
+                         fit_width=(layout.tail or {}).get("fit_width_mm"))
     return tail["t_hat"], tail["n_out"], np.array(tail["pad1_world"], dtype=float)
 
 
@@ -128,6 +129,34 @@ def connector_open_edge_endpoints(layout, outline_xy, params, connector_dir):
     return ranked[:2]
 
 
+def drop_tiny_edges(ring, keep=(), tol=0.002):
+    """A closed ring without its near-zero-length edges.
+
+    Polygon unions and buffers leave the odd edge well under a micron long;
+    KiCad rejects those as a malformed outline. Merges each such vertex into
+    its neighbour, never moving a vertex listed in `keep` (the connector's
+    open endpoints the outline must meet exactly)."""
+    ring = np.asarray(ring, dtype=float)
+    keep = [np.asarray(k, dtype=float) for k in keep]
+
+    def kept(p):
+        return any(np.linalg.norm(p - k) < 1e-9 for k in keep)
+
+    out = []
+    for p in ring:
+        if out and np.linalg.norm(p - out[-1]) < tol:
+            if kept(p):
+                out[-1] = p
+            continue
+        out.append(p)
+    while len(out) > 3 and np.linalg.norm(out[0] - out[-1]) < tol:
+        if kept(out[-1]):
+            out.pop(0)
+        else:
+            out.pop()
+    return np.asarray(out, dtype=float) if len(out) >= 3 else ring
+
+
 def stitched_outline_segments(layout, outline_xy, params, connector_dir):
     """Return board Edge.Cuts segments with the connector landing zone cut away.
 
@@ -150,6 +179,7 @@ def stitched_outline_segments(layout, outline_xy, params, connector_dir):
     if len(pts) < 4:
         return None
 
+    pts = drop_tiny_edges(pts)
     plain = [(pts[i], pts[(i + 1) % len(pts)]) for i in range(len(pts))]
     open_pts = connector_open_edge_endpoints(layout, outline_xy, params, connector_dir)
     if not open_pts:
@@ -185,6 +215,7 @@ def stitched_outline_segments(layout, outline_xy, params, connector_dir):
             ring[i] = A
         elif np.linalg.norm(ring[i] - B) < snap:
             ring[i] = B
+    ring = drop_tiny_edges(ring, keep=(A, B))
     opening = LineString([tuple(A), tuple(B)])
     segments = []
     for i in range(len(ring)):

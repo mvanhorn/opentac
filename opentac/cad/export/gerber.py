@@ -457,7 +457,8 @@ def _generate_edge_cuts(layout, outline_xy, params, connector_dir=""):
     p2 = outline_xy[1]
 
     conn_pos = layout.connector_pos
-    tail = tail_geometry(outline_poly, p1, p2, conn_pos, params)
+    tail = tail_geometry(outline_poly, p1, p2, conn_pos, params,
+                         fit_width=(layout.tail or {}).get("fit_width_mm"))
     t_hat = tail["t_hat"]
     n_out = tail["n_out"]
     A = tail["A"]

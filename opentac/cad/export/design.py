@@ -99,6 +99,7 @@ def params_to_dict(params: Params) -> dict:
         # of silently re-exporting as an unnamed board.
         "design_name": params.design_name,
         "readout_board": params.readout_board,
+        "narrow_tail": params.narrow_tail,
     }
 
 

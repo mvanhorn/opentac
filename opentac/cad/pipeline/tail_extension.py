@@ -8,7 +8,7 @@ from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
 
 from .geometry import (
-    remove_collinear, remove_collinear_closed,
+    extension_tail_poly, remove_collinear, remove_collinear_closed,
 )
 
 
@@ -251,7 +251,7 @@ def apply_tail_extension(layout, routes, params, connector_dir=""):
 
     # The custom tail corridor stops at the connector base; physical connector
     # outline/pads are stitched in during export when a supported footprint is present.
-    corridor = LineString(path).buffer(width / 2 + clearance, cap_style=2, join_style=2)
+    corridor = extension_tail_poly(path, width, clearance, layout.tail.get("connector_min_width_mm"))
     expanded = unary_union([layout.board_poly, corridor])
     layout.board_poly = expanded
     final_poly = _largest_polygon(expanded)

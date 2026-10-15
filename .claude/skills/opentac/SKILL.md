@@ -205,6 +205,12 @@ a bent path around an obstacle) — do it only if they ask for something the
 automatic 1mm does not cover, and use the held `edit_data` with
 `redo_padding()` so it does not re-route the board.
 
+The tail is narrow by default (`narrow_tail=True`): after routing it is cut down
+to the traces it carries and flares back to the connector's width just before
+the connector. Taxels and traces are identical to a connector-width tail, so do
+not trade it off against taxel count. A `tail_width_mm` the user gives is used as
+is.
+
 The tail's contacts are on the **bottom** copper (the readout boards' Molex
 505110 is a bottom-contact connector for 0.3 mm FPC). The export opens solder
 mask on the bottom only there, and its drawing layer says where the polyimide

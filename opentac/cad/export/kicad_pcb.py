@@ -55,7 +55,8 @@ def generate_kicad_pcb(
     outline_poly = layout.outline_poly
     p1 = outline_xy[0]
     p2 = outline_xy[1]
-    tail = tail_geometry(outline_poly, p1, p2, conn_pos, params)
+    tail = tail_geometry(outline_poly, p1, p2, conn_pos, params,
+                         fit_width=(layout.tail or {}).get("fit_width_mm"))
     t_hat = tail["t_hat"]
     A = tail["A"]
     B = tail["B"]
