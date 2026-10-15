@@ -50,7 +50,6 @@ def generate_svg(
                  f'width="{svg_w:.0f}" height="{svg_h:.0f}">')
     lines.append('<style>')
     lines.append('  .outline { fill: none; stroke: #333; stroke-width: 0.3; }')
-    lines.append('  .anchor-hole { fill: #ffffff; stroke: #333; stroke-width: 0.18; }')
     lines.append('  .sensor-outline { fill: none; stroke: #6688aa; stroke-width: 0.16; stroke-dasharray: 0.7,0.35; }')
     lines.append('  .routing-area { fill: #eef8ef; stroke: none; opacity: 0.55; }')
     lines.append('  .route-keepout { fill: none; stroke: #2d7d46; stroke-width: 0.12; stroke-dasharray: 0.8,0.45; opacity: 0.55; }')
@@ -83,16 +82,6 @@ def generate_svg(
     if layout.routing_margin_applied_mm > 0:
         sensor_pts = ' '.join(f'{tx(x):.3f},{ty(y):.3f}' for x, y in outline_xy)
         lines.append(f'<polygon points="{sensor_pts}" class="sensor-outline"/>')
-
-    # Anchor cutouts — drawn filled white so they read as holes through the
-    # board rather than as circles printed on it.
-    _anchor = (getattr(layout, "routing", None) or {}).get("anchor_holes")
-    if _anchor and _anchor.get("centers"):
-        _r = float(_anchor["dia_mm"]) / 2.0
-        _rpx = abs(tx(_r) - tx(0.0))
-        for _cx, _cy in _anchor["centers"]:
-            lines.append(f'<circle cx="{tx(_cx):.3f}" cy="{ty(_cy):.3f}" '
-                         f'r="{_rpx:.3f}" class="anchor-hole"/>')
 
     # Route edge-padding guide: trace centerlines should stay inside this guide.
     keepout_offset = params.board_edge_clear_mm + params.trace_w_mm / 2

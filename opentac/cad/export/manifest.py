@@ -40,7 +40,7 @@ def _shear_block(layout, active_pix, pixel_xy, params):
 
     A flag would say almost nothing: every 2x2 block holding ANY taxel gets a
     full-size bump (`bump_centers_from_taxels`), so "may have a bump" is true
-    of every taxel on a board without anchor holes. What no consumer can
+    of every taxel. What no consumer can
     recover on its own is the GROUPING, and that is what shear actually needs:
     a bump converts a sideways load into an asymmetric normal load across the
     four taxels beneath it, so the direction only exists as a differential
@@ -53,11 +53,7 @@ def _shear_block(layout, active_pix, pixel_xy, params):
     invariant 1 of the bump sheet, and the reason that module derives row/col
     from position instead.
 
-    Centres come from the anchor cutouts when the board has them, exactly as
-    `/bump-sheet` does (the bump must land ON its hole, and re-deriving the
-    lattice puts it elsewhere the moment the pitch is non-uniform, which is
-    the whole point of the "paired" lattice). Otherwise they come from the
-    taxel grid, on `params.pitch_*_mm` — the same two numbers `/bump-sheet`
+    Centres come from the taxel grid, on `params.pitch_*_mm` — the same two numbers `/bump-sheet`
     passes — never on the manifest's own `px`/`py`, which are pad-order
     derived and can be negative.
 
@@ -73,24 +69,15 @@ def _shear_block(layout, active_pix, pixel_xy, params):
     if pitch_x <= 0.0 or pitch_y <= 0.0:
         return None
 
-    anchor = (getattr(layout, "routing", None) or {}).get("anchor_holes") or {}
-    centers = anchor.get("centers")
-    if centers:
-        centers = np.asarray(centers, dtype=float).reshape(-1, 2)
-        src = "anchor_holes"
-    else:
-        centers, _partial = bump_centers_from_taxels(
-            layout.placements_xy, sorted(active_pix), pitch_x, pitch_y)
-        src = "taxel_2x2"
+    centers, _partial = bump_centers_from_taxels(
+        layout.placements_xy, sorted(active_pix), pitch_x, pitch_y)
     if not len(centers):
         return None
 
     return {
-        # Which rule produced the centres, because the two are not
-        # interchangeable: "anchor_holes" means the bumps are keyed through
-        # the board and some blocks may have lost theirs at the edge;
-        # "taxel_2x2" means the lattice is uniform and every block has one.
-        "src": src,
+        # Which rule produced the centres. Always the uniform 2x2 taxel grid
+        # now; kept so readers of older manifests see the same key.
+        "src": "taxel_2x2",
         "bumps": [[round(float(x), 4), round(float(y), 4)] for x, y in centers],
         "b": bump_index_per_point([[p[0], p[1]] for p in pixel_xy],
                                   centers, pitch_x, pitch_y),

@@ -19,7 +19,7 @@ from shapely.geometry import Point, Polygon
 
 from opentac.cad.main import generate, GenerateRequest
 from opentac.cad.export.kicad_footprint import build_pixel_footprint_text, make_footprint_name
-from opentac.cad.pipeline.bump_sheet import BumpParams, bump_centers_from_taxels
+from opentac.cad.pipeline.bump_sheet import bump_centers_from_taxels
 
 SQUARE = [[-20, -20], [20, -20], [20, 20], [-20, 20]]
 U_NOTCH = [[-34, 0], [-12, 0], [-12, 34], [12, 34], [12, 0], [34, 0], [34, 56], [-34, 56]]
@@ -102,7 +102,7 @@ def test_manifest_says_which_taxels_share_a_shear_bump():
     man, edit_data = _manifest()
     sh = man.get("shear")
     assert sh, "manifest has no shear block"
-    assert sh["src"] == "taxel_2x2", "no anchor holes on this board"
+    assert sh["src"] == "taxel_2x2"
     assert len(sh["b"]) == len(man["pixels"]), "shear.b must be parallel to pixels"
 
     # The centres are the ones /bump-sheet builds for the same board.
@@ -131,46 +131,13 @@ def test_manifest_says_which_taxels_share_a_shear_bump():
             assert abs(x - cx) <= 4.2 * 0.5 + 1e-6 and abs(y - cy) <= 4.2 * 0.5 + 1e-6
 
 
-def test_shear_block_follows_the_anchor_cutouts_when_the_board_has_them():
-    """With anchor holes the bumps sit ON the cutouts, so the cutout centres —
-    not a re-derived taxel lattice — are what the manifest must publish.
-
-    A cutout whose disc would hang over the board edge is dropped, which
-    orphans that block's taxels. That is one of two ways a taxel ends up
-    bumpless on this path — see test_anchor_holes_orphan_an_odd_taxel_line for
-    the more common one. Neither happens without anchor holes."""
-    man, edit_data = _manifest(anchor_holes=True)
-    sh = man.get("shear")
-    assert sh and sh["src"] == "anchor_holes", "anchor board must use the cutouts"
-
-    holes = np.asarray(edit_data["layout"]["routing"]["anchor_holes"]["centers"],
-                       dtype=float)
-    got = np.asarray(sh["bumps"], dtype=float)
-    assert len(got) == len(holes), f"{len(got)} bumps vs {len(holes)} cutouts"
-    d, _ = cKDTree(holes).query(got)
-    assert d.max() < 1e-3, f"bumps are not on the cutouts ({d.max():.4f}mm off)"
-
-    # Nothing is claimed to be under a bump that is not: a -1 taxel must be
-    # further than one tile from every bump.
-    px = float(edit_data["params"]["pitch_x_mm"])
-    py = float(edit_data["params"]["pitch_y_mm"])
-    for p, b in zip(man["pixels"], sh["b"]):
-        near = [(cx, cy) for cx, cy in got
-                if abs(p[0] - cx) <= px + 1e-6 and abs(p[1] - cy) <= py + 1e-6]
-        assert bool(near) == (b >= 0), f"taxel at {p[:2]} labelled {b} but {len(near)} tiles cover it"
-
-
 @pytest.mark.parametrize("outline", [LSHAPE, SQ_45x38])
-def test_no_taxel_is_left_bumpless_without_anchor_holes(outline):
+def test_no_taxel_is_left_bumpless(outline):
     """Invariant 2 of the bump sheet, checked from the manifest.
 
     An odd line count does NOT orphan anything on the taxel path: the leftover
     line forms its own partial block and keeps a full-size bump. The L-shape
     here comes out 11x9 — odd in both axes — and still covers every taxel.
-
-    This is the control for the test below. Without it, the orphaning measured
-    there reads as a property of odd grids in general, when it is really the
-    anchor path failing to honour this invariant.
     """
     resp = generate(GenerateRequest(outline=outline, router="hug"))
     z = __import__("zipfile").ZipFile(io.BytesIO(base64.b64decode(resp.zip_b64)))
@@ -182,71 +149,11 @@ def test_no_taxel_is_left_bumpless_without_anchor_holes(outline):
     n_rows = len(np.unique(np.round(P[:, 1], 2)))
     bumpless = [p for p, b in zip(man["pixels"], sh["b"]) if b < 0]
     assert not bumpless, \
-        f"{n_cols}x{n_rows} grid left {len(bumpless)} taxels bumpless without anchor holes"
-
-
-@pytest.mark.parametrize("outline,lattice", [
-    (LSHAPE, "uniform"), (LSHAPE, "paired"),
-    (SQ_45x38, "uniform"), (SQ_45x38, "paired"),
-])
-def test_anchor_holes_orphan_an_odd_taxel_line(outline, lattice):
-    """With anchor holes, bumps ARE the cutouts — and an odd line gets none.
-
-    `_pair_midpoints` emits midpoints of pairs only, so the unpaired edge line
-    has no cutout and therefore no bump, and its taxels read pressure only.
-    Exact, hence the equality rather than a bound:
-
-        bumpless = (cols odd ? rows : 0) + (rows odd ? cols : 0)
-                   - (both odd ? 1 : 0)          # the corner, counted twice
-
-    This CONTRADICTS invariant 2 (see the test above, which is the control)
-    and is recorded here as current behaviour, not as desired behaviour — the
-    fix is a design call, see NOTES.md. If a later change makes the anchor
-    path cover those taxels, this test should start failing and be replaced by
-    the control's assertion, not relaxed.
-
-    Parametrised over BOTH lattices deliberately: "paired" packs denser so it
-    lands on an odd count more often, but "uniform" orphans on exactly the
-    same rule (7x6 at 45x38 -> 6 bumpless). Pinning only the paired case would
-    have recorded a coincidence as a cause.
-    """
-    resp = generate(GenerateRequest(outline=outline, router="hug", anchor_holes=True,
-                                    anchor_hole_lattice=lattice))
-    z = __import__("zipfile").ZipFile(io.BytesIO(base64.b64decode(resp.zip_b64)))
-    man = json.loads(z.read("manifest.json"))
-    sh = man["shear"]
-    P = np.asarray([[p[0], p[1]] for p in man["pixels"]], dtype=float)
-    b = np.asarray(sh["b"])
-
-    n_cols = len(np.unique(np.round(P[:, 0], 2)))
-    n_rows = len(np.unique(np.round(P[:, 1], 2)))
-    want = (n_rows if n_cols % 2 else 0) + (n_cols if n_rows % 2 else 0) \
-        - (1 if (n_cols % 2 and n_rows % 2) else 0)
-    assert int((b < 0).sum()) == want, \
-        f"{lattice} {n_cols}x{n_rows}: {int((b < 0).sum())} bumpless, expected {want}"
-
-    # Checked against the REAL bump footprint, not the tile rule that produced
-    # the labels, so the two cannot drift into agreeing while both are wrong.
-    # A bump's base is an ellipse bump_base_frac * 2 * pitch across, on the
-    # cutout; normalised distance < 1 means the taxel is under bump material.
-    bp = BumpParams()
-    rx = bp.bump_base_frac * resp.edit_data["params"]["pitch_x_mm"]
-    ry = bp.bump_base_frac * resp.edit_data["params"]["pitch_y_mm"]
-    C = np.asarray(sh["bumps"], dtype=float)
-    for p, bi in zip(man["pixels"], sh["b"]):
-        d = np.hypot((p[0] - C[:, 0]) / rx, (p[1] - C[:, 1]) / ry).min()
-        if bi >= 0:
-            assert d < 1.0, f"taxel at {p[:2]} claimed under bump {bi} but {d:.2f} radii out"
-        else:
-            assert d > 1.0, f"taxel at {p[:2]} called bumpless but only {d:.2f} radii out"
+        f"{n_cols}x{n_rows} grid left {len(bumpless)} taxels bumpless"
 
 
 if __name__ == "__main__":
     test_manifest_carries_the_real_board()
     test_manifest_says_which_taxels_share_a_shear_bump()
-    test_shear_block_follows_the_anchor_cutouts_when_the_board_has_them()
     for _o in (LSHAPE, SQ_45x38):
-        test_no_taxel_is_left_bumpless_without_anchor_holes(_o)
-    for _o, _l in ((LSHAPE, "uniform"), (LSHAPE, "paired"),
-                   (SQ_45x38, "uniform"), (SQ_45x38, "paired")):
-        test_anchor_holes_orphan_an_odd_taxel_line(_o, _l)
+        test_no_taxel_is_left_bumpless(_o)

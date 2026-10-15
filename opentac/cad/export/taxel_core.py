@@ -243,7 +243,7 @@ def analyze(manifest):
 # encode / decode
 # --------------------------------------------------------------------------
 
-def encode(manifest, anchor_holes=False, pad_pitch_05=True):
+def encode(manifest, pad_pitch_05=True):
     """manifest dict -> taxel core bytes."""
     g = analyze(manifest)
     r, c = g["r"], g["c"]
@@ -261,7 +261,7 @@ def encode(manifest, anchor_holes=False, pad_pitch_05=True):
     w.u(1 if fp_default else 0, 1)
     w.u(1 if sparse_x else 0, 1)
     w.u(1 if sparse_y else 0, 1)
-    w.u(1 if anchor_holes else 0, 1)     # disambiguates shear bump derivation
+    w.u(0, 1)                            # reserved: was the anchor-holes flag, always 0
     w.u(1 if pad_pitch_05 else 0, 1)     # which FPC connector mates
     if not (0 < r < 64 and 0 < c < 64):
         raise TaxelCoreError("grid %dx%d exceeds the 63x63 this format encodes" % (r, c))
@@ -353,7 +353,7 @@ def decode(data):
     fp_default = b.u(1)
     sparse_x = b.u(1)
     sparse_y = b.u(1)
-    anchor_holes = b.u(1)
+    b.u(1)                               # reserved (anchor-holes flag in early boards)
     pad_pitch_05 = b.u(1)
     r = b.u(6)
     c = b.u(6)
@@ -398,7 +398,6 @@ def decode(data):
         "rp": list(range(rp0, rp0 + r)),
         "cp": list(range(rp0 + r, rp0 + r + c)),
         "pad_pitch_mm": 0.5 if pad_pitch_05 else None,
-        "anchor_holes": bool(anchor_holes),
         "perm": perm, "kx": kx, "ky": ky,
         "m": mask,
     }
@@ -570,7 +569,6 @@ def to_manifest(core):
         "cp": list(core["cp"]),
         "m": list(core["m"]),
         "pad_pitch_mm": core.get("pad_pitch_mm"),
-        "anchor_holes": core.get("anchor_holes"),
     }
 
 

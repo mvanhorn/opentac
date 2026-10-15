@@ -4,8 +4,7 @@ manifest.json describes the board that was MADE — taxel positions, the taxel
 footprint, the real cut boundary. That is deliberately a description of the
 *result*, and it is not enough to keep working on a design: `/generate` takes
 about thirty-five inputs and the manifest carried seven of them, so anything
-re-importing it had to guess board_mode, the router, every clearance and the
-whole anchor-hole block. The two records here close that gap, and they answer
+re-importing it had to guess board_mode, the router and every clearance. The two records here close that gap, and they answer
 two different questions:
 
   `design_block()` -> the "design" key inside manifest.json. The RECIPE:
@@ -99,16 +98,6 @@ def params_to_dict(params: Params) -> dict:
         # Round-trips so a re-opened design keeps its silkscreen label instead
         # of silently re-exporting as an unnamed board.
         "design_name": params.design_name,
-        # Anchor cutouts must round-trip: this dict is what /export-edited and
-        # the route editor rebuild Params from, and a missing key silently
-        # defaults anchor_holes to False -- re-exporting a board would drop
-        # every cutout from Edge.Cuts while the on-screen preview still showed
-        # them (they live in layout.routing, which does round-trip).
-        "anchor_holes": params.anchor_holes,
-        "anchor_hole_dia_mm": params.anchor_hole_dia_mm,
-        "anchor_hole_clearance_mm": params.anchor_hole_clearance_mm,
-        "anchor_hole_lattice": params.anchor_hole_lattice,
-        "anchor_hole_square_cells": params.anchor_hole_square_cells,
     }
 
 
@@ -172,7 +161,7 @@ def zip_with_design(zip_b64: str, design: dict) -> str:
     Done by rewriting the archive rather than threading a payload into
     _build_outputs, because the ZIP is built there on a deep COPY of the
     layout while edit_data is built afterwards from the original (see
-    _attach_anchor_holes' docstring for why the two are separate). Rewriting
+    `_outputs_with_connector_tail` in main.py). Rewriting
     leaves the export chain — the part that actually gets manufactured —
     completely untouched.
     """

@@ -294,7 +294,6 @@ def layout_with_connector(
             params.pitch_x_mm, params.pitch_y_mm,
             params.edge_keepout_mm,
             anchor=pack_anchor,
-            pattern_x=params.pack_pattern_x, pattern_y=params.pack_pattern_y,
         )
 
     if len(placements_xy) == 0:
@@ -417,8 +416,7 @@ def max_pack_count(outline_xy: np.ndarray, params: Params, fill_xy: np.ndarray =
     placements, _ = pack_pixels_in_polygon(
         pack_xy, params.pixel_w_mm, params.pixel_h_mm,
         params.pitch_x_mm, params.pitch_y_mm, params.edge_keepout_mm,
-        anchor="top_center",
-        pattern_x=params.pack_pattern_x, pattern_y=params.pack_pattern_y)
+        anchor="top_center")
     return len(placements)
 
 
@@ -618,8 +616,7 @@ def _best_phase_placements(region_xy, params) -> np.ndarray | None:
             placements, _ = pack_pixels_in_polygon(
                 region_xy, params.pixel_w_mm, params.pixel_h_mm,
                 params.pitch_x_mm, params.pitch_y_mm,
-                params.edge_keepout_mm, anchor="top_center", phase=phase,
-                pattern_x=params.pack_pattern_x, pattern_y=params.pack_pattern_y)
+                params.edge_keepout_mm, anchor="top_center", phase=phase)
             if len(placements) == 0:
                 continue
             keep = _largest_grid_component(placements, params)

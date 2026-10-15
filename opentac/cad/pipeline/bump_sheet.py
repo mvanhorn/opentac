@@ -350,14 +350,7 @@ def _slit_geometry(recess_poly, centers, pitch_x, pitch_y, p: BumpParams,
 
 
 def build_bump_sheet(final_outline_xy, cable_y, placements_xy, active_idx,
-                     pitch_x, pitch_y, p: BumpParams | None = None,
-                     centers_override=None) -> BumpSheetResult:
-    """`centers_override`: bump centres to use instead of deriving them from
-    the taxel grid. Passed when the board carries anchor cutouts -- the bump
-    has to sit on its hole, and re-deriving the lattice here would put it
-    somewhere else the moment the pitch is non-uniform (the paired lattice),
-    because the derivation assumes a constant step.
-    """
+                     pitch_x, pitch_y, p: BumpParams | None = None) -> BumpSheetResult:
     p = p or BumpParams()
     warnings = []
 
@@ -371,12 +364,8 @@ def build_bump_sheet(final_outline_xy, cable_y, placements_xy, active_idx,
     recess = _above_cable(_largest_polygon(body.buffer(p.recess_tolerance_mm)), cable_y)
     sheet_2d = _above_cable(_largest_polygon(recess.buffer(p.skirt_width_mm)), cable_y)
 
-    if centers_override is not None and len(centers_override):
-        centers = np.asarray(centers_override, dtype=float).reshape(-1, 2)
-        partial = 0
-    else:
-        centers, partial = bump_centers_from_taxels(
-            placements_xy, active_idx, pitch_x, pitch_y)
+    centers, partial = bump_centers_from_taxels(
+        placements_xy, active_idx, pitch_x, pitch_y)
     if not len(centers):
         warnings.append("The board has no taxels, so the sheet has no bumps.")
 

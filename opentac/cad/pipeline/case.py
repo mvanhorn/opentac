@@ -237,7 +237,7 @@ def _hatch_geometry(recess_poly, pts, pitch_x, pitch_y, width,
     the interior taxels get the compliance.
 
     Column and row lines are taken as the midpoint of each ADJACENT PAIR rather
-    than centre+pitch, so a non-uniform lattice (the paired anchor-hole pitch)
+    than centre+pitch, so an uneven lattice
     grooves in the right places instead of drifting across the array.
     """
     pts = np.asarray(pts, dtype=float)

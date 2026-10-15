@@ -59,30 +59,31 @@ class Params:
     # from pixel_*_mm/pitch_*_mm — see solve_grid_pixel_size in pipeline/layout.py.
     target_cols: int | None = None
     target_rows: int | None = None
-    # Anchor holes: Edge.Cuts cutouts at 2x2 block centres, one per shear bump,
-    # so the bump sheet's posts key the cover to the board across the whole
-    # array instead of only at the skirt. See pipeline/anchor_holes.py for what
-    # sets the pitch (the intra-column F.Cu bus, not the taxel copper).
-    anchor_holes: bool = False
-    anchor_hole_dia_mm: float = 1.5
-    anchor_hole_clearance_mm: float = 0.4
-    # "uniform" — every taxel gap widened to fit a cutout, even though only one
-    #             gap in two actually carries one.
-    # "paired"  — only the intra-block gap is widened; blocks sit at the tight
-    #             taxel spacing. Same cutouts, denser array.
-    anchor_hole_lattice: str = "uniform"
-    # Only X has to grow (the row bus clears the cutout already). Growing Y to
-    # match keeps the 2x2 block square and the bump round, so shear sensitivity
-    # stays isotropic; leaving Y tight buys taxels at the cost of an oval bump.
-    anchor_hole_square_cells: bool = True
     # Printed on the front silkscreen just inboard of the connector, so a
     # fabricated board says which design it is. Not geometry: it changes
     # nothing the router or the packer sees. Empty means no label.
     design_name: str = ""
-    # Resolved by anchor_holes.apply_to_params() at request time, not user
-    # input: the step sequence the packer cycles. None = constant pitch.
-    pack_pattern_x: list | None = None
-    pack_pattern_y: list | None = None
+
+
+# Params keys that saved designs (edit_data, design.json) may still carry from
+# the anchor-hole feature, which was removed before release. Loading drops them;
+# a design that had anchor holes switched ON is refused rather than silently
+# rebuilt without its cutouts.
+REMOVED_PARAM_KEYS = frozenset({
+    "anchor_holes", "anchor_hole_dia_mm", "anchor_hole_clearance_mm",
+    "anchor_hole_lattice", "anchor_hole_square_cells",
+    "pack_pattern_x", "pack_pattern_y",
+})
+
+
+def drop_removed_params(stored: dict) -> dict:
+    """`stored` without REMOVED_PARAM_KEYS; ValueError if it used anchor holes."""
+    if stored.get("anchor_holes"):
+        raise ValueError(
+            "This design uses bump anchor holes, a feature that was removed before "
+            "release. Open it in an earlier build, or regenerate it "
+            "from its outline.")
+    return {k: v for k, v in stored.items() if k not in REMOVED_PARAM_KEYS}
 
 
 @dataclass

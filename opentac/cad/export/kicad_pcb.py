@@ -174,7 +174,6 @@ def generate_kicad_pcb(
                 lines.append(_edge_line(v1, v2))
         lines.append(_edge_line(A, D))
         lines.append(_edge_line(B, C))
-    lines.extend(_anchor_hole_lines(layout))
 
     # Pixel footprints
     pix_num = 0
@@ -310,27 +309,6 @@ def _backmark_lines(manifest_json) -> list:
             out.append(
                 f'  (gr_line (start {fmt(x1)} {fmt(-y1)}) (end {fmt(x2)} {fmt(-y2)}) '
                 f'(stroke (width {fmt(w)}) (type solid)) (layer "B.SilkS"))')
-    return out
-
-
-def _anchor_hole_lines(layout) -> list:
-    """Anchor cutouts as Edge.Cuts circles.
-
-    A closed loop on Edge.Cuts that lies inside the board outline is an
-    internal cutout -- the fab mills it out. That is what these have to be:
-    the bump sheet's post passes THROUGH the board, so a drilled/plated hole
-    would be both wrong (nothing to plate) and, at 1.5mm with no annular ring,
-    awkward to specify. Same y-negation as every other Edge.Cuts primitive.
-    """
-    spec = (getattr(layout, "routing", None) or {}).get("anchor_holes")
-    if not spec or not spec.get("centers"):
-        return []
-    r = float(spec["dia_mm"]) / 2.0
-    out = []
-    for cx, cy in spec["centers"]:
-        out.append(f'  (gr_circle (center {fmt(cx)} {fmt(-cy)}) '
-                   f'(end {fmt(cx + r)} {fmt(-cy)}) (layer "Edge.Cuts") '
-                   f'(width 0.15) (fill none))')
     return out
 
 

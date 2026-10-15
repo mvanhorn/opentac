@@ -323,41 +323,6 @@
             <label>Edge keepout <input id="edge_keepout_mm" type="number" step="0.1" value="0.5" /></label>
           </div>
 
-          <!-- Anchor holes: not shipping yet. Hidden, not deleted; drop `hidden`
-               to bring the section back. The unchecked box sends anchor_holes=false. -->
-          <div id="anchor-holes-section" hidden>
-          <h3 class="params-subhead">Bump anchor holes</h3>
-          <p class="hint">
-            Cuts a hole clean through the board under every shear bump, so the bump
-            sheet's posts key the cover to the board across the whole array instead of
-            only at the skirt &mdash; the cover can no longer slide under strong shear.
-            The taxel pitch grows to make room; the wider pitch is worked out from the
-            column bus that runs past each hole, not typed in.
-          </p>
-          <label class="check-field" title="Adds Edge.Cuts cutouts at every 2x2 taxel block centre, directly under each bump.">
-            <input id="anchor_holes" type="checkbox" />
-            <span>Add anchor holes under bumps</span>
-          </label>
-          <div id="anchor-holes-body" hidden>
-            <div class="params">
-              <label title="Cutout diameter. Sets how much the pitch has to grow.">Hole &oslash; <input id="anchor_hole_dia_mm" type="number" step="0.1" min="0.2" value="1.5" /></label>
-              <label title="Copper-to-cutout-edge clearance. 0.4mm suits a milled internal cutout.">Clearance <input id="anchor_hole_clearance_mm" type="number" step="0.05" min="0" value="0.4" /></label>
-            </div>
-            <label class="radio-field" title="Widens every taxel gap, even though only one gap in two carries a cutout. Simplest, fewest taxels.">
-              <input type="radio" name="anchor_hole_lattice" value="uniform" checked />
-              <span>Uniform pitch &mdash; every gap widened</span>
-            </label>
-            <label class="radio-field" title="Widens only the intra-block gap that actually carries a cutout; blocks stay at the tight taxel spacing. Same holes, denser array.">
-              <input type="radio" name="anchor_hole_lattice" value="paired" />
-              <span>Paired pitch &mdash; only the gap with a hole in it</span>
-            </label>
-            <label class="check-field" title="Only X has to grow: the row bus already clears the cutout. Growing Y to match keeps the 2x2 block square and the bump round, so shear response stays the same in both axes. Uncheck for more taxels and an oval bump.">
-              <input id="anchor_hole_square_cells" type="checkbox" checked />
-              <span>Keep blocks square (round bump, isotropic shear)</span>
-            </label>
-          </div>
-          </div>
-
           <h3 class="params-subhead">Routing &amp; clearance</h3>
           <div class="params">
             <label>Trace W <input id="trace_w_mm" type="number" step="0.05" value="0.2" /></label>

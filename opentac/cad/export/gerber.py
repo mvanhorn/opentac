@@ -441,25 +441,6 @@ def _arc_to_segments(start, mid, end, n_segs=16):
     return pts
 
 
-def _draw_anchor_holes(lines, layout, segments: int = 72):
-    """Anchor cutouts as closed polylines on Edge.Cuts.
-
-    Stroked as many short chords rather than a G75 arc: an approximated circle
-    is unambiguous to every CAM viewer, and at 72 segments a 1.5mm hole is
-    within 0.4um of round -- three orders under the router bit that cuts it.
-    """
-    spec = (getattr(layout, "routing", None) or {}).get("anchor_holes")
-    if not spec or not spec.get("centers"):
-        return
-    r = float(spec["dia_mm"]) / 2.0
-    th = np.linspace(0.0, 2.0 * np.pi, segments + 1)
-    for cx, cy in spec["centers"]:
-        xs = cx + r * np.cos(th)
-        ys = cy + r * np.sin(th)
-        for i in range(segments):
-            _draw_line(lines, xs[i], ys[i], xs[i + 1], ys[i + 1])
-
-
 def _generate_edge_cuts(layout, outline_xy, params, connector_dir=""):
     """Generate Edge.Cuts Gerber layer."""
     from opentac.cad.pipeline.geometry import tail_geometry
@@ -523,7 +504,6 @@ def _generate_edge_cuts(layout, outline_xy, params, connector_dir=""):
         for p1_arc, p2_arc in zip(pts, pts[1:]):
             _draw_line(lines, p1_arc[0], p1_arc[1], p2_arc[0], p2_arc[1])
 
-    _draw_anchor_holes(lines, layout)
     _write_footer(lines)
     return '\n'.join(lines)
 

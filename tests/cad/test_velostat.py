@@ -124,17 +124,6 @@ def test_fold_halves_are_mirror_images_across_the_crease():
     assert np.abs((b - b.mean(0)) - (a - a.mean(0))).max() > 1.0
 
 
-def test_anchor_holes_are_punched_through():
-    res = _generate([[-25, -25], [25, -25], [25, 25], [-25, 25]], anchor_holes=True)
-    from opentac.cad.main import _attach_anchor_holes
-    layout, outline_xy, params, removed = _layout_from_edit_data(res.edit_data)
-    _attach_anchor_holes(layout, params, removed)
-    n = len(layout.routing.get("anchor_holes", {}).get("centers", []))
-    assert n > 0, "fixture should produce anchor holes"
-    poly = velostat_polygon(layout, outline_xy)
-    assert len(poly.interiors) == n
-
-
 def test_too_big_to_fold_still_ships_the_dxf():
     res = _generate(HUGE, pixel_w_mm=22, pixel_h_mm=22, pitch_x_mm=22.4, pitch_y_mm=22.4)
     v = res.stats["velostat"]

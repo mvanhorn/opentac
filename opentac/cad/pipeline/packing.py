@@ -13,8 +13,6 @@ def pack_pixels_in_polygon(
     edge_keepout_mm: float,
     anchor: str = "top_right",
     phase: tuple = (0.0, 0.0),
-    pattern_x: list | None = None,
-    pattern_y: list | None = None,
 ) -> tuple[np.ndarray, object]:
     """Place rectangular pixels inside a polygon on a rectangular grid.
 
@@ -27,15 +25,6 @@ def pack_pixels_in_polygon(
                        mode, where the routing space is already reserved by an
                        explicit keep-out band and the array should sit centered
                        inside what remains.
-    pattern_x, pattern_y:
-        Repeating sequence of steps to walk the lattice with, instead of a
-        constant pitch. `[6.1, 4.2]` lays columns down in pairs 6.1mm apart
-        with 4.2mm between pairs -- the "paired" anchor-hole lattice, where
-        only the gap that actually carries a cutout is widened. The step
-        sequence starts at the anchor corner, so pattern[0] is the FIRST gap
-        in from the top/right edge and every block stays whole from there.
-        None (default) means a constant `pitch_*_mm`, the original behaviour.
-
     phase:
         (ox, oy) lattice offset in mm, applied after anchoring — shifts every
         candidate center left/down by that amount. The default (0, 0) is the
@@ -64,21 +53,18 @@ def pack_pixels_in_polygon(
     dx = pixel_w_mm / 2
     dy = pixel_h_mm / 2
 
-    def walk(hi, lo, half, pitch, pattern):
-        """Lattice centres from `hi` down to `lo`, stepping `pattern` cyclically."""
-        steps = [s for s in (pattern or []) if s > 1e-9] or [pitch]
+    def walk(hi, lo, half, pitch):
+        """Lattice centres from `hi` down to `lo`, one `pitch` apart."""
         out = []
         v = hi - half
-        k = 0
         while v >= lo + half - 1e-9:
             out.append(v)
-            v -= steps[k % len(steps)]
-            k += 1
+            v -= pitch
         out.reverse()
         return out
 
-    x_centers = walk(xmax, xmin, dx, pitch_x_mm, pattern_x)
-    y_centers = walk(ymax, ymin, dy, pitch_y_mm, pattern_y)
+    x_centers = walk(xmax, xmin, dx, pitch_x_mm)
+    y_centers = walk(ymax, ymin, dy, pitch_y_mm)
 
     if anchor == "top_center" and x_centers:
         # Split the leftover horizontal slack evenly instead of letting it all

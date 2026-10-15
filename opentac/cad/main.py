@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import nearest_points, unary_union
 
-from opentac.cad.pipeline.types import Params
+from opentac.cad.pipeline.types import Params, drop_removed_params
 from opentac.cad.pipeline.types import Layout, Route
 from opentac.cad.pipeline.geometry import (
     rotate_for_cable, remove_collinear_closed, tail_geometry,
@@ -34,7 +34,6 @@ from opentac.cad.pipeline.layout import (
 )
 from opentac.cad.pipeline.bump_sheet import BumpParams, build_bump_sheet
 from opentac.cad.pipeline.case import CaseParams, build_case
-from opentac.cad.pipeline import anchor_holes as anchor_holes_mod
 from opentac.cad.pipeline import keepout as keepout_mod
 from opentac.cad.pipeline.keepout import _TOO_SMALL_MSG as _KEEPOUT_TOO_SMALL_MSG
 _UNROUTED_MSG = (
@@ -177,24 +176,6 @@ class GenerateRequest(BaseModel):
                     'Grow-board mode ("expand") only.')
     target_rows: int | None = Field(
         None, ge=1, description="Target sensor rows — see target_cols.")
-    anchor_holes: bool = Field(
-        False,
-        description="Cut a hole through the board at every 2x2 taxel block centre, "
-                    "under each shear bump, so the bump sheet's posts key the cover "
-                    "to the board across the array instead of only at the skirt. "
-                    "Widens the taxel pitch to make room.")
-    anchor_hole_dia_mm: float = Field(1.5, gt=0.0, description="Anchor cutout diameter (mm).")
-    anchor_hole_clearance_mm: float = Field(
-        0.4, ge=0.0, description="Copper-to-cutout-edge clearance (mm); sets how far the pitch grows.")
-    anchor_hole_lattice: str = Field(
-        "uniform",
-        description='"uniform" widens every taxel gap; "paired" widens only the '
-                    "intra-block gap that actually carries a cutout, keeping blocks at "
-                    "the tight taxel spacing. Same holes, denser array.")
-    anchor_hole_square_cells: bool = Field(
-        True,
-        description="Grow Y to match X so the 2x2 block stays square and the bump round "
-                    "(isotropic shear response). False leaves Y tight — more taxels, oval bump.")
     design_name: str = Field(
         "",
         description="Name printed on the front silkscreen just inboard of the connector, "
@@ -801,7 +782,6 @@ def _build_edit_data(
     fill_xy=None,
 ) -> dict:
     sync_pads_to_feeds(layout, row_routes)
-    _attach_anchor_holes(layout, params, removed)
     minx, miny, maxx, maxy = layout.board_poly.bounds
     margin = 2.0
     cable_coords = []
@@ -875,7 +855,7 @@ def _build_edit_data(
 def _layout_from_edit_data(edit_data: dict) -> tuple[Layout, np.ndarray, Params, set[int]]:
     outline_xy = np.array(edit_data["outline"], dtype=float)
     final_outline_xy = np.array(edit_data.get("final_outline", edit_data["outline"]), dtype=float)
-    stored_params = dict(edit_data["params"])
+    stored_params = drop_removed_params(dict(edit_data["params"]))
     # edit_data written before board_mode existed carries only the booleans.
     stored_params["board_mode"] = _resolve_board_mode(
         stored_params.get("board_mode"), bool(stored_params.get("auto_expand_board", True)))
@@ -1450,39 +1430,6 @@ def _outputs_with_connector_tail(
                           params, routing_problem_pix, incomplete_nets, fill_xy)
 
 
-def _attach_anchor_holes(layout: Layout, params: Params, removed: set[int]) -> None:
-    """Resolve the anchor cutouts onto `layout.routing`, in place.
-
-    Deferred to here rather than done in the layout because the cutouts depend
-    on the FINAL board polygon: post-route containment and follow-padding both
-    redraw the edge, and a cutout comfortably inside the expanded canvas can
-    end up straddling the edge that actually ships.
-
-    Called from both `_build_outputs` and `_build_edit_data` on purpose. The
-    export path runs on a deep COPY of the layout (see
-    `_outputs_with_connector_tail`), so a single call in either place would
-    leave the other side without the cutouts -- exports with nothing to mill,
-    or an editor and bump sheet that do not know the holes exist.
-    """
-    if not getattr(params, "anchor_holes", False):
-        layout.routing.pop("anchor_holes", None)
-        return
-    pitches = anchor_holes_mod.resolve_pitches(params)
-    active = [i for i in range(len(layout.placements_xy)) if i not in removed]
-    centers, dropped = anchor_holes_mod.anchor_hole_centers(
-        layout.placements_xy, active, params, pitches, board_poly=layout.board_poly)
-    layout.routing["anchor_holes"] = {
-        "centers": centers.tolist(),
-        "dia_mm": float(params.anchor_hole_dia_mm),
-        "clearance_mm": float(params.anchor_hole_clearance_mm),
-        "lattice": params.anchor_hole_lattice,
-        "square_cells": bool(params.anchor_hole_square_cells),
-        "dropped_at_edge": int(dropped),
-        "wide_x_mm": float(pitches["wide_x"]), "narrow_x_mm": float(pitches["narrow_x"]),
-        "wide_y_mm": float(pitches["wide_y"]), "narrow_y_mm": float(pitches["narrow_y"]),
-    }
-
-
 def _build_outputs(
     layout: Layout,
     outline_xy: np.ndarray,
@@ -1504,7 +1451,6 @@ def _build_outputs(
     if incomplete_nets is None:
         incomplete_nets = list(layout.routing.get("incomplete_nets") or ())
 
-    _attach_anchor_holes(layout, params, removed)
     raw_connector_dir = os.path.join(os.path.dirname(__file__), "connectors")
     active_connector_dir = connector_export_dir(layout, raw_connector_dir)
     connector_export_enabled = bool(active_connector_dir)
@@ -1629,12 +1575,6 @@ def _build_outputs(
         "fixed_keepout_routing_clean": bool(layout.tail.get("fixed_keepout_routing_clean", False)),
         "fixed_keepout_worst_escape_mm": round(layout.tail.get("fixed_keepout_worst_escape_mm", 0.0), 3),
         "max_pack_pixels": int(layout.tail.get("max_pack_pixels", len(layout.placements_xy))),
-        "anchor_holes": int(len((layout.routing.get("anchor_holes") or {}).get("centers") or [])),
-        "anchor_hole_lattice": (layout.routing.get("anchor_holes") or {}).get("lattice", ""),
-        "anchor_hole_dia_mm": float((layout.routing.get("anchor_holes") or {}).get("dia_mm", 0.0)),
-        "anchor_hole_dropped_at_edge": int((layout.routing.get("anchor_holes") or {}).get("dropped_at_edge", 0)),
-        "anchor_pitch_wide_x_mm": float((layout.routing.get("anchor_holes") or {}).get("wide_x_mm", 0.0)),
-        "anchor_pitch_narrow_x_mm": float((layout.routing.get("anchor_holes") or {}).get("narrow_x_mm", 0.0)),
         "dropped_by_keepout": int(layout.tail.get("dropped_by_keepout", 0)),
         "fixed_board_routing": bool(layout.tail.get("fixed_board_routing", False)),
         "perimeter_routing_attempted": bool(layout.tail.get("perimeter_routing_attempted", False)),
@@ -1778,11 +1718,6 @@ def generate(req: GenerateRequest):
             connector_shoulder_fillet_mm=req.connector_shoulder_fillet_mm,
             target_cols=req.target_cols,
             target_rows=req.target_rows,
-            anchor_holes=req.anchor_holes,
-            anchor_hole_dia_mm=req.anchor_hole_dia_mm,
-            anchor_hole_clearance_mm=req.anchor_hole_clearance_mm,
-            anchor_hole_lattice=req.anchor_hole_lattice,
-            anchor_hole_square_cells=req.anchor_hole_square_cells,
             design_name=req.design_name,
             copper_layers=req.copper_layers,
         )
@@ -1790,15 +1725,6 @@ def generate(req: GenerateRequest):
         params = _params_for_board_mode(params, board_mode)
         params = _without_expansion_padding(params)
         params = _apply_target_grid(params, outline_xy, fill_xy, board_mode)
-        # Anchor holes rewrite the pitch, so this has to run after target-grid
-        # solving (which sets pitch from a requested column count) and before
-        # any packing. Both cannot apply at once: target_cols asks for a pitch,
-        # anchor holes dictate one.
-        if params.anchor_holes and (req.target_cols or req.target_rows):
-            raise ValueError(
-                "target_cols/target_rows and anchor_holes both set the pitch — "
-                "use one or the other.")
-        anchor_pitches = anchor_holes_mod.apply_to_params(params)
 
         routing_problem_pix = set()
         incomplete = []
@@ -2295,16 +2221,10 @@ def bump_sheet(req: BumpSheetRequest):
         overrides = {k: v for k, v in (req.params or {}).items()
                      if k in BumpParams.__dataclass_fields__ and v is not None}
         bp = BumpParams(**overrides)
-        # When the board has anchor cutouts, the bumps must land ON them, so the
-        # cutout centres are authoritative and the taxel-grid derivation is
-        # skipped entirely.
-        _anchor = (edit_data.get("layout", {}).get("routing") or {}).get("anchor_holes")
-        _centers = (_anchor or {}).get("centers") or None
         result = build_bump_sheet(
             edit_data.get("final_outline", edit_data["outline"]), cable_y,
             placements, active,
-            float(params["pitch_x_mm"]), float(params["pitch_y_mm"]), bp,
-            centers_override=_centers)
+            float(params["pitch_x_mm"]), float(params["pitch_y_mm"]), bp)
 
         mesh = result.mesh
         stl_bytes = mesh.export(file_type="stl")

@@ -3,7 +3,7 @@
 manifest.json describes the board that was MADE. That is not the same thing as
 describing how to make it: /generate takes about thirty-five inputs and the
 manifest carried seven, so a re-import used to have to guess board_mode, the
-router, every clearance and the whole anchor-hole block, and would silently
+router and every clearance, and would silently
 produce a different board.
 
 Two records now come out of an export (export/design.py), and this pins both:
@@ -95,11 +95,6 @@ CASES = [
     # so a replay must not re-solve and land somewhere else.
     ("square/target-grid", dict(outline=SQUARE, router="hug", board_mode="expand",
                                 target_cols=6, target_rows=6)),
-    # Anchor holes rewrite the pitch from the cutout diameter; the recipe has to
-    # carry the whole block or the replay silently drops every cutout.
-    ("square/anchor-holes", dict(outline=SQUARE, router="hug", board_mode="expand",
-                                 pixel_w_mm=3, pixel_h_mm=3, pitch_x_mm=3.2, pitch_y_mm=3.2,
-                                 anchor_holes=True)),
     # Every value deliberately off its default, including a hand-upsized
     # connector. Without this, a recipe that silently fell back to defaults
     # would pass every case above — most designs are drawn near the defaults,

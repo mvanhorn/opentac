@@ -23,8 +23,7 @@ from __future__ import annotations
 import io
 
 import numpy as np
-from shapely.geometry import Point, Polygon
-from shapely.ops import unary_union
+from shapely.geometry import Polygon
 
 from .print_pdf import (INK, FAINT, MARGIN_MM, PAGES, MM_TO_PT, _Content,
                         _build_pdf, _draw_scale_check, _page_furniture)
@@ -45,8 +44,7 @@ def velostat_polygon(layout, outline_xy, inset_mm: float = 0.0) -> Polygon:
     whichever edge the cable is on. It ends a few mm inside the board edge,
     over the routing margin, where there is nothing to sense.
 
-    `inset_mm` > 0 shrinks it further. The anchor holes are not shrunk with it:
-    they are for a post that is the same size whatever the outer margin is.
+    `inset_mm` > 0 shrinks it further.
     """
     body = Polygon(np.asarray(outline_xy, dtype=float)).buffer(0)
     body = max(getattr(body, "geoms", [body]), key=lambda g: g.area)
@@ -55,14 +53,6 @@ def velostat_polygon(layout, outline_xy, inset_mm: float = 0.0) -> Polygon:
         if not shrunk.is_empty:
             body = max(getattr(shrunk, "geoms", [shrunk]), key=lambda g: g.area)
 
-    anchors = (getattr(layout, "routing", None) or {}).get("anchor_holes") or {}
-    centers = anchors.get("centers") or []
-    dia = float(anchors.get("dia_mm", 0.0))
-    if centers and dia > 0:
-        holes = [Point(c).buffer(dia / 2.0, quad_segs=16) for c in centers]
-        body = body.difference(unary_union(holes))
-        if not isinstance(body, Polygon):
-            body = max(body.geoms, key=lambda g: g.area)
     return body.buffer(0)
 
 

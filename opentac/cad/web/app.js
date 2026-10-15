@@ -1097,9 +1097,8 @@ window.addEventListener("otc:dxf-outline", (e) => {
 // `el.value = String(value)`, which is a no-op on a checkbox (setting .value
 // changes the submitted value, not the tick) and misses radio groups
 // entirely, because a group is addressed by NAME and only board_mode was
-// special-cased. So `anchor_holes`, `anchor_hole_square_cells`,
-// `follow_main_padding`, `smooth_follow_padding` and `anchor_hole_lattice`
-// all imported as "whatever the form happened to be showing" — invisible for
+// special-cased. So `follow_main_padding` and `smooth_follow_padding`
+// imported as "whatever the form happened to be showing" — invisible for
 // the built-in examples, which set none of them, and wrong for a design file,
 // which sets all of them.
 function applyParamsToForm(params) {
@@ -1539,31 +1538,6 @@ function syncAutoExpandControls() {
 }
 
 boardModeInputs.forEach((el) => el.addEventListener("change", syncAutoExpandControls));
-const anchorHolesEl = document.getElementById("anchor_holes");
-const anchorHolesBody = document.getElementById("anchor-holes-body");
-function syncAnchorHoleControls() {
-  if (!anchorHolesEl || !anchorHolesBody) return;
-  anchorHolesBody.hidden = !anchorHolesEl.checked;
-  // The pitch fields stop meaning anything once the cutouts dictate the pitch,
-  // so grey them out rather than let someone type a value that gets ignored.
-  for (const id of ["pitch_x_mm", "pitch_y_mm"]) {
-    const el = document.getElementById(id);
-    if (el) {
-      el.disabled = anchorHolesEl.checked;
-      el.title = anchorHolesEl.checked
-        ? "Set by the anchor-hole lattice — derived from the hole diameter and the column bus clearance."
-        : el.dataset.baseTitle || el.title;
-    }
-  }
-}
-if (anchorHolesEl) {
-  for (const id of ["pitch_x_mm", "pitch_y_mm"]) {
-    const el = document.getElementById(id);
-    if (el) el.dataset.baseTitle = el.title;
-  }
-  anchorHolesEl.addEventListener("change", syncAnchorHoleControls);
-  syncAnchorHoleControls();
-}
 
 function readParams() {
   const ids = ["pixel_w_mm", "pixel_h_mm", "pitch_x_mm", "pitch_y_mm",
@@ -1596,20 +1570,6 @@ function readParams() {
   }
   // Legacy flags, still sent so an older backend keeps behaving; the current
   // backend derives both from board_mode and ignores them.
-  // Anchor holes. The pitch fields above are still sent but the backend
-  // overrides them: the wide pitch is derived from the cutout diameter and the
-  // column bus, so a typed pitch cannot be honoured without breaking clearance.
-  p.anchor_holes = document.getElementById("anchor_holes").checked;
-  if (p.anchor_holes) {
-    p.anchor_hole_dia_mm = parseFloat(document.getElementById("anchor_hole_dia_mm").value) || 1.5;
-    p.anchor_hole_clearance_mm = parseFloat(document.getElementById("anchor_hole_clearance_mm").value) || 0;
-    const lat = document.querySelector('input[name="anchor_hole_lattice"]:checked');
-    p.anchor_hole_lattice = lat ? lat.value : "uniform";
-    p.anchor_hole_square_cells = document.getElementById("anchor_hole_square_cells").checked;
-    // target_cols/rows also dictate a pitch; the backend rejects both at once.
-    delete p.target_cols;
-    delete p.target_rows;
-  }
   p.preserve_sensors = true;
   p.auto_expand_board = p.board_mode === "expand";
   // Printed on the front silkscreen just inboard of the connector. The backend
@@ -2012,17 +1972,6 @@ function renderStats(stats, drc) {
       ? "0 violations — ready to manufacture"
       : `${drc.violations} violations — see details below`],
   ];
-  if (stats.anchor_holes) {
-    const lat = stats.anchor_hole_lattice === "paired"
-      ? `paired pitch (${stats.anchor_pitch_wide_x_mm} / ${stats.anchor_pitch_narrow_x_mm} mm)`
-      : `uniform pitch (${stats.anchor_pitch_wide_x_mm} mm)`;
-    summary.push(["Bump anchor holes",
-      `${stats.anchor_holes} × ⌀${stats.anchor_hole_dia_mm} mm through the board — ${lat}`]);
-    if (stats.anchor_hole_dropped_at_edge) {
-      summary.push(["Anchor holes skipped",
-        `${stats.anchor_hole_dropped_at_edge} too close to the board edge — those bumps get no post`]);
-    }
-  }
   if (stats.removed_pixels > 0) {
     summary.push(["Taxels dropped", `${stats.removed_pixels} (couldn't be wired cleanly — try a larger pitch or a simpler shape)`]);
   }
