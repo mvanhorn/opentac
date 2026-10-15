@@ -13,3 +13,6 @@ site/
 # data stays out of git (Zenodo / Releases)
 recordings/
 *.npz
+
+# Third-party 3D models (LCSC/EasyEDA, manufacturers) are not redistributed: see hardware/README.md
+hardware/libs/3dmodels/
