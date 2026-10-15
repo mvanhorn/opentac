@@ -28,6 +28,7 @@ pad numbers for every row and column net.
 
 import json
 import math
+import re
 
 # The footprint is default on all 24 boards in this repo, so a single flag
 # usually replaces the whole block. Values are mm.
@@ -498,6 +499,54 @@ def b41decode(text):
     return bytes(out)
 
 
+# --------------------------------------------------------------------------
+# the printed link
+#
+# The QR prints a link rather than the bare payload, so a phone camera opens a
+# page that decodes it (opentac.github.io/qr/, docs/javascripts/qr.js) instead
+# of showing a string that has to be carried to a computer.
+#
+# QR alphanumeric mode has no '#' or '?', and one character outside it puts the
+# whole code in byte mode, which is far bigger. So the payload rides in the URL
+# PATH, and every character of the link is in alphanumeric mode. That is also
+# why the scheme and host are uppercase; browsers fold both.
+#
+# Every '/' in the payload is printed as '*'. '*' is in alphanumeric mode and
+# legal in a URL path, and with no '/' left the payload is one path segment,
+# so a browser cannot drop or rewrite part of it as a '.' or '..' segment.
+# '*' is not in base41, so the swap is unambiguous in both directions.
+#
+# The path does not exist on the site: GitHub Pages answers it with 404.html,
+# which sends /q/<payload> (any case) on to /qr/#<payload> (overrides/404.html).
+# --------------------------------------------------------------------------
+
+LINK_PREFIX = "HTTPS://OPENTAC.GITHUB.IO/Q/"
+
+# What payload_from_text recognises as the link, after whitespace removal and
+# upper-casing: with or without the scheme, and also the decoder-page address
+# a browser shows once the redirect has happened (.../QR/#<payload>).
+_LINK = re.compile(r"^(?:HTTPS?://)?OPENTAC\.GITHUB\.IO/(?:Q/|QR/?#)(.*)$")
+
+
+def qr_link(payload):
+    """The text the QR prints for a base41 payload."""
+    return LINK_PREFIX + payload.replace("/", "*")
+
+
+def payload_from_text(text):
+    """The bare base41 payload from whatever a scanner or a person hands over.
+
+    That is either the link (any case, with or without https://, '*' or '/')
+    or the bare payload that boards printed before the link -- and boards too
+    small for it -- carry. Whitespace is dropped anywhere; base41 has none.
+    """
+    text = "".join(str(text).split()).upper()
+    m = _LINK.match(text)
+    if m:
+        text = m.group(1)
+    return text.replace("*", "/")
+
+
 def load_manifest(path):
     with open(path) as fh:
         m = json.load(fh)
@@ -575,13 +624,14 @@ def to_manifest(core):
 def manifest_from_scan(payload):
     """The whole path: the string a scanner gives you -> a manifest dict.
 
-    `payload` is exactly what comes off the QR. Whitespace is stripped and case
-    folded up, because base41 is uppercase and phone scanners sometimes hand
-    back a trimmed or lowercased string.
+    `payload` is exactly what comes off the QR: the link, or the bare payload
+    on older and small boards (see payload_from_text). Whitespace is stripped
+    and case folded up, because base41 is uppercase and phone scanners
+    sometimes hand back a trimmed or lowercased string.
     """
     # base41 contains no whitespace at all, so trimming is now safe as well as
     # convenient -- which is the point of dropping ' ' from the alphabet.
-    text = "".join(str(payload).split()).upper()
+    text = payload_from_text(payload)
     if not text:
         raise TaxelCoreError("empty payload")
     bad = sorted({ch for ch in text if ch not in B41})

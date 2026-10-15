@@ -100,6 +100,11 @@ def test_cli_manifest_from_qr(tmp_path, capsys):
     assert json.loads(out.read_text())["m"] == raw["m"]
     assert main(["manifest", "from-qr", "not a qr!"]) == 1
     assert "cannot read the QR" in capsys.readouterr().err
+    # what a phone reads off a board printed since the QR became a link
+    link = tmp_path / "from_link.json"
+    assert main(["manifest", "from-qr", " " + taxel_core.qr_link(payload).lower() + "\n",
+                 "-o", str(link)]) == 0
+    assert link.read_bytes() == out.read_bytes()
 
 
 def test_cli_setup_dry_run(tmp_path, capsys):

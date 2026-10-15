@@ -147,6 +147,36 @@ def test_qr_round_trip(name, board):
     assert spec["shear_groups"] is None           # the QR carries no shear grouping
 
 
+def test_qr_link_forms_decode_like_the_bare_payload():
+    """Boards print the QR as a link (taxel_core.qr_link); codes printed before
+    that, and on boards too small for the link, carry the bare payload. Every
+    form a scanner or a person can hand over must give the same file, byte for
+    byte, so the same skin id."""
+    # pinky_tip's payload has three '/', which the link prints as '*'.
+    raw_m = taxel_core.load_manifest(ROOT / "examples" / "manifests" / "pinky_tip_30pin.json")
+    payload = taxel_core.b41encode(taxel_core.encode(raw_m))
+    assert payload.count("/") == 3
+    ref = manifest.from_qr(payload).source_bytes
+
+    link = taxel_core.qr_link(payload)
+    assert link == "HTTPS://OPENTAC.GITHUB.IO/Q/" + payload.replace("/", "*")
+    host_path = link[len("HTTPS://"):]
+    for text in (link, link.lower(), " \t" + link + "\r\n", host_path, host_path.lower(),
+                 link.replace("*", "/"), "http://opentac.github.io/q/" + payload,
+                 "https://opentac.github.io/qr/#" + payload.replace("/", "*"),
+                 payload.replace("/", "*"), payload.lower()):
+        assert manifest.from_qr(text).source_bytes == ref, text
+
+    # The link does not weaken the checksum: a changed character is still refused.
+    i = len("HTTPS://OPENTAC.GITHUB.IO/Q/") + 4
+    bad = link[:i] + ("A" if link[i] != "A" else "B") + link[i + 1:]
+    with pytest.raises(manifest.ManifestError, match="QR"):
+        manifest.from_qr(bad)
+    # Someone else's link is not read as a payload.
+    with pytest.raises(manifest.ManifestError, match="QR"):
+        manifest.from_qr("https://example.com/q/" + payload)
+
+
 def test_qr_garbage():
     with pytest.raises(manifest.ManifestError, match="QR"):
         manifest.from_qr("HELLO WORLD!")

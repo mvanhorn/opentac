@@ -32,7 +32,8 @@ from opentac.cad.export.silk_backmark import (
     DIM_CELL_MARGIN_MM, DIM_STROKE_W_MM, DIM_TEXT_H_MM, EDGE_CLEAR_MM,
     GRID_MINOR_MM, MODULE_MM, PRECOMP_MM, backmark)
 from opentac.cad.export.taxel_core import (
-    ABSENT, B41, TaxelCoreError, b41decode, decode, manifest_from_scan, taxels)
+    ABSENT, B41, LINK_PREFIX, TaxelCoreError, b41decode, decode, manifest_from_scan,
+    qr_link, taxels)
 from opentac.cad.main import generate, GenerateRequest
 
 SQUARE = [[-20, -20], [20, -20], [20, 20], [-20, 20]]
@@ -334,3 +335,110 @@ def test_a_mangled_scan_fails_loudly():
         ch = rng.choice([c for c in B41 if c != payload[i]])
         with pytest.raises(TaxelCoreError):
             manifest_from_scan(payload[:i] + ch + payload[i + 1:])
+
+
+# --------------------------------------------------------------------------
+# the link: what a phone camera opens
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("tag,outline,mode,pw,pitch", CASES)
+def test_the_qr_is_a_link_when_it_fits(tag, outline, mode, pw, pitch):
+    """A phone camera opens a link; it only shows a bare payload as text.
+
+    The link has to stay inside QR alphanumeric mode -- one character outside
+    it and segno would have to fall back to byte mode, a much bigger code -- and
+    the payload has to survive a browser: no '/' left (so no '.' or '..' path
+    segment a browser would rewrite), and every link form decodes to the same
+    manifest as the bare payload.
+    """
+    import segno
+
+    manifest_json, _ = _manifest(outline, mode, pw, pitch)
+    q = backmark(manifest_json)["qr"]
+    assert q["form"] == "link", "%s: printed %s" % (tag, q["form"])
+    assert q["text"] == qr_link(q["payload"]) == LINK_PREFIX + q["payload"].replace("/", "*")
+    assert set(q["text"]) <= set(QR_ALNUM), "%s: link leaves alphanumeric mode" % tag
+    assert segno.make(q["text"], error="M", mode="alphanumeric").version == q["version"]
+
+    segment = q["text"][len(LINK_PREFIX):]
+    assert "/" not in segment and segment not in (".", ".."), \
+        "%s: the payload is more than one path segment" % tag
+
+    reference = manifest_from_scan(q["payload"])
+    host_path = q["text"][len("HTTPS://"):]
+    for text in (q["text"], q["text"].lower(), host_path, " " + host_path.lower() + "\n",
+                 q["text"].replace("*", "/"), "https://opentac.github.io/qr/#" + q["payload"]):
+        assert manifest_from_scan(text) == reference, "%s: %r decodes differently" % (tag, text)
+
+
+def _resized(manifest_json, side):
+    """The same manifest on a square board of the given side, centred on the
+    taxel field -- the QR's first choice of position."""
+    man = json.loads(manifest_json)
+    xs = [p[0] for p in man["pixels"]]
+    ys = [p[1] for p in man["pixels"]]
+    cx, cy = (min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0
+    h = side / 2.0
+    man["edge_cuts"] = [[cx - h, cy - h], [cx + h, cy - h], [cx + h, cy + h], [cx - h, cy + h]]
+    return json.dumps(man)
+
+
+def test_a_board_too_small_for_the_link_gets_the_bare_code():
+    """The link costs 28 characters, a QR version, ~1.4 mm a side. A board that
+    has room for the bare code but not the link still gets a code, and says
+    which; one without room for either gets none, and says so."""
+    manifest_json, _ = _manifest(SQUARE, "expand", 2.0, 2.2)
+    big = backmark(manifest_json)["qr"]
+    assert big["form"] == "link"
+    link_mm = big["size_mm"]
+    bare_payload = big["payload"]
+
+    from opentac.cad.export.silk_backmark import _qr_size_mm
+    bare_mm = _qr_size_mm(json.loads(manifest_json), "bare")
+    assert bare_mm < link_mm
+
+    small = _resized(manifest_json, (bare_mm + link_mm) / 2.0)
+    mark = backmark(small)
+    q = mark["qr"]
+    assert q and q["form"] == "bare" and q["text"] == q["payload"] == bare_payload
+    assert abs(q["size_mm"] - bare_mm) < 1e-9
+    assert any("QR link" in w and "bare" in w for w in mark["warnings"]), mark["warnings"]
+    assert manifest_from_scan(q["text"]) == manifest_from_scan(qr_link(bare_payload))
+
+    # and it is still printed inside the board, quiet zone included
+    poly = Polygon(json.loads(small)["edge_cuts"])
+    (cx, cy), h = q["center"], q["size_mm"] / 2.0
+    assert poly.buffer(1e-9).contains(box(cx - h, cy - h, cx + h, cy + h))
+
+    tiny = backmark(_resized(manifest_json, bare_mm - 0.5))
+    assert tiny["qr"] is None
+    assert any("omitted" in w and "as a link" in w and "bare code" in w
+               for w in tiny["warnings"]), tiny["warnings"]
+
+
+def test_a_small_exported_board_carries_the_bare_code_in_both_files():
+    """The whole export path on a board the link does not fit: a 10 mm square.
+
+    The board file and the Gerber must both carry the bare code, and the
+    /generate stats must say which code the back carries.
+    """
+    resp = generate(GenerateRequest(
+        outline=[[-5, -5], [5, -5], [5, 5], [-5, 5]], router="hug", board_mode="expand",
+        pixel_w_mm=2.0, pixel_h_mm=2.0, pitch_x_mm=2.2, pitch_y_mm=2.2))
+    import base64
+    import io
+    import zipfile
+    z = zipfile.ZipFile(io.BytesIO(base64.b64decode(resp.zip_b64)))
+    manifest_json = z.read("manifest.json").decode()
+    mark = backmark(manifest_json)
+    assert mark["qr"] and mark["qr"]["form"] == "bare"
+
+    stats = resp.stats["back_qr"]
+    assert stats["form"] == "bare" and stats["text"] == mark["qr"]["payload"]
+    assert any("QR link" in w for w in stats["warnings"])
+
+    pcb = z.read("board.kicad_pcb").decode()
+    n_seg = sum(len(poly) - 1 for poly in mark["strokes"])
+    assert pcb.count('(layer "B.SilkS")') == len(mark["rects"]) + n_seg
+    gbo = z.read("gerber/board-B_Silkscreen.gbo").decode()
+    assert gbo.count("G36*") == len(mark["rects"])

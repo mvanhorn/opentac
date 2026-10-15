@@ -312,7 +312,8 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("file", help="manifest.json or design .zip")
     q.set_defaults(func=_manifest_check)
     q = msub.add_parser("from-qr", help="rebuild a manifest from the text of the sensor's QR code")
-    q.add_argument("text", help="the text a QR scanner app reads off the back of the sensor")
+    q.add_argument("text", help="what a QR scanner reads off the back of the sensor: the link "
+                   "(https://opentac.github.io/q/...) or, on older boards, the bare code; quote it")
     q.add_argument("-o", "--out", help="write the manifest here (default: print it)")
     q.set_defaults(func=_manifest_from_qr)
     return parser

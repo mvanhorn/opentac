@@ -60,6 +60,7 @@ from opentac.cad.export.legacy_manifest import (
     is_legacy_manifest, recover as recover_legacy, geometry_svg,
 )
 from opentac.cad.export.print_pdf import generate_print_pdf
+from opentac.cad.export.silk_backmark import backmark
 from opentac.cad.export.velostat import velostat_polygon, velostat_dxf, velostat_fold_pdf
 from opentac.cad.export.gerber import generate_gerbers
 from opentac.cad.export.excellon import generate_drill_file
@@ -1629,6 +1630,7 @@ def _build_outputs(
         "routing_warning_nets": len(incomplete_nets),
         "row_routes_left": int(layout.routing.get("row_routes_left", 0)),
         "row_routes_right": int(layout.routing.get("row_routes_right", 0)),
+        "back_qr": _back_qr_stats(manifest_json),
     }
     drc = {
         "violations": len(violations) + len(incomplete_nets),
@@ -1664,6 +1666,18 @@ def _build_outputs(
             "fold": velo_info.get("fold"),
         }
     return svg_text, stats, drc, zip_b64
+
+
+def _back_qr_stats(manifest_json) -> dict:
+    """Which QR the back silkscreen carries, so the export can say so: "link"
+    (a phone opens the decoder page), "bare" (a board too small for the link;
+    a phone shows text) or None. See export/silk_backmark.py."""
+    mark = backmark(manifest_json)
+    q = mark["qr"]
+    return {"form": q["form"] if q else None,
+            "size_mm": round(q["size_mm"], 2) if q else None,
+            "text": q["text"] if q else None,
+            "warnings": list(mark["warnings"])}
 
 
 @app.post("/generate", response_model=GenerateResponse)

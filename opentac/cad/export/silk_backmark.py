@@ -14,6 +14,13 @@ board in this repo, which is a QR small enough to print. That is everything
 needed to READ a sensor -- the scan order, where each taxel physically sits,
 and which pad drives it.
 
+It prints as a link, HTTPS://OPENTAC.GITHUB.IO/Q/<payload> (taxel_core.qr_link),
+so a phone camera opens the website's decoder page. The link is 28 characters
+longer than the payload: one QR version (two on 1 of the 31 example designs),
+1.4 mm a side per version. A board too small for it gets the bare payload,
+which a phone shows as text for the decoder page or `opentac manifest
+from-qr`; a board too small for that gets no QR.
+
 THE GRID carries the board's shape, by making the photograph measurable. The
 outline is deliberately not in the QR (it is 80-95% of the payload, and the
 physical board already has it), so it comes from a picture instead. On a FLEX
@@ -78,7 +85,7 @@ import numpy as np
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import polylabel
 
-from opentac.cad.export.taxel_core import b41encode, encode as encode_core
+from opentac.cad.export.taxel_core import b41encode, encode as encode_core, qr_link
 
 # Geometry, all mm. See the sizing note above before changing MODULE_MM.
 MODULE_MM = 0.35
@@ -107,6 +114,10 @@ DIM_STROKE_W_MM = 0.2      # their recommended silkscreen width, not the 0.15 fl
 DIM_CELL_MARGIN_MM = 0.6   # text to cell wall
 
 SUBDIV = 16                # sub-cells per module when pre-compensating
+
+# What the QR says, in order of preference: the link, then the bare payload for
+# a board too small for the link. See the module docstring.
+QR_FORMS = ("link", "bare")
 
 
 # --------------------------------------------------------------------------
@@ -187,16 +198,24 @@ def _ink_runs(dark, precomp_modules):
     return out
 
 
-def qr_rects(manifest, center):
+def _qr_text(manifest, form):
+    """(blob, payload, text): the taxel core, its base41 payload, and what a
+    QR of this form prints."""
+    blob = encode_core(manifest)
+    payload = b41encode(blob)
+    return blob, payload, (qr_link(payload) if form == "link" else payload)
+
+
+def qr_rects(manifest, center, form="link"):
     """QR ink rectangles in board coords (y-up), pre-mirrored in X.
 
-    Returns (rects, info) where info carries version/module count/size so the
-    caller can report what it placed.
+    `form` is "link" or "bare" (QR_FORMS). Returns (rects, info) where info
+    carries the printed text, version, module count and size so the caller can
+    report what it placed.
     """
     try:
-        blob = encode_core(manifest)
-        payload = b41encode(blob)
-        dark, version = _qr_matrix(payload)
+        blob, payload, text = _qr_text(manifest, form)
+        dark, version = _qr_matrix(text)
     except Exception:
         return [], None
     if dark is None:
@@ -217,7 +236,7 @@ def qr_rects(manifest, center):
         ry0 = y1 - b * MODULE_MM
         rects.append((rx0, ry0, rx1, ry1))
     return rects, {
-        "payload": payload, "bytes": len(blob),
+        "form": form, "text": text, "payload": payload, "bytes": len(blob),
         "version": version, "modules": n, "size_mm": side,
         "module_mm": MODULE_MM, "precomp_mm": PRECOMP_MM,
         "center": (cx, cy),
@@ -411,7 +430,7 @@ def origin_rects(edge_cuts):
 # entry point
 # --------------------------------------------------------------------------
 
-def _qr_center(manifest, edge_cuts, tcx, tcy):
+def _qr_center(edge_cuts, tcx, tcy, size):
     """Where the QR goes.
 
     First choice is the centre of the taxel field: every board has one, it is
@@ -424,8 +443,9 @@ def _qr_center(manifest, edge_cuts, tcx, tcy):
     from any edge, which is the best place a square of unknown size can go on a
     concave outline. `polylabel` finds it far more reliably than the centroid,
     which on a horseshoe or a U sits outside the board entirely.
+
+    `size` is the printed side of the QR, quiet zone included.
     """
-    size = _qr_size_mm(manifest)
     inner = _inset(edge_cuts, 0.0)
     if inner is None or size is None:
         return (tcx, tcy)
@@ -442,10 +462,10 @@ def _qr_center(manifest, edge_cuts, tcx, tcy):
     return (pole.x, pole.y)
 
 
-def _qr_size_mm(manifest):
+def _qr_size_mm(manifest, form="link"):
     """Printed side of the QR, quiet zone included, without building artwork."""
     try:
-        dark, _ = _qr_matrix(b41encode(encode_core(manifest)))
+        dark, _ = _qr_matrix(_qr_text(manifest, form)[2])
     except Exception:
         return None
     return None if dark is None else dark.shape[0] * MODULE_MM
@@ -493,10 +513,27 @@ def _backmark(manifest_json, enable=True):
 
     tx = [p[0] for p in manifest["pixels"]]
     ty = [p[1] for p in manifest["pixels"]]
-    center = _qr_center(manifest, edge_cuts, (min(tx) + max(tx)) / 2.0,
-                        (min(ty) + max(ty)) / 2.0)
+    tcx, tcy = (min(tx) + max(tx)) / 2.0, (min(ty) + max(ty)) / 2.0
 
-    qr, info = qr_rects(manifest, center)
+    # The link if it fits, else the bare payload, else nothing. A QR that
+    # overhangs the cut line is worse than no QR: the fab clips it and the
+    # remains do not decode. So each form is placed and checked, and what was
+    # printed instead is said rather than left to be found on the board.
+    inner = _inset(edge_cuts, 0.0)
+    qr, info, center, missed = [], None, None, []
+    for form in QR_FORMS:
+        size = _qr_size_mm(manifest, form)
+        if size is None:
+            break                # no segno, or a grid the format cannot hold
+        at = _qr_center(edge_cuts, tcx, tcy, size)
+        half = size / 2.0
+        if inner is not None and inner.contains(
+                box(at[0] - half, at[1] - half, at[0] + half, at[1] + half)):
+            qr, info = qr_rects(manifest, at, form)
+            center = at if info else None
+            break
+        missed.append((form, size))
+
     keep = []
     warnings = []
     strokes, dim_bb = [], None
@@ -504,20 +541,18 @@ def _backmark(manifest_json, enable=True):
         half = info["size_mm"] / 2.0 + QR_CLEAR_MM
         keep.append((center[0] - half, center[1] - half,
                      center[0] + half, center[1] + half))
-        # A QR that overhangs the cut line is worse than no QR: the fab clips
-        # it and the remains do not decode. Drop it and say so rather than
-        # shipping a broken mark.
-        inner = _inset(edge_cuts, 0.0)
-        qhalf = info["size_mm"] / 2.0
-        fits = inner is not None and inner.contains(
-            box(center[0] - qhalf, center[1] - qhalf,
-                center[0] + qhalf, center[1] + qhalf))
-        if not fits:
+        if missed:
             warnings.append(
-                "taxel-core QR (%.1f mm) does not fit anywhere inside the board "
-                "outline; back QR omitted, registration grid kept"
-                % info["size_mm"])
-            qr, info, keep = [], None, []
+                "the QR link (%.2f mm) does not fit inside the board outline; "
+                "the back carries the bare taxel-core code (%.2f mm) instead, which "
+                "a phone shows as text: paste it at opentac.github.io/qr/ or run "
+                "opentac manifest from-qr" % (missed[0][1], info["size_mm"]))
+    elif missed:
+        warnings.append(
+            "taxel-core QR (%s) does not fit anywhere inside the board outline; "
+            "back QR omitted, registration grid kept"
+            % ", ".join("%.2f mm as %s" % (size, "a link" if form == "link" else "the bare code")
+                        for form, size in missed))
 
     # No keep-out: the label sits inside a cell, so it cannot cross a grid line.
     strokes, dim_bb = dim_label(edge_cuts, center if info else None,
