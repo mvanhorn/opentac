@@ -16,3 +16,6 @@ recordings/
 
 # Third-party 3D models (LCSC/EasyEDA, manufacturers) are not redistributed: see hardware/README.md
 hardware/libs/3dmodels/
+
+# KiCad per-user view settings, written whenever a board is opened or plotted
+*.kicad_prl
