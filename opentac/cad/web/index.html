@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OpenTactileCAD — v2</title>
+  <title>OpenTac CAD</title>
   <link rel="stylesheet" href="style.css" />
 
   <!-- Resolve bare "three" imports (used by the vendored addons) to the local build -->
@@ -18,7 +18,7 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>OpenTactileCAD <span class="tag">v2</span></h1>
+    <h1>OpenTac CAD</h1>
     <nav class="topnav" aria-label="Primary">
       <button id="nav-home" type="button" class="linklike">Home</button>
       <button id="nav-tool" type="button" class="linklike">Tool</button>
@@ -34,7 +34,7 @@
       <div class="panel landing-hero">
         <h2>Custom tactile sensors, wrapped around any real part</h2>
         <p>
-          OpenTactileCAD designs custom piezoresistive tactile sensor arrays — for robot
+          OpenTac CAD designs custom piezoresistive tactile sensor arrays — for robot
           grippers, prosthetic hands, wearables, or any surface that needs to feel
           contact — and turns them into a fully routed, manufacturable PCB: sensor
           pixels, wiring, connector, DRC-checked routing, and KiCad/Gerber files,
@@ -113,7 +113,7 @@
         </article>
       </div>
 
-      <h3 class="landing-modes__label">Two more ways to use OpenTactileCAD</h3>
+      <h3 class="landing-modes__label">Two more ways to use OpenTac CAD</h3>
       <div class="landing-guides">
         <article class="panel guide-card">
           <h2>Run it on your own computer — much faster</h2>
@@ -125,29 +125,26 @@
           </p>
           <ol>
             <li>
-              Install <strong>Python 3.12 or newer</strong> from
-              <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>.
-              On Windows, tick <em>"Add python.exe to PATH"</em> in the installer.
-            </li>
-            <li>
               Download the code: on
-              <a href="https://github.com/OpenTactileCAD/OpenTactileCAD" target="_blank" rel="noopener">the project's GitHub page</a>,
+              <a href="https://github.com/opentac/opentac.github.io" target="_blank" rel="noopener">the project's GitHub page</a>,
               click the green <strong>Code</strong> button → <strong>Download ZIP</strong>, and unzip it
               anywhere (or <code>git clone</code> it if you use git).
             </li>
             <li>
-              Open the unzipped folder and double-click
-              <strong><code>Start_OpenTactileCAD.bat</code></strong> (Windows) or
-              <strong><code>Start_OpenTactileCAD.command</code></strong> (Mac).
-              The first run installs what it needs into its own private folder — a few
-              minutes, one time only. After that it starts in seconds and opens this same
-              app in your browser.
+              Open the folder and double-click
+              <strong><code>Start_OpenTac.bat</code></strong> (Windows) or
+              <strong><code>Start_OpenTac.command</code></strong> (Mac).
+              If <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv</a> is not
+              installed yet, it offers to install it. The first run then downloads what the app
+              needs, a few minutes, once. After that it starts in seconds and opens this same app
+              in your browser.
             </li>
           </ol>
           <p class="guide-card__note">
             Mac: if double-clicking is blocked, open Terminal, type <code>bash&nbsp;</code>
-            (with a trailing space), drag <code>Start_OpenTactileCAD.command</code> onto the
-            window, and press Enter. On Linux, run that same command.
+            (with a trailing space), drag <code>Start_OpenTac.command</code> onto the
+            window, and press Enter. On Linux, run that same command. With uv installed you can
+            also run <code>uv run opentac cad</code> from the folder.
           </p>
         </article>
         <article class="panel guide-card">

@@ -1,4 +1,4 @@
-"""Outline construction and validation for OpenTactileCAD.
+"""Outline construction and validation for OpenTac CAD.
 
 Everything here exists to keep a generated outline out of the failure modes
 documented in NOTES.md ("The cable edge must be a real edge") and in

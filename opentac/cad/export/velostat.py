@@ -94,7 +94,7 @@ def _mirror_rings(rings, axis: str, about: float):
     return [[(x, 2 * about - y) for x, y in r] for r in rings]
 
 
-def velostat_fold_pdf(poly: Polygon, title="OpenTactileCAD Velostat fold template",
+def velostat_fold_pdf(poly: Polygon, title="OpenTac CAD Velostat fold template",
                       info=None) -> bytes | None:
     """Shape + its mirror image across a crease, at 1:1.
 
@@ -151,7 +151,7 @@ def velostat_fold_pdf(poly: Polygon, title="OpenTactileCAD Velostat fold templat
             halves = [[[(x + dx, y + dy) for x, y in r] for r in rings]]
 
         _page_furniture(
-            c, title if crease else "OpenTactileCAD Velostat cutting template",
+            c, title if crease else "OpenTac CAD Velostat cutting template",
             f"Piece {w:.1f} x {h:.1f} mm  |  1:1 - print at 100% (Actual size)  |  sheet: {name}",
             pw, ph)
         c.text(MARGIN_MM, ph - MARGIN_MM - 8.5,

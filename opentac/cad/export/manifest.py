@@ -228,7 +228,7 @@ def export_manifest(
     # ignored by every consumer, so a "_readme" costs nothing but is visible
     # the moment someone opens the file.
     readme = [
-        "OpenTactileCAD sensor manifest. Lengths in mm.",
+        "OpenTac CAD sensor manifest. Lengths in mm.",
         "Coordinates are Y-UP and share one frame (cable edge horizontal at the"
         " bottom), so 'outline', 'edge_cuts' and 'pixels' overlay directly."
         " The KiCad export negates Y.",
@@ -253,7 +253,7 @@ def export_manifest(
         " The bump SHEET is optional and its height/taper are chosen when it"
         " is built, so they are not here - this is only where bumps would go.",
         *( _SIM_README_LINES if sim3d else () ),
-        "'design' is the RECIPE: every input OpenTactileCAD needs to rebuild"
+        "'design' is the RECIPE: every input OpenTac CAD needs to rebuild"
         " this board. Open this file in the app to keep editing the design."
         " Everything above it describes the RESULT and is ignored on import."
         " design.json, beside this file in the ZIP, additionally restores"

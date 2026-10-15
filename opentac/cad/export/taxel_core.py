@@ -533,7 +533,7 @@ def to_manifest(core):
 
     return {
         "_readme": [
-            "OpenTactileCAD sensor manifest, RECOVERED from the back-silkscreen QR.",
+            "OpenTac CAD sensor manifest, RECOVERED from the back-silkscreen QR.",
             "Lengths in mm. Coordinates are Y-UP, the same frame the printed "
             "registration grid uses, whose origin is this frame's (0, 0).",
             "Positions are quantized to 0.01 mm by the printed format; the "

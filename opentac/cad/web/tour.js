@@ -8,7 +8,7 @@ import { applyModeVisibility, getSelectedMode } from "./landing.js";
 const BASE_STEPS = [
   {
     view: "landing",
-    title: "Welcome to OpenTactileCAD",
+    title: "Welcome to OpenTac CAD",
     body: "Design custom piezoresistive tactile sensor arrays — for robot grippers, prosthetic hands, wearables, anything that needs to feel contact — and get back a fully routed, manufacturable PCB. Pixels, wiring, connector, and fab files, generated automatically. This short tour walks through the basics.",
   },
   {
