@@ -569,25 +569,6 @@ button.mode-button.active {
   color: var(--muted);
 }
 
-.connector-upsize {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel-2);
-  flex-wrap: wrap;
-}
-.connector-upsize[hidden] { display: none; }
-.connector-upsize label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
-.connector-upsize .hint { margin: 0; font-size: 11px; }
-.connector-upsize select {
-  font: inherit; padding: 5px 7px; border-radius: 5px;
-  border: 1px solid var(--line); background: #0c1116; color: var(--text);
-}
-
 #stats { margin-top: 10px; font-size: 12px; }
 #stats table { width: 100%; border-collapse: collapse; }
 #stats td { padding: 2px 0; color: var(--muted); }
@@ -634,6 +615,7 @@ button.mode-button.active {
 .generate-actions {
   margin-top: 0;
 }
+.generate-panel__body #stats { grid-column: 1 / -1; }
 /* The download step, as its own panel at the foot of the views column. flex:none
    so it keeps its natural height and does not compete with .view--grow above. */
 .download-bar {

@@ -98,6 +98,7 @@ def params_to_dict(params: Params) -> dict:
         # Round-trips so a re-opened design keeps its silkscreen label instead
         # of silently re-exporting as an unnamed board.
         "design_name": params.design_name,
+        "readout_board": params.readout_board,
     }
 
 

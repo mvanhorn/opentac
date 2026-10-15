@@ -1,5 +1,6 @@
 """Net assignment, connector selection, pad mapping, and cable geometry."""
 
+import dataclasses
 import numpy as np
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
@@ -312,7 +313,7 @@ def layout_with_connector(
     if params.connector_pos_override is not None:
         conn_pos, conn_swap = resolve_connector_override(params.connector_pos_override, n_row, n_col)
     else:
-        conn_pos, conn_swap = select_connector_for_nets(n_row, n_col)
+        conn_pos, conn_swap = select_connector_for_nets(n_row, n_col, params.readout_board)
 
     # Order nets for pad assignment
     col_nets_ordered = sort_nets_by_mean_xy(col_nets, placements_xy, col_net_per_pixel, "COL")
@@ -663,9 +664,19 @@ def layout_fixed_hug_keepout(
     if seed_profile is not None:
         profile = seed_profile.copy()
     else:
-        full_layout = layout_with_connector(
-            outline_xy, params, fill_xy, pack_anchor="top_center",
-            join_split_nets=join_split_nets)
+        # Provisional full pack, only to size the wiring band. It uses the same
+        # connector as the final layout when it fits; when the full grid is too
+        # big for that board (the carve below takes rows away), any connector
+        # will do here, and the board limit applies to the carved layout.
+        try:
+            full_layout = layout_with_connector(
+                outline_xy, params, fill_xy, pack_anchor="top_center",
+                join_split_nets=join_split_nets)
+        except ConnectorCapacityError:
+            full_layout = layout_with_connector(
+                outline_xy, dataclasses.replace(params, readout_board="any",
+                                                connector_pos_override=None),
+                fill_xy, pack_anchor="top_center", join_split_nets=join_split_nets)
         profile = keepout_mod.make_profile(outline_xy, floor)
         profile.widths = np.maximum(
             profile.widths, hug_keepout_widths(profile, params, full_layout))
@@ -836,6 +847,34 @@ CONNECTOR_UPSIZE_OPTIONS = [80, 90, 100]
 
 CONNECTOR_FAMILY = CONNECTOR_AUTO_OPTIONS + CONNECTOR_UPSIZE_OPTIONS
 
+# The OpenTac readout boards and the FPC connector each one carries. A sensor
+# made for one of them uses that board's connector size; on both boards one
+# connector half is wired to the drive side and the other to the sense side,
+# which matches connector_segment_pad_ranges' split exactly (30-pos: 1-15 /
+# 16-30, 60-pos: 1-30 / 31-60), so rows and columns may take either half.
+READOUT_BOARDS = {"30pin": 30, "60pin": 60}
+READOUT_BOARD_LIMITS = {"30pin": "15 rows x 15 columns", "60pin": "30 rows x 30 columns"}
+class ConnectorCapacityError(ValueError):
+    """The sensor has more rows or columns than the connector (or readout
+    board) allowed for it can carry."""
+
+
+# "auto": the 30-pin board when the grid fits it, else the 60-pin board.
+# "any": the whole auto-selectable family (no OpenTac readout board for most sizes).
+READOUT_BOARD_CHOICES = ("auto", "30pin", "60pin", "any")
+
+
+def connector_options_for(readout_board: str) -> list[int]:
+    """Connector sizes the selector may use for a readout-board choice."""
+    if readout_board == "auto":
+        return [READOUT_BOARDS["30pin"], READOUT_BOARDS["60pin"]]
+    if readout_board in READOUT_BOARDS:
+        return [READOUT_BOARDS[readout_board]]
+    if readout_board == "any":
+        return list(CONNECTOR_AUTO_OPTIONS)
+    raise ValueError(
+        f"readout_board must be one of {READOUT_BOARD_CHOICES}, got {readout_board!r}.")
+
 
 # Pads deliberately left unconnected so the row/column boundary can land on the
 # connector's true mechanical centre. Only 70-pos needs this: its 70 pads are an
@@ -900,10 +939,21 @@ def _best_fit_swap(conn_pos: int, n_row: int, n_col: int):
     return True, s_swap < s_normal - 1e-9
 
 
-def select_connector_for_nets(n_row: int, n_col: int) -> tuple[int, bool]:
-    """Select the smallest auto-selectable connector that fits the nets."""
+def select_connector_for_nets(n_row: int, n_col: int,
+                              readout_board: str = "any") -> tuple[int, bool]:
+    """Select the smallest connector that fits the nets, among the sizes the
+    readout-board choice allows (see connector_options_for)."""
+    options = connector_options_for(readout_board)
+    if readout_board != "any" and not any(_best_fit_swap(cp, n_row, n_col)[0] for cp in options):
+        board = "30pin" if readout_board == "30pin" else "60pin"
+        hint = ("Choose the 60-pin readout board, or use a larger taxel pitch or a smaller outline."
+                if board == "30pin" else
+                "Use a larger taxel pitch or a smaller outline.")
+        raise ConnectorCapacityError(
+            f"This sensor needs {n_row} rows and {n_col} columns, but the "
+            f"{board[:2]}-pin readout board reads at most {READOUT_BOARD_LIMITS[board]}. {hint}")
     capacities = []
-    for cp in CONNECTOR_AUTO_OPTIONS:
+    for cp in options:
         L, R = _connector_capacity(cp)
         capacities.append((cp, L, R))
         fits, swap = _best_fit_swap(cp, n_row, n_col)
@@ -920,7 +970,7 @@ def select_connector_for_nets(n_row: int, n_col: int) -> tuple[int, bool]:
         if suggested is not None
         else f"reduce row/column count or add connector support larger than {CONNECTOR_FAMILY[-1]}-pos"
     )
-    raise ValueError(
+    raise ConnectorCapacityError(
         f"No connector fits n_row={n_row} n_col={n_col}. "
         f"Largest auto-selectable connector is {largest_cp}-pos with capacity "
         f"{largest_l} nets on one side and {largest_r} nets on the other. "
@@ -937,7 +987,7 @@ def resolve_connector_override(conn_pos: int, n_row: int, n_col: int) -> tuple[i
     fits, swap = _best_fit_swap(conn_pos, n_row, n_col)
     if not fits:
         L, R = _connector_capacity(conn_pos)
-        raise ValueError(
+        raise ConnectorCapacityError(
             f"{conn_pos}-pos connector cannot fit n_row={n_row} n_col={n_col} "
             f"(capacity {L} nets on one side, {R} on the other). "
             f"Choose a larger connector_pos_override."

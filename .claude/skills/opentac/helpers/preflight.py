@@ -62,9 +62,10 @@ def preflight(outline, pixel_w_mm: float, pixel_h_mm: float,
     need = min_cable_edge_mm(rows, cols)
     if need is None:
         blockers.append(
-            f"{rows} rows + {cols} columns is {rows + cols} channels. No "
-            "connector in the family carries that (50 per side is the "
-            "ceiling). Use larger taxels or sense a smaller area.")
+            f"{rows} rows and {cols} columns "
+            "do not fit an OpenTac readout board: the 60-pin board reads at most "
+            "30 rows and 30 columns, the 30-pin board 15 x 15. Use larger taxels "
+            "or sense a smaller area.")
     else:
         edge_len = float(np.hypot(*(outline[1] - outline[0])))
         if edge_len + 1e-6 < need:
@@ -72,11 +73,6 @@ def preflight(outline, pixel_w_mm: float, pixel_h_mm: float,
                 f"The cable edge is {edge_len:.1f}mm wide but this grid needs "
                 f"a {need:.1f}mm connector. Widen the flat edge, move the "
                 "cable to a wider side, or use larger taxels.")
-        if max(rows, cols) > 32:
-            warnings.append(
-                f"{max(rows, cols)} channels on one side needs a connector "
-                "larger than the pipeline auto-selects; pass "
-                "connector_pos_override explicitly.")
 
     # --- split columns / rows --------------------------------------------
     for axis, label, n in (("x", "column", cols), ("y", "row", rows)):

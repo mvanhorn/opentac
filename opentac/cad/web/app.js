@@ -1233,7 +1233,6 @@ window.addEventListener("otc:restore-design", (e) => {
     downloadBtn.disabled = true;
     setPrintPdf(null);
     renderRecoveredStats(editData, notes);
-    updateConnectorUpsizeControl(null);
     genStatus.innerHTML =
       `Reopened <strong>${label}</strong> as a finished board. Build a case from it ` +
       `below — it is shaped from the board, so it fits the one you ` +
@@ -1246,7 +1245,6 @@ window.addEventListener("otc:restore-design", (e) => {
   downloadBtn.disabled = !lastZipB64;
   setPrintPdf(stats);
   renderStats(stats, drc);
-  updateConnectorUpsizeControl(stats?.connector_pos);
   genStatus.textContent = `Reopened ${label}. Edit and re-download, or press Generate PCB to rebuild it from its settings.`;
 });
 
@@ -1447,6 +1445,7 @@ function readParams() {
   p.pitch_y_mm = Math.max(p.pitch_y_mm, p.pixel_h_mm);
   p.board_mode = selectedBoardMode();
   p.copper_layers = selectedCopperLayers();
+  p.readout_board = document.querySelector('input[name="readout_board"]:checked')?.value || "auto";
   p.router = "hug";
   // In rows/cols mode the backend solves pixel size and pitch from the outline,
   // so the pixel_*/pitch_* values above are sent but ignored. Only send the
@@ -1555,26 +1554,6 @@ pixelPreviewIds.forEach((id) => {
   document.getElementById(id)?.addEventListener("input", renderPixelPreview);
 });
 
-// Larger sizes in the same 0.5mm-pitch FPC family as the auto-selected
-// connectors, offered only when the user explicitly wants a bigger one
-// (e.g. to match an existing/larger readout board) — mirrors
-// backend/pipeline/layout.py's CONNECTOR_FAMILY. The backend re-validates
-// the chosen size regardless, so this list only needs to drive the dropdown.
-const CONNECTOR_FAMILY = [20, 30, 40, 50, 60, 70, 80, 90, 100];
-const connectorUpsizeEl = document.getElementById("connector-upsize");
-const connectorUpsizeSelect = document.getElementById("connector-upsize-select");
-const connectorUpsizeBtn = document.getElementById("connector-upsize-btn");
-
-function updateConnectorUpsizeControl(currentConnectorPos) {
-  const larger = CONNECTOR_FAMILY.filter((n) => n > currentConnectorPos);
-  if (!larger.length) {
-    connectorUpsizeEl.hidden = true;
-    return;
-  }
-  connectorUpsizeSelect.innerHTML = larger.map((n) => `<option value="${n}">${n}-pos</option>`).join("");
-  connectorUpsizeEl.hidden = false;
-}
-
 async function runGenerate(overrides = {}) {
   if (vertices.length < 3) {
     genStatus.innerHTML = `<span class="error">Need at least 3 outline vertices.</span>`;
@@ -1614,7 +1593,6 @@ async function runGenerate(overrides = {}) {
   generateInFlight = true;
   pcbPreview.classList.remove("pcb-preview--stale");
   statsEl.innerHTML = "";
-  connectorUpsizeEl.hidden = true;
   downloadBtn.disabled = true;
   setPrintPdf(null);
   lastZipB64 = null;
@@ -1647,7 +1625,6 @@ async function runGenerate(overrides = {}) {
     setPrintPdf(data.stats);
     window.otcCaseBoardReady?.(!!data.edit_data);
     renderStats(data.stats, data.drc);
-    updateConnectorUpsizeControl(data.stats.connector_pos);
     genStatus.textContent = "Done.";
   } catch (err) {
     genStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`;
@@ -1797,26 +1774,12 @@ window.otcGetEditData = () => routeEditor.getEditData();
 
 document.getElementById("generate").addEventListener("click", () => runGenerate());
 
-connectorUpsizeBtn.addEventListener("click", async () => {
-  const chosen = parseInt(connectorUpsizeSelect.value, 10);
-  if (!Number.isFinite(chosen)) return;
-  // Lightweight swap: keeps the existing routes untouched (connector pads
-  // are always assigned centered on the connector body, so already-used
-  // pads sit at the same physical position regardless of connector size —
-  // only the pad *numbers* and the board's Edge.Cuts envelope around the
-  // connector housing change). No re-pack/re-route, unlike Generate.
-  if (!routeEditor.hasEditableRoutes()) return;
-  genStatus.textContent = `Switching to a ${chosen}-pos connector…`;
-  try {
-    const data = await routeEditor.resizeConnector(chosen);
-    lastZipB64 = null;
-    downloadBtn.disabled = false;
-    updateConnectorUpsizeControl(data.stats.connector_pos);
-    genStatus.textContent = "Done.";
-  } catch (err) {
-    genStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`;
-  }
-});
+// The OpenTac readout board a connector size belongs to (30-pin or 60-pin).
+function readoutBoardText(connectorPos) {
+  if (connectorPos === 30) return "30-pin board (30-position FPC connector)";
+  if (connectorPos === 60) return "60-pin board (60-position FPC connector)";
+  return `${connectorPos}-position FPC connector (no OpenTac readout board)`;
+}
 
 // "2", or "4 — N rows wired on the inner layers" (and how many stayed on
 // the bottom copper, if any did).
@@ -1835,7 +1798,7 @@ function renderStats(stats, drc) {
   // metric) stays available under a collapsible "All details".
   const summary = [
     ["Sensing spots (taxels)", `${stats.active_pixels}`],
-    ["Connector", `${stats.connector_pos}-position FPC, chosen automatically`],
+    ["Readout board", readoutBoardText(stats.connector_pos)],
     ["Board mode", stats.board_mode === "fixed_keepout"
       ? "outline kept exactly as drawn"
       : "board grown to fit the wiring"],

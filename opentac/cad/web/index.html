@@ -376,6 +376,20 @@
               Keep outline fixed, shrink sensor grid
             </label>
           </div>
+          <div class="params params--emphasis" role="radiogroup" aria-label="Readout board">
+            <label class="check-field" title="Uses the 30-pin board when the sensor has at most 15 rows and 15 columns, otherwise the 60-pin board.">
+              <input type="radio" name="readout_board" value="auto" checked />
+              Readout board: picked automatically
+            </label>
+            <label class="check-field" title="Two stacked 16 x 22.8 mm boards. Reads up to 15 rows x 15 columns.">
+              <input type="radio" name="readout_board" value="30pin" />
+              30-pin board (up to 15 x 15)
+            </label>
+            <label class="check-field" title="One 37 x 34.3 mm board. Reads up to 30 rows x 30 columns.">
+              <input type="radio" name="readout_board" value="60pin" />
+              60-pin board (up to 30 x 30)
+            </label>
+          </div>
         </section>
 
         <section class="group">
@@ -468,14 +482,6 @@
               <button id="generate" type="button" class="primary">Generate PCB</button>
             </div>
             <div id="gen-status" class="mini"></div>
-            <div id="connector-upsize" class="connector-upsize" hidden>
-              <label>
-                Need a bigger connector?
-                <span class="hint">e.g. to slot into a different, larger readout board</span>
-                <select id="connector-upsize-select"></select>
-              </label>
-              <button id="connector-upsize-btn" type="button" class="secondary">Use this size</button>
-            </div>
             <div id="stats"></div>
           </div>
         </div>
@@ -761,6 +767,8 @@
           </dl>
           <h3>Board sizing</h3>
           <dl class="help-glossary">
+            <dt>Readout board (<code>readout_board</code>)</dt>
+            <dd>The OpenTac board the sensor plugs into: 30-pin (up to 15 x 15 taxels, two stacked 16 x 22.8&nbsp;mm boards) or 60-pin (up to 30 x 30, one 37 x 34.3&nbsp;mm board). It sets the connector on the sensor's tail.</dd>
             <dt>2 or 4 copper layers (<code>copper_layers</code>)</dt>
             <dd>On 2 layers, columns run on the top copper and rows on the bottom, and every wire travels around the outside of the sensor field to the connector, so the board needs a wiring band around the field. On 4 layers the rows are wired on two inner layers instead: In1 carries each row straight through the field to the connector, in row order, and In2 joins the pieces of rows a notch cuts in two. Rows then need no band, so with a fixed outline more of it holds taxels. Either choice works with either board mode below. A 4-layer board costs more to fabricate, and needs the hug router.</dd>
             <dt>Grow board to fit wiring (<code>board_mode: "expand"</code>)</dt>
@@ -801,7 +809,7 @@
           <h3>Reopening a design</h3>
           <p>Keep the ZIP and you can carry on where you left off: <strong>Open</strong> in the mode switcher (or <strong>Continue a saved design</strong> on the front page) takes the ZIP back &mdash; no need to unzip it &mdash; and puts the board and every setting back on screen, including routes you moved by hand.</p>
           <p>If the app has been updated since you downloaded it, the exact board can no longer be guaranteed, so it is rebuilt from its saved settings instead and you are told so. That rebuild reproduces the same board; only hand edits to individual routes are lost.</p>
-          <p>The connector is auto-selected as the smallest 0.5mm-pitch FPC connector (20 up to 100 positions) that fits your sensor's row and column count. If you need a specific larger size — say, to slot into an existing readout board — a "Need a bigger connector?" control appears next to the stats after Generate, offering larger sizes up to 100-pos.</p>
+          <p>The sensor plugs into an OpenTac readout board, chosen under <strong>Board sizing</strong>. The 30-pin board reads up to 15 rows x 15 columns and the 60-pin board up to 30 x 30; "picked automatically" uses the 30-pin board when the grid fits it. The tail ends in the matching 0.5&nbsp;mm-pitch FPC connector, 30 or 60 positions. A grid larger than 30 x 30 does not fit either board: use a larger taxel pitch or a smaller outline.</p>
           <h3>The printable 1:1 PDF</h3>
           <p>Both the ZIP (<code>printable_1to1.pdf</code>) and the <strong>Download printable PDF</strong> button next to it give you a full-size paper template of your board. Print it, cut it out, and hold it against the real part <em>before</em> you order boards &mdash; it takes a minute and catches a wrong dimension that would otherwise arrive as a batch of useless PCBs.</p>
           <p>It draws the board's <strong>real manufactured edge</strong>, including the cable tail and connector &mdash; not the shape you drew, which is smaller. The sensor grid is printed faintly inside so you can see where the sensing spots land.</p>

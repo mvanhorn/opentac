@@ -27,7 +27,10 @@ SHAPES = {
 
 
 def _board(outline):
-    r = client.post("/generate", json={"outline": outline, "router": "hug"})
+    # readout_board "any": these fixtures were sized around the smallest connector
+    # that fits (20-pos on the small board); the tests are about the case's tail
+    # detection, not about which readout board the sensor plugs into.
+    r = client.post("/generate", json={"outline": outline, "router": "hug", "readout_board": "any"})
     assert r.status_code == 200, r.text[:300]
     ed = r.json()["edit_data"]
     P = np.asarray(ed["layout"]["placements_xy"], dtype=float)

@@ -642,33 +642,6 @@ export function createRouteEditor({
       : "Padding updated from current routes. DRC clean.");
   }
 
-  async function resizeConnector(newConnectorPos) {
-    if (!hasEditableRoutes()) return;
-    setStatus(`Switching to a ${newConnectorPos}-pos connector...`);
-    const resp = await fetch(`${apiBase}/redo-padding`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        edit_data: editData,
-        routes,
-        params: readParams ? readParams() : null,
-        connector_pos_override: newConnectorPos,
-      }),
-    });
-    if (!resp.ok) {
-      const detail = await resp.json().catch(() => ({}));
-      throw new Error(detail.detail || `HTTP ${resp.status}`);
-    }
-    const data = await resp.json();
-    renderStats(data.stats, data.drc);
-    load(data.edit_data, data.svg);
-    renderConnectorPreview(editData?.layout?.tail_extension?.path || tailPath);
-    setStatus(data.drc.violations
-      ? `Connector switched to ${newConnectorPos}-pos with ${data.drc.violations} DRC violation(s). Download remains available.`
-      : `Connector switched to ${newConnectorPos}-pos. DRC clean.`);
-    return data;
-  }
-
   function getConnectorPos() {
     return Number(editData?.layout?.connector_pos) || null;
   }
@@ -831,7 +804,6 @@ export function createRouteEditor({
     load,
     hasEditableRoutes,
     exportEdited,
-    resizeConnector,
     getConnectorPos,
     // The live edit_data, including anything redo-padding or a connector swap
     // changed. The case wraps the FINAL outline, so it has to read this

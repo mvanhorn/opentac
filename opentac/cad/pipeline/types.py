@@ -63,6 +63,10 @@ class Params:
     # fabricated board says which design it is. Not geometry: it changes
     # nothing the router or the packer sees. Empty means no label.
     design_name: str = ""
+    # Which OpenTac readout board the sensor plugs into: "auto" (30-pin when the
+    # grid fits 15x15, else 60-pin), "30pin", "60pin", or "any" connector size.
+    # connector_pos_override, when set, wins over this.
+    readout_board: str = "auto"
 
 
 # Params keys that saved designs (edit_data, design.json) may still carry from

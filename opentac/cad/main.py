@@ -176,6 +176,13 @@ class GenerateRequest(BaseModel):
                     'Grow-board mode ("expand") only.')
     target_rows: int | None = Field(
         None, ge=1, description="Target sensor rows — see target_cols.")
+    readout_board: str = Field(
+        "auto",
+        description='Which OpenTac readout board the sensor plugs into. "auto" uses the '
+                    '30-pin board (up to 15 x 15 taxels) when the grid fits, else the 60-pin '
+                    'board (up to 30 x 30). "30pin" or "60pin" force one; "any" allows every '
+                    "connector size from 20 to 70 positions, most of which have no OpenTac "
+                    "readout board. connector_pos_override, when set, wins.")
     design_name: str = Field(
         "",
         description="Name printed on the front silkscreen just inboard of the connector, "
@@ -1719,6 +1726,7 @@ def generate(req: GenerateRequest):
             target_cols=req.target_cols,
             target_rows=req.target_rows,
             design_name=req.design_name,
+            readout_board=req.readout_board,
             copper_layers=req.copper_layers,
         )
         board_mode = _resolve_board_mode(req.board_mode, req.auto_expand_board)

@@ -188,10 +188,14 @@ TOOL_SPECS = [
                         "the shape is a starting point rather than a "
                         "constraint."),
                 },
-                "connector_pos_override": {
-                    "type": "integer",
-                    "description": "Force a connector size; needed above 32 "
-                                   "channels per side.",
+                "readout_board": {
+                    "type": "string",
+                    "enum": ["auto", "30pin", "60pin"],
+                    "description": "Which OpenTac readout board the sensor "
+                                   "plugs into. auto (default) picks the "
+                                   "30-pin board (up to 15x15 taxels) when "
+                                   "the grid fits, else the 60-pin board "
+                                   "(up to 30x30).",
                 },
                 "target_cols": {"type": "integer",
                                 "description": "Grow mode only: solve taxel "
@@ -209,7 +213,7 @@ TOOL_SPECS = [
 # silently dropped by GenerateRequest, which ignores unknown fields.
 GEN_PARAMS = {
     "pixel_w_mm", "pixel_h_mm", "pitch_x_mm", "pitch_y_mm", "gap_mm",
-    "trace_w_mm", "clearance_mm", "cable_length_mm", "connector_pos_override",
+    "trace_w_mm", "clearance_mm", "cable_length_mm", "readout_board",
     "target_cols", "target_rows",
 }
 

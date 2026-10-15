@@ -243,9 +243,8 @@ def validate(pts: np.ndarray, rows: int | None = None, cols: int | None = None,
         need = min_cable_edge_mm(rows, cols, pad_pitch_mm)
         if need is None:
             problems.append(
-                f"{rows} rows x {cols} columns needs {rows + cols} channels, "
-                "more than any connector in the family carries (50 per side "
-                "is the ceiling). Reduce the grid.")
+                f"{rows} rows x {cols} columns does not fit an OpenTac readout "
+                "board (60-pin: up to 30 x 30, 30-pin: up to 15 x 15). Reduce the grid.")
         elif edge_len + 1e-6 < need:
             problems.append(
                 f"Cable edge is {edge_len:.1f}mm but a {rows}x{cols} grid "
@@ -255,25 +254,19 @@ def validate(pts: np.ndarray, rows: int | None = None, cols: int | None = None,
     return problems
 
 
-def min_cable_edge_mm(rows: int, cols: int, pad_pitch_mm: float = 0.5) -> float | None:
+def min_cable_edge_mm(rows: int, cols: int, pad_pitch_mm: float = 0.5,
+                      readout_board: str = "auto") -> float | None:
     """Width the flat cable edge must have for a rows x cols grid.
 
     Derived from the pipeline's own connector tables rather than tabulated
     here, so it cannot drift from what select_connector_for_nets() will pick.
-    Returns None if no connector in the family fits.
+    Returns None if the grid does not fit the chosen readout board.
     """
     from opentac.cad.pipeline.layout import select_connector_for_nets
     from opentac.cad.pipeline.geometry import connector_dimensions
     try:
-        conn_pos, _swap = select_connector_for_nets(rows, cols)
+        conn_pos, _swap = select_connector_for_nets(rows, cols, readout_board)
     except ValueError:
-        for override in (80, 90, 100):
-            if _fits(override, rows, cols):
-                return connector_dimensions(override, pad_pitch_mm)["ear_stiffener_width_mm"]
         return None
     return connector_dimensions(conn_pos, pad_pitch_mm)["ear_stiffener_width_mm"]
 
-
-def _fits(conn_pos: int, rows: int, cols: int) -> bool:
-    from opentac.cad.pipeline.layout import _best_fit_swap
-    return bool(_best_fit_swap(conn_pos, rows, cols)[0])
