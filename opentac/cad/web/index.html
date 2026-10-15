@@ -375,32 +375,7 @@
               <input type="radio" name="board_mode" value="fixed_keepout" />
               Keep outline fixed, shrink sensor grid
             </label>
-            <label class="check-field" title="New router: wires hug the sensor field instead of walking a grid. Rows/columns cut apart by a concavity stay one net where possible, bridged by a trace around the concavity. In fixed-outline mode the wiring keep-out band is sized exactly from the routing plan. Uncheck to compare against the original router.">
-              <input id="hug_router" type="checkbox" checked />
-              Hug routing (new): wires follow the sensor shape
-            </label>
           </div>
-          <details class="advanced">
-            <summary>Advanced board-shape controls</summary>
-            <div class="params">
-              <label title="Extra board margin used for routing when Preserve sensors and Auto-expand board are enabled.">
-                Routing margin
-                <input id="routing_margin_mm" type="number" min="0" step="0.5" value="3.0" />
-              </label>
-              <label class="check-field" title="Make the final main-board outline follow the outer sensor layout and routed traces instead of a rectangular expansion.">
-                <input id="follow_main_padding" type="checkbox" checked />
-                Follow layout/routes
-              </label>
-              <label title="Distance from the outermost main layout or route to the final board edge. On 4 copper layers it is only added where wires run at the edge (mostly by the connector); elsewhere the board keeps the shape you drew. Tail dimensions remain separate.">
-                Follow padding
-                <input id="follow_main_padding_mm" type="number" min="0" step="0.1" value="2.0" />
-              </label>
-              <label class="check-field" title="Smooth the followed final board edge around route bundles instead of preserving sharp buffered corners.">
-                <input id="smooth_follow_padding" type="checkbox" checked />
-                Smooth follow edge
-              </label>
-            </div>
-          </details>
         </section>
 
         <section class="group">
@@ -477,12 +452,6 @@
             <div class="row">
               <button id="preset-square" type="button">Square 40×40</button>
               <button id="preset-rect" type="button">Rect 50×30</button>
-              <button id="preset-L" type="button" title="L-shape — one concave corner">L</button>
-              <button id="preset-C" type="button" title="C-shape — a notch splits 10 of 14 columns">C</button>
-              <button id="preset-deepC" type="button" title="Deeper, wider C notch">Deep C</button>
-              <button id="preset-U" type="button" title="U — the notch opens onto the cable edge, cutting rows">U</button>
-              <button id="preset-T" type="button" title="T — narrow stem into a wide top">T</button>
-              <button id="preset-eight" type="button" title="Two lobes joined by a waist">Eight</button>
               <button id="preset-foot" type="button" title="Foot/insole-like asymmetric outline">Foot</button>
               <button id="clear-outline" type="button" class="secondary">Clear outline</button>
             </div>
@@ -504,10 +473,6 @@
                 Need a bigger connector?
                 <span class="hint">e.g. to slot into a different, larger readout board</span>
                 <select id="connector-upsize-select"></select>
-              </label>
-              <label title="Rounds the Edge.Cuts step where the wider connector body meets the narrower cable/tail, instead of leaving a sharp 90° notch. 0 disables.">
-                Shoulder fillet (mm)
-                <input id="connector_shoulder_fillet_mm" type="number" min="0" step="0.1" value="1.0" />
               </label>
               <button id="connector-upsize-btn" type="button" class="secondary">Use this size</button>
             </div>
@@ -537,10 +502,6 @@
             </div>
           </div>
           <div id="pcb-preview" class="pcb-preview">
-            <div id="tail-extension-prompt" class="tail-extension-prompt" hidden>
-              <span>Optional: need the cable to be longer, or to bend around your part? Press <strong>Tail extension</strong> above to draw a custom tail path.</span>
-              <button id="tail-extension-prompt-close" type="button" aria-label="Close tail extension prompt">×</button>
-            </div>
             <p class="placeholder">Draw an outline and press <em>Generate PCB</em>.</p>
           </div>
           <div id="tail-extension-panel" class="tail-extension-panel" hidden>
@@ -806,16 +767,10 @@
             <dd>The default. Sensors are packed at maximum density inside the shape you drew, then the final board outline is grown outward until every wire fits. No sensor is ever dropped — but the exported board is larger than the shape you drew.</dd>
             <dt>Keep outline fixed, shrink sensor grid (<code>board_mode: "fixed_keepout"</code>)</dt>
             <dd>The shape you drew is exactly the board you get. A wiring keep-out band is reserved just inside the outline — wider on the sides that carry more wires, narrow at the top where few pass — and only the area left over is filled with sensors, so pixels that would reach into the wiring zone are never placed. Because the keep-out is a clean geometric band, the surviving sensors stay a regular rectangular grid rather than a shape with holes punched in it. The band is sized from the actual wiring demand and the result is DRC-verified, falling back to a more conservative band if the dense one does not route cleanly. Trade-off: still fewer sensors than grow mode on the same outline.</dd>
-            <dt>Routing margin (<code>routing_margin_mm</code>)</dt>
-            <dd>The minimum wiring space (mm) reserved on each side before routing starts; the actual amount is sized automatically from how many sensors need wiring out on that side. In grow mode this space is added <em>outside</em> the outline; in fixed mode the same estimate is carved <em>inside</em> it.</dd>
+            <dt>Board edge in grow mode</dt>
+            <dd>Set automatically. The final edge is shrink-wrapped about 2&nbsp;mm around the outermost sensors and wires, with rounded corners. On 4 copper layers that margin is added only where wires run at the edge, mostly near the connector; elsewhere the board keeps the shape you drew.</dd>
             <dt>Post-route safety net</dt>
-            <dd>Not a setting you control directly — after wires are actually routed, if any wire still pokes outside the board, the board is grown just enough to contain it. A safety net on top of Routing margin.</dd>
-            <dt>Follow layout/routes (<code>follow_main_padding</code>)</dt>
-            <dd>Instead of a boxy expanded rectangle, shrink-wraps the final board edge to hug the actual sensor grid and wire bundles — a more organic, compact final shape.</dd>
-            <dt>Follow padding (<code>follow_main_padding_mm</code>)</dt>
-            <dd>How much space (mm) to leave between the outermost wire/sensor and the shrink-wrapped edge. On 4 copper layers the rows leave on the inner layers, so wires run at the edge only near the connector (the column fan-out, and any row left on the back): the padding goes there, and everywhere else the board keeps the shape you drew.</dd>
-            <dt>Smooth follow edge (<code>smooth_follow_padding</code>)</dt>
-            <dd>Rounds that shrink-wrapped edge instead of leaving sharp mitered corners.</dd>
+            <dd>After wires are routed, if any wire still pokes outside the board, the board is grown just enough to contain it.</dd>
             <dt>Tail extension</dt>
             <dd>A separate, later step — after you Generate, the PCB Preview toolbar lets you draw a custom path for the cable/connector tail, growing the board along that path.</dd>
           </dl>
@@ -852,7 +807,7 @@
           <p>It draws the board's <strong>real manufactured edge</strong>, including the cable tail and connector &mdash; not the shape you drew, which is smaller. The sensor grid is printed faintly inside so you can see where the sensing spots land.</p>
           <p><strong>Print it at 100%.</strong> Print dialogs default to "Fit to page" or "Shrink to printable area", which quietly resizes the sheet by a few percent and makes the template wrong. Every page carries a 100&nbsp;mm ruler: measure it with a real ruler after printing. If it is not exactly 100&nbsp;mm, reprint at <em>Actual size</em>. The sheet size used (A4 or A3) is printed at the top &mdash; pick that size in your print dialog.</p>
           <p>Boards too big for one sheet are split across several, with a dashed overlap line on each: trim to the dashed line and butt the next sheet against it.</p>
-          <p>A bigger connector body can be wider than the cable/tail running into it, which puts a step in the board's cut outline. <strong>Shoulder fillet</strong>, next to that control, rounds that step — both the outward corners at the connector tip and the two inward notches where the tail meets the shoulder — instead of leaving sharp 90° corners that concentrate stress in a flex PCB. Set it to 0 for square corners.</p>
+          <p>A bigger connector body can be wider than the cable/tail running into it, which puts a step in the board's cut outline. That step is always rounded with a 1&nbsp;mm fillet, at the connector tip and at the two inward notches where the tail meets the shoulder, so there are no sharp 90° corners to concentrate stress in the flex PCB.</p>
         </section>
 
         <section id="help-bumps" class="panel help-section">

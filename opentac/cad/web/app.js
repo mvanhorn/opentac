@@ -970,22 +970,10 @@ clearOutlineBtn.addEventListener("click", () => {
   updateCadButtons();
 });
 // Preset outlines. The FIRST edge (vertex 0 -> 1) becomes the cable edge, same
-// rule as hand-drawn outlines. The concave shapes match the routing regression
-// harness exactly, so results here should reproduce the tested numbers.
+// rule as hand-drawn outlines.
 const PRESET_SHAPES = {
   "preset-square": [[-20, -20], [20, -20], [20, 20], [-20, 20]],
   "preset-rect":   [[-25, -15], [25, -15], [25, 15], [-25, 15]],
-  "preset-L":      [[-30, 0], [30, 0], [30, 16], [-6, 16], [-6, 50], [-30, 50]],
-  "preset-C":      [[-30, 0], [30, 0], [30, 12], [-12, 12], [-12, 38], [30, 38],
-                    [30, 50], [-30, 50]],
-  "preset-deepC":  [[-34, 0], [34, 0], [34, 10], [-18, 10], [-18, 46], [34, 46],
-                    [34, 56], [-34, 56]],
-  "preset-U":      [[-34, 0], [-12, 0], [-12, 34], [12, 34], [12, 0], [34, 0],
-                    [34, 56], [-34, 56]],
-  "preset-T":      [[-12, 0], [12, 0], [12, 34], [34, 34], [34, 52], [-34, 52],
-                    [-34, 34], [-12, 34]],
-  "preset-eight":  [[-24, 0], [24, 0], [24, 24], [6, 32], [6, 36], [24, 44],
-                    [24, 68], [-24, 68], [-24, 44], [-6, 36], [-6, 32], [-24, 24]],
   "preset-foot":   [[-30, 0], [16, 0], [16, 14], [-4, 22], [-4, 52], [-30, 52]],
 };
 for (const [id, coords] of Object.entries(PRESET_SHAPES)) {
@@ -1097,10 +1085,8 @@ window.addEventListener("otc:dxf-outline", (e) => {
 // `el.value = String(value)`, which is a no-op on a checkbox (setting .value
 // changes the submitted value, not the tick) and misses radio groups
 // entirely, because a group is addressed by NAME and only board_mode was
-// special-cased. So `follow_main_padding` and `smooth_follow_padding`
-// imported as "whatever the form happened to be showing" — invisible for
-// the built-in examples, which set none of them, and wrong for a design file,
-// which sets all of them.
+// special-cased, so checkbox and radio settings in a design file imported as
+// "whatever the form happened to be showing".
 function applyParamsToForm(params) {
   const extras = {};
   for (const [key, value] of Object.entries(params || {})) {
@@ -1109,11 +1095,8 @@ function applyParamsToForm(params) {
       if (radio) radio.checked = true;
       continue;
     }
-    if (key === "router") {
-      const hugEl = document.getElementById("hug_router");
-      if (hugEl) hugEl.checked = value === "hug";
-      continue;
-    }
+    // The hug router is the only one the page offers; a stored "legacy" is ignored.
+    if (key === "router") continue;
     const el = document.getElementById(key);
     if (el) {
       if (el.type === "checkbox") el.checked = !!value;
@@ -1131,7 +1114,6 @@ function applyParamsToForm(params) {
     // the smallest connector that fits instead of the one it was built with.
     if (value !== null && value !== undefined) extras[key] = value;
   }
-  syncCopperLayers();
   return extras;
 }
 
@@ -1175,7 +1157,6 @@ window.addEventListener("otc:load-example", (e) => {
   if (gridSizeModeInput) gridSizeModeInput.checked = true;
   enforcePitchFloor();
   syncGridMode();
-  syncAutoExpandControls();
   renderPixelPreview();
   fitViewTo(vertices);
   redraw();
@@ -1228,7 +1209,6 @@ window.addEventListener("otc:restore-design", (e) => {
   if (gridSizeModeInput) gridSizeModeInput.checked = true;
   enforcePitchFloor();
   syncGridMode();
-  syncAutoExpandControls();
   renderPixelPreview();
   fitViewTo(vertices);
   redraw();
@@ -1244,8 +1224,6 @@ window.addEventListener("otc:restore-design", (e) => {
   // Both paths enable the case: it is built from the board's geometry, which a
   // recovered design has in full.
   window.otcCaseBoardReady?.(true);
-  tailExtensionPromptDismissed = false;
-  hideTailExtensionPrompt();
 
   if (geometryOnly) {
     // No ZIP and no DRC to show: nothing here was re-exported, because the
@@ -1317,10 +1295,7 @@ const statsEl = document.getElementById("stats");
 const pcbPreview = document.getElementById("pcb-preview");
 const downloadBtn = document.getElementById("download");
 const routeEditStatus = document.getElementById("route-edit-status");
-const tailExtensionPrompt = document.getElementById("tail-extension-prompt");
-const tailExtensionPromptClose = document.getElementById("tail-extension-prompt-close");
 let lastZipB64 = null;
-let tailExtensionPromptDismissed = false;
 
 function downloadZip(zipB64, filename) {
   if (!zipB64) return;
@@ -1343,26 +1318,9 @@ const routeEditor = createRouteEditor({
   downloadZip,
   renderStats,
   readParams,
-  onTailExtensionApplied: hideTailExtensionPrompt,
 });
 
-function showTailExtensionPrompt() {
-  if (tailExtensionPrompt && !tailExtensionPromptDismissed) {
-    if (tailExtensionPrompt.parentElement !== pcbPreview) {
-      pcbPreview.prepend(tailExtensionPrompt);
-    }
-    tailExtensionPrompt.hidden = false;
-  }
-}
 
-function hideTailExtensionPrompt() {
-  if (tailExtensionPrompt) tailExtensionPrompt.hidden = true;
-}
-
-tailExtensionPromptClose?.addEventListener("click", () => {
-  tailExtensionPromptDismissed = true;
-  hideTailExtensionPrompt();
-});
 
 const boardModeInputs = Array.from(document.querySelectorAll('input[name="board_mode"]'));
 function selectedBoardMode() {
@@ -1378,15 +1336,7 @@ function selectedCopperLayers() {
   const picked = copperLayerInputs.find((el) => el.checked);
   return picked && picked.value === "4" ? 4 : 2;
 }
-function syncCopperLayers() {
-  const hugEl = document.getElementById("hug_router");
-  if (!hugEl) return;
-  const four = selectedCopperLayers() === 4;
-  if (four) hugEl.checked = true;
-  hugEl.disabled = four;
-  hugEl.closest("label")?.setAttribute("aria-disabled", four ? "true" : "false");
-}
-copperLayerInputs.forEach((el) => el.addEventListener("change", syncCopperLayers));
+
 
 // Hug routing works in both board modes now (fixed-outline sizes its wiring
 // keep-out band exactly from the hug routing plan), so the checkbox is never
@@ -1477,72 +1427,11 @@ enforcePitchFloor();
 // Everything below is expansion-only shaping: in fixed-outline mode the drawn
 // outline is the board, so these are forced off exactly as they were when
 // auto-expand was a checkbox the user could clear.
-// board_edge_clear_mm is deliberately NOT in here. It is a manufacturing
-// clearance between copper and the board cut, not board-growth padding, and
-// pipeline/drc.py only runs its copper-to-edge test when it is non-zero — so
-// forcing it to 0 in fixed-outline mode (as this used to) disabled that test in
-// exactly the mode where copper runs closest to the edge. Mirrors the same
-// reasoning in _without_expansion_padding (backend/main.py).
-const expansionDependentInputs = {
-  followMain: document.getElementById("follow_main_padding"),
-  followDistance: document.getElementById("follow_main_padding_mm"),
-  smoothFollow: document.getElementById("smooth_follow_padding"),
-};
-const expansionDefaults = {
-  followDistance: expansionDependentInputs.followDistance?.value || "2.0",
-  followMain: Boolean(expansionDependentInputs.followMain?.checked),
-  smoothFollow: Boolean(expansionDependentInputs.smoothFollow?.checked),
-};
-let savedExpansionValues = { ...expansionDefaults };
-
-function syncAutoExpandControls() {
-  if (!boardModeInputs.length) return;
-  const enabled = selectedBoardMode() === "expand";
-  const { followMain, followDistance, smoothFollow } = expansionDependentInputs;
-
-  if (!enabled) {
-    savedExpansionValues = {
-      followDistance: followDistance?.value || expansionDefaults.followDistance,
-      followMain: Boolean(followMain?.checked),
-      smoothFollow: Boolean(smoothFollow?.checked),
-    };
-    if (followMain) {
-      followMain.checked = false;
-      followMain.disabled = true;
-    }
-    if (followDistance) {
-      followDistance.value = "0";
-      followDistance.disabled = true;
-    }
-    if (smoothFollow) {
-      smoothFollow.checked = false;
-      smoothFollow.disabled = true;
-    }
-    return;
-  }
-
-  if (followMain) {
-    followMain.disabled = false;
-    followMain.checked = savedExpansionValues.followMain;
-  }
-  if (followDistance) {
-    followDistance.disabled = false;
-    followDistance.value = savedExpansionValues.followDistance || expansionDefaults.followDistance;
-  }
-  if (smoothFollow) {
-    smoothFollow.disabled = false;
-    smoothFollow.checked = savedExpansionValues.smoothFollow;
-  }
-}
-
-boardModeInputs.forEach((el) => el.addEventListener("change", syncAutoExpandControls));
-
 function readParams() {
   const ids = ["pixel_w_mm", "pixel_h_mm", "pitch_x_mm", "pitch_y_mm",
     "trace_w_mm", "gap_mm", "clearance_mm", "edge_keepout_mm", "board_edge_clear_mm",
     "center_clear_mm", "edge_clear_mm", "via_drill_mm", "via_dia_mm",
-    "routing_margin_mm", "follow_main_padding_mm", "cable_length_mm", "tail_width_mm", "tail_side_padding_mm",
-    "connector_shoulder_fillet_mm"];
+    "cable_length_mm", "tail_width_mm", "tail_side_padding_mm"];
   const p = {};
   for (const id of ids) {
     const value = document.getElementById(id).value;
@@ -1558,7 +1447,7 @@ function readParams() {
   p.pitch_y_mm = Math.max(p.pitch_y_mm, p.pixel_h_mm);
   p.board_mode = selectedBoardMode();
   p.copper_layers = selectedCopperLayers();
-  p.router = document.getElementById("hug_router").checked || p.copper_layers === 4 ? "hug" : "legacy";
+  p.router = "hug";
   // In rows/cols mode the backend solves pixel size and pitch from the outline,
   // so the pixel_*/pitch_* values above are sent but ignored. Only send the
   // targets in that mode — sending them always would override the size fields.
@@ -1573,13 +1462,9 @@ function readParams() {
   // Printed on the front silkscreen just inboard of the connector. The backend
   // re-sanitises it and drops it if it will not fit.
   p.design_name = designStem();
-  p.follow_main_padding = document.getElementById("follow_main_padding").checked;
-  p.smooth_follow_padding = document.getElementById("smooth_follow_padding").checked;
-  if (!p.auto_expand_board) {
-    p.follow_main_padding = false;
-    p.follow_main_padding_mm = 0;
-    p.smooth_follow_padding = false;
-  }
+  // Routing margin, follow padding and the connector shoulder fillet are not on
+  // the page: the backend's defaults apply, and fixed-outline mode turns the
+  // follow padding off itself (_without_expansion_padding in main.py).
   return p;
 }
 
@@ -1763,12 +1648,6 @@ async function runGenerate(overrides = {}) {
     window.otcCaseBoardReady?.(!!data.edit_data);
     renderStats(data.stats, data.drc);
     updateConnectorUpsizeControl(data.stats.connector_pos);
-    tailExtensionPromptDismissed = false;
-    if (data.edit_data && !data.stats?.tail_extension_enabled) {
-      showTailExtensionPrompt();
-    } else {
-      hideTailExtensionPrompt();
-    }
     genStatus.textContent = "Done.";
   } catch (err) {
     genStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`;

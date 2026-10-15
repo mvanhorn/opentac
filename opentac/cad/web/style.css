@@ -818,39 +818,6 @@ dl.bump-stats dd { margin: 0; color: var(--text); }
    whichever constraint binds. Zoomed-in states still scroll via .pcb-preview's
    own overflow. */
 .pcb-preview svg { max-width: 100%; max-height: 100%; width: auto; height: auto; }
-.tail-extension-prompt {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: min(360px, calc(100% - 24px));
-  padding: 8px 10px;
-  border: 1px solid #111;
-  border-radius: 4px;
-  background: #ffd84d;
-  color: #111;
-  font-weight: 700;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
-}
-.tail-extension-prompt[hidden] {
-  display: none;
-}
-.tail-extension-prompt button {
-  flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid #111;
-  border-radius: 50%;
-  background: #111;
-  color: #ffd84d;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 18px;
-}
 .route-editor-svg {
   cursor: grab;
   touch-action: none;
