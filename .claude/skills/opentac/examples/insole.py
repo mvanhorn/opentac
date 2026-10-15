@@ -4,7 +4,7 @@ Run it after cloning to confirm the skill is wired up:
 
     uv run python .claude/skills/opentac/examples/insole.py /tmp/insole
 
-Expect a clean board of roughly 190 taxels at 96 x 252mm, DRC 0, in ~10s.
+Expect a clean board of about 175 taxels (10 x 28 on the 60-pin readout board), DRC 0, in ~25s.
 
 Dimensions come from published sizing data, not from memory: a US men's
 size 9 foot is ~254mm long and averages 94.4mm across the ball (86-102mm
@@ -53,10 +53,11 @@ def main(out_dir: str) -> int:
             print("  -", p)
         return 1
 
-    # 8.0mm pitch: an insole is 2.6:1, so a square grid over it is coarse
+    # 8.6mm pitch keeps the rows within the 60-pin readout board (30 max).
+    # An insole is 2.6:1, so a square grid over it is coarse
     # along the foot. Taxels here are square by choice — pressure mapping
     # wants uniform cells — and the row count is what sets the channel load.
-    kw = dict(pixel_w_mm=7.8, pixel_h_mm=7.8, pitch_x_mm=8.0, pitch_y_mm=8.0)
+    kw = dict(pixel_w_mm=8.4, pixel_h_mm=8.4, pitch_x_mm=8.6, pitch_y_mm=8.6)
 
     pf = P.preflight(ol, kw["pixel_w_mm"], kw["pixel_h_mm"],
                      kw["pitch_x_mm"], kw["pitch_y_mm"], router="hug")
