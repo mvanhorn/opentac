@@ -59,7 +59,7 @@ you open this folder. Other agents: see [AGENTS.md](AGENTS.md).
 | 60-pin | 30 rows x 30 columns | 37 x 34.3 mm |
 | 30-pin (two stacked boards) | 15 rows x 15 columns | 16 x 22.8 mm |
 
-Both plug straight into USB, carry an IMU, and can be daisy-chained over I2C.
+Both plug straight into USB and carry an IMU. 30-pin boards can be daisy-chained over I2C.
 
 ## Citing
 
