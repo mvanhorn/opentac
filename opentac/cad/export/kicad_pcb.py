@@ -401,7 +401,13 @@ def _connector_custom_pad_line(pad, pad_num, net_text, drill):
         corner_pts.append(f'(xy {fmt(p[0])} {fmt(p[1])})')
 
     drill_text = f' (drill {fmt(drill)})' if drill else ''
-    layers = '"*.Cu" "*.Mask"' if drill else '"F.Cu" "F.Mask"'
+    # The pad's own layers from the connector footprint: contacts are on the
+    # BOTTOM copper (Molex 505110 is bottom-contact), so the mask opens on
+    # B.Mask only and the top stays covered under the stiffener.
+    if pad.get("layers"):
+        layers = " ".join(f'"{name}"' for name in pad["layers"])
+    else:
+        layers = '"*.Cu" "B.Mask"' if drill else '"F.Cu" "F.Mask"'
     kind = pad.get("kind") or ('thru_hole' if drill else 'smd')
 
     return (f'    (pad "{pad_num}" {kind} custom{net_text} '

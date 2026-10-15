@@ -285,7 +285,7 @@
 		(layer "Edge.Cuts")
 		(uuid "2eccd2e9-17b8-4852-ad01-39b8f597ed40")
 	)
-	(fp_text user "46.6x6 PI Stiffener\nT = 0.3 total"
+	(fp_text user "46.6x6 PI stiffener on TOP (taxel side)\nT = 0.3 total, contacts on BOTTOM"
 		(at 46.55 -0.1 0)
 		(unlocked yes)
 		(layer "Cmts.User")
@@ -316,7 +316,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "7a7c5104-e895-46a5-b013-5825ac0a5e55")
 	)
@@ -326,7 +326,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "6b4d59df-4139-461a-9be4-7d6eb2c9edca")
 	)
@@ -336,7 +336,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "b28a16c3-9655-4a01-8129-e08dccaca864")
 	)
@@ -346,7 +346,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "da7bf247-8656-4e7e-876e-2a67da4003d6")
 	)
@@ -356,7 +356,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "0c3480ce-57a6-45bf-9a74-45cb96848aa4")
 	)
@@ -366,7 +366,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "a5c5825c-46e8-43ff-8c0a-0ce24109e046")
 	)
@@ -376,7 +376,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "5eb436b2-1eeb-4425-9385-a98ad41c95ea")
 	)
@@ -386,7 +386,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "a3055ca8-9b0b-47a9-b611-97817eeffb86")
 	)
@@ -396,7 +396,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "735ca072-d069-4560-90bc-001e8de9109c")
 	)
@@ -406,7 +406,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "59d838ac-b688-4c56-bb23-6375428628f8")
 	)
@@ -416,7 +416,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "5b2ac47d-80a0-4334-a33e-e01427458d55")
 	)
@@ -426,7 +426,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "fd62dbc2-e069-4032-8cc8-804cad412cdb")
 	)
@@ -436,7 +436,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "786a2a04-ade4-4fb2-a4ee-fdac96f67b9c")
 	)
@@ -446,7 +446,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "e2c3b237-20d6-4e72-be05-3e85c04a0a9c")
 	)
@@ -456,7 +456,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "9f40e58b-c09d-4c50-920d-53a8ac28cdcc")
 	)
@@ -466,7 +466,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "e7425b40-6fb0-4e65-8e98-65a47b5c09c8")
 	)
@@ -476,7 +476,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "79aff5e3-1ead-40f3-846c-6eaca23ee055")
 	)
@@ -486,7 +486,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "deb76830-2d99-4425-9816-b84ba80a538b")
 	)
@@ -496,7 +496,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "481e79f1-e93d-4d0f-a3ea-f2dd19e1ebff")
 	)
@@ -506,7 +506,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "72d7e99f-9eba-4115-87bc-08dce8d22f3c")
 	)
@@ -516,7 +516,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "82bcc3c4-53fa-4eb9-a425-072dde40bc5d")
 	)
@@ -526,7 +526,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "4298daf7-7681-4580-802d-3ff8f42d777d")
 	)
@@ -536,7 +536,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "326adc4c-010e-405c-95c8-ed3fb0ee3bd1")
 	)
@@ -546,7 +546,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "8a86d128-1abd-4649-be03-1d60fd75b5ca")
 	)
@@ -556,7 +556,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "d5821dc6-b05b-4a15-915b-839d6f160122")
 	)
@@ -566,7 +566,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "bdf504e4-0d81-4425-83df-737404790647")
 	)
@@ -576,7 +576,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "08a81515-5ad8-4cd1-abcc-8d86d394fa01")
 	)
@@ -586,7 +586,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "4c49ab3d-66d6-498d-90c0-1a2f40036db5")
 	)
@@ -596,7 +596,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "87056868-3255-414c-9466-0de1c576baac")
 	)
@@ -606,7 +606,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "610a1cbf-7d12-4d03-a786-ac64665fb2ef")
 	)
@@ -616,7 +616,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "1466609b-d73f-478d-a9df-7bf7da1dc711")
 	)
@@ -626,7 +626,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "c77b4def-ab46-42b2-94f8-d36b0b93c326")
 	)
@@ -636,7 +636,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "a3045c8a-6930-4cd1-ae34-00e222969300")
 	)
@@ -646,7 +646,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "3a733d5d-68aa-493a-8f97-32abc91cefe5")
 	)
@@ -656,7 +656,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "7c28f086-e3a1-4455-8147-8dbc79bd650c")
 	)
@@ -666,7 +666,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "2dc9a016-8de3-4f7a-aa66-aad4e1b2d8e6")
 	)
@@ -676,7 +676,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "3ef7c706-180b-4f88-8c07-65d64df80cce")
 	)
@@ -686,7 +686,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "6ebfb66c-72ba-4e3d-8763-606e4c0a15c5")
 	)
@@ -696,7 +696,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "82e767e6-09d5-4cdf-a18f-13e38b4ddcb0")
 	)
@@ -706,7 +706,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "35f435c2-affc-4046-af86-de887a9228aa")
 	)
@@ -716,7 +716,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "4c091dd2-d38d-48c3-bdfa-891f17b2db0f")
 	)
@@ -726,7 +726,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "17c5e5ec-3014-4b3b-93b7-618020d94f80")
 	)
@@ -736,7 +736,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "59ab63d2-f2b5-4035-ba21-320cacf716e0")
 	)
@@ -746,7 +746,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "f9cf200e-3773-4f60-8a50-84003cc27678")
 	)
@@ -756,7 +756,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "3d6a50c6-763e-4a27-8972-674bb25f12e7")
 	)
@@ -766,7 +766,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "a4b73b9e-b970-48c2-8560-4d736c02e4c7")
 	)
@@ -776,7 +776,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "fb9eb1b7-7037-45ee-9bbb-0fdb21e0d155")
 	)
@@ -786,7 +786,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "454bca48-6f1d-4137-9241-2baaa91a81ad")
 	)
@@ -796,7 +796,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "4cd34941-6094-4581-ba64-0926f2688091")
 	)
@@ -806,7 +806,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "efc09dba-e2aa-4ee1-8ba3-ef0b32177be3")
 	)
@@ -816,7 +816,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "6105771a-4b59-4ce9-b034-640a75b4220d")
 	)
@@ -826,7 +826,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "458ccfef-7610-449e-b3bd-157fb0c61221")
 	)
@@ -836,7 +836,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "23baba71-4546-4beb-8d01-819e7afd7266")
 	)
@@ -846,7 +846,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "1e2197a8-1de6-4745-af0f-adf6c3b940ff")
 	)
@@ -856,7 +856,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "332bd2cd-44f9-40df-a55d-6343c48c4e1e")
 	)
@@ -866,7 +866,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "dae758b4-1cdd-4ffd-a31e-3f606e631c23")
 	)
@@ -876,7 +876,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "dc0ba6b9-d08d-4f90-8fe5-f021ad8947f3")
 	)
@@ -886,7 +886,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "dba7d15b-d9e7-4678-bb99-dc49c30babc1")
 	)
@@ -896,7 +896,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "1262007d-c288-4c90-bc78-ac21dc88fc27")
 	)
@@ -906,7 +906,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "2e986970-4db8-4eeb-b6af-5bc994a1e118")
 	)
@@ -916,7 +916,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "65520c8c-6e80-47c7-93c7-61fdc134f01f")
 	)
@@ -926,7 +926,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "4eed26b0-1840-4217-9fef-5a27f691e481")
 	)
@@ -936,7 +936,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "9d0de456-e68c-41c2-b5f1-11319856a8c4")
 	)
@@ -946,7 +946,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "84178da0-7dc1-4b97-9abd-a79c23daaf23")
 	)
@@ -956,7 +956,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "39e6131a-3835-4b3a-a06c-8c2ff3586912")
 	)
@@ -966,7 +966,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "75578bb4-50a7-49eb-930e-d2e8c57bb004")
 	)
@@ -976,7 +976,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "94c4260b-6828-418a-9a2f-8589f99fa5d8")
 	)
@@ -986,7 +986,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "7732d9bc-0d4d-4e9c-960a-8f486f3230d3")
 	)
@@ -996,7 +996,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "f99ebe9f-e03d-47b0-bc9f-6e9f36575cc8")
 	)
@@ -1006,7 +1006,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "eaca9160-4406-4610-abde-a1ac9d2cd146")
 	)
@@ -1016,7 +1016,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "8f0d83dd-2478-4f8f-b941-706c1cad3e17")
 	)
@@ -1026,7 +1026,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "011a2045-1be8-4cce-a1dc-3dc90c1e7647")
 	)
@@ -1036,7 +1036,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "29956b71-7fc5-4bae-9317-35bcb419aa7d")
 	)
@@ -1046,7 +1046,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "fcb08297-6ea5-4caa-8351-857b5611df8e")
 	)
@@ -1056,7 +1056,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "e0de8b92-a4dc-4f8b-9b08-63c501042dc5")
 	)
@@ -1066,7 +1066,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "b36d48d7-7751-4a92-ad0c-f05615d3d3d0")
 	)
@@ -1076,7 +1076,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "c24ce47c-2455-4eb0-80b7-807149e91b8b")
 	)
@@ -1086,7 +1086,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "dd0ce61e-1ce2-4f00-b75a-76d99ce5faae")
 	)
@@ -1096,7 +1096,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "5d065d96-a071-457c-9b72-ea4d0f1c2fd1")
 	)
@@ -1106,7 +1106,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "2d51f3fc-457a-4326-8e20-836e9d5cd80c")
 	)
@@ -1116,7 +1116,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "03e2bfd7-02a2-40b6-813c-7facec07a3cd")
 	)
@@ -1126,7 +1126,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "6e0070db-864d-4530-bed6-b506dc171978")
 	)
@@ -1136,7 +1136,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "b4c6dd97-1656-4e90-94a4-85d0dbf8f2c0")
 	)
@@ -1146,7 +1146,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "46411d00-a00f-4fb7-8c0a-c1062447ca2f")
 	)
@@ -1156,7 +1156,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "01cd17f5-4708-442f-9ac6-1cb9528cd901")
 	)
@@ -1166,7 +1166,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "70b96247-a1ca-4ea7-8b86-2fc55ebe3ed1")
 	)
@@ -1176,7 +1176,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "1f1ea240-c18b-4a92-9ad4-152a773c1f1b")
 	)
@@ -1186,7 +1186,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "d04f92b9-2d1c-4288-b4f8-fe1be09153e0")
 	)
@@ -1196,7 +1196,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "266a57e9-50a2-46d4-a940-efef2c05f41d")
 	)
@@ -1206,7 +1206,7 @@
 		(drill 0.2
 			(offset 0 -1.5)
 		)
-		(layers "*.Cu" "*.Mask")
+		(layers "*.Cu" "B.Mask")
 		(remove_unused_layers no)
 		(uuid "75c6c004-8174-4a5b-934f-416a866175f6")
 	)
