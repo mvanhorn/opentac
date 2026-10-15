@@ -104,8 +104,7 @@ cost milliseconds; the generate they guard costs 10-40 seconds.
 
 **The router is not a choice. Always use `"hug"`.** It works in both board
 modes — `helpers/generate.py::generate_board()` passes it by default, and the
-site does the same (the frontend's checkbox ships checked and is never gated
-on board mode). The raw `GenerateRequest.router` still defaults to
+site always sends it. The raw `GenerateRequest.router` still defaults to
 `"legacy"`, so pass it explicitly if you ever call `main.generate()` directly.
 
 `"legacy"` is the original row/column router, kept so the two can be compared.
@@ -159,6 +158,27 @@ the count follow.
 **Never compute the board's size from the outline you sent.** The connector
 union widens it. Read the real dimensions from `stats` and `manifest.json`.
 
+## Readout board and copper layers
+
+**Every sensor plugs into an OpenTac readout board**, and the board sets the
+grid limit. Count rows and columns per direction, not their sum:
+
+- **30-pin board** (`readout_board="30pin"`): up to 15 rows x 15 columns. Two
+  stacked 16 x 22.8 mm boards; the tail ends in a 30-position connector.
+- **60-pin board** (`readout_board="60pin"`): up to 30 rows x 30 columns. One
+  37 x 34.3 mm board; 60-position connector.
+- `readout_board="auto"` (the default) takes the 30-pin board when the grid
+  fits it, else the 60-pin board. A grid over 30 in either direction fails
+  with a message naming the limit: use larger taxels or a smaller area.
+
+**Copper layers: `copper_layers=2` (default) or `4`.** On 2 layers every row
+wire runs around the outside of the sensor field to the connector, so the
+board needs a wiring band. On 4 layers rows run underneath on the inner layers
+(In1 feeds, In2 links across notches), so a fixed outline keeps far more of
+its area for taxels. Use 4 for complex or tightly bounded parts, such as a
+fingertip: on the D'Claw flat-top hexagon fingertip, 4 layers fit 497 taxels
+where 2 layers fit 410. 4-layer flex costs more to fabricate; say so.
+
 ## Taxel sizing
 
 Width and height are independent (`pixel_w_mm`/`pixel_h_mm`,
@@ -168,9 +188,8 @@ are the expensive direction: every row is a net that must reach the connector.
 - **Neither dimension below 1.5mm.**
 - Pitch slightly exceeds the taxel so they do not touch (the UI defaults are
   4.0mm taxels on a 4.2mm pitch).
-- Channels = rows + columns. The pipeline auto-selects up to 32 per side
-  (70-position connector, needing a 36.6mm cable edge). Up to 50 per side with
-  an explicit `connector_pos_override`. Beyond that no footprint exists.
+- Rows and columns are each capped by the readout board: 15 on the 30-pin
+  board, 30 on the 60-pin board (see above).
 
 Ask the user what they are sensing before picking. Fine pressure distribution
 wants small taxels; detecting presence over a large area does not.
@@ -185,6 +204,12 @@ track-to-drill gap). Drawing a custom tail is optional polish (a longer reach,
 a bent path around an obstacle) — do it only if they ask for something the
 automatic 1mm does not cover, and use the held `edit_data` with
 `redo_padding()` so it does not re-route the board.
+
+The tail's contacts are on the **bottom** copper (the readout boards' Molex
+505110 is a bottom-contact connector for 0.3 mm FPC). The export opens solder
+mask on the bottom only there, and its drawing layer says where the polyimide
+stiffener goes: on the top (taxel side), 0.3 mm total. Tell the user this when
+they order.
 
 ## Split nets (concave shapes)
 
@@ -254,10 +279,17 @@ needs.
 
 ## Limits worth stating early
 
-- Channels cap at 32 per side automatically, 50 with an override.
+- At most 30 rows and 30 columns (60-pin board); 15 x 15 for the 30-pin board.
 - One taxel grid per board — `fill_region` restricts *where* taxels go, but
   cannot give two densities on one board.
-- Doubly-curved surfaces (a fingertip, a sphere) cannot be flattened without
-  distortion. `check_developability()` reports the error in mm. Offer to cut
-  the surface into flatter pieces — separate boards, or regions joined with
-  struts — rather than shipping a warped one.
+- **Doubly-curved surfaces cannot be sensorized.** A flex PCB bends in one
+  direction at a time, so a sphere, dome or rounded fingertip pad cannot be
+  covered without wrinkling or tearing. `check_developability()` reports the
+  error in mm. Do not ship a warped board. Approximate the part with flat
+  facets instead, and prefer a **hexagon**: a hexagonal prism with a flat top
+  covers a round part well, and its top and six side faces unfold into one
+  flat pattern ("leaves" around the top) that the pipeline can sensorize and
+  that folds back onto the part. Worked example, the D'Claw 1-inch fingertip:
+  a flat-top hexagon with 5 columns per leaf, 30 columns in total to fit the
+  60-pin board, 4 copper layers, 546 taxels. Single-curvature surfaces
+  (cylinders, cones) unroll directly with the STL tools.
