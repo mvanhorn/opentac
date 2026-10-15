@@ -111,3 +111,31 @@ def test_cli_setup_dry_run(tmp_path, capsys):
     golden = json.loads((Path(__file__).parent / "fixtures" / "configs_from_opentac_device.json").read_text())
     assert out.read_bytes().hex() == golden["finger_8x6_60pin.json"]["READOUT60"]
     assert main(["setup", str(EXAMPLES / "finger_8x6_60pin.json"), "--dry-run", "--board", "node16"]) == 1
+
+
+def test_cli_with_a_board_attached(tmp_path, monkeypatch, capsys):
+    """setup, info and record through the CLI, the serial port replaced by a FakeBoard."""
+    import opentac.device.link as link
+
+    fake = FakeBoard("READOUT60")
+    monkeypatch.setattr(link, "find_any", lambda: ("board", "/dev/fake"))
+    monkeypatch.setattr(link, "find", lambda kind: "/dev/fake")
+
+    def fake_open(self, port):
+        self.link, self.port, self._sent, self._buf = fake, port, "", b""
+    monkeypatch.setattr(link.Transport, "_open", fake_open)
+
+    assert main(["info"]) == 0
+    assert "no skin" in capsys.readouterr().out
+    assert not [c for c in fake.commands if c.startswith("p ")]      # info changes nothing
+    assert main(["setup", str(EXAMPLES / "square_9x9_60pin.json")]) == 0
+    out = capsys.readouterr().out
+    assert "READOUT60 on /dev/fake now holds square_9x9_60pin.json" in out
+    assert "not yet been checked by pressing" in out
+    assert main(["info"]) == 0
+    out = capsys.readouterr().out
+    assert "9 x 9, 81 taxels" in out and "GAIN_SW" in out and "(10000 ohm feedback)" in out
+    assert main(["record", str(tmp_path / "takes"), "--seconds", "0.05", "--set", "GAIN_SW=2"]) == 0
+    take = next((tmp_path / "takes").iterdir())
+    info = json.loads((take / "take.json").read_text())
+    assert info["settings"]["gain_sw"] == 2 and round(info["settings"]["feedback_ohm"]) == 991

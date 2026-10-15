@@ -70,10 +70,31 @@ def binary_for(board: str) -> Path:
     return path
 
 
+def board_port(port=None) -> str:
+    """The board's serial port: one that answers `?`, else the only STM32 USB port.
+
+    A daisy-chain node's firmware answers only `B` on USB, so it is found by
+    its USB vendor id instead.
+    """
+    from serial.tools import list_ports
+
+    from opentac.device.link import find
+    if port:
+        return port
+    try:
+        return find("board")
+    except DeviceError:
+        stm = sorted(p.device for p in list_ports.comports()
+                     if p.vid == 0x0483 and not p.device.startswith("/dev/tty."))
+        if len(stm) == 1:
+            return stm[0]
+        raise
+
+
 def running_board(port=None) -> tuple[str | None, object]:
     """(board name the firmware reports, open link), or (None, link) if it does not say."""
     from opentac.device.link import UsbLink
-    link = UsbLink(port)
+    link = UsbLink(board_port(port), timeout=2.0)
     try:
         caps = [ln for ln in link.command("?", until="R,END") if ln.startswith("R,CAPS,")]
         return (parse_caps(caps[0])["board"] if caps else None), link
@@ -110,6 +131,12 @@ def flash(board: str | None = None, port=None, binary=None, force=False, dry_run
             raise DeviceError("cannot tell which board this is: pass --board readout60|node16|readout32")
         binary = binary_for(board)
     binary = Path(binary)
+    named = [k for k in BINARIES if k in binary.name.lower()]
+    if board and named and board.lower() not in named and not force:
+        if link is not None:
+            link.close()
+        raise DeviceError(f"{binary.name} is firmware for {named[0]}, but the board is {board}. "
+                          f"Pass --force if you are sure.")
     cmd = flash_command(name, path, binary)
     if dry_run:
         log(f"would send B to {getattr(link, 'port', 'the board')} (reboot into DFU), then run:")

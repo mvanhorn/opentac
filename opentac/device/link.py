@@ -73,6 +73,20 @@ def find(kind: str) -> str:
     raise DeviceError(f"several {what}s found: {', '.join(match)}. Pass port= (CLI: --port).")
 
 
+def find_any() -> tuple[str, str]:
+    """('board', port) for a single board on USB, else ('bus', port) for a bus controller."""
+    found = {p: probe(p) for p in candidate_ports()}
+    for kind in ("board", "bus"):
+        match = [p for p, k in found.items() if k == kind]
+        if len(match) == 1:
+            return kind, match[0]
+        if len(match) > 1:
+            raise DeviceError(f"several OpenTac {kind}s found: {', '.join(match)}. "
+                              f"Pass port= (CLI: --port).")
+    raise DeviceError("no OpenTac readout board or bus controller found on USB. Is it plugged "
+                      "in, and is no other program (a viewer) holding its port?")
+
+
 class Transport:
     """Command/reply over a serial link. Replies are matched, not counted."""
 

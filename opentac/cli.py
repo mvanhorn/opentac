@@ -36,17 +36,17 @@ def _session(args) -> dict:
 
 def _open(args, all_nodes=False, session=None):
     """(sensors, bus) for the board or bus the arguments point at."""
-    from opentac.device import Bus, DeviceError, Sensor
-    from opentac.device.link import find
+    from opentac.device import Bus, Sensor
+    from opentac.device.link import find_any
 
     session = _session(args) if session is None else session
     node = getattr(args, "node", None)
-    if node is None and all_nodes:
-        try:
-            find("board")
-        except DeviceError:
-            bus = Bus(args.port, **session)
+    if node is None and all_nodes and not args.port:
+        kind, port = find_any()
+        if kind == "bus":
+            bus = Bus(port, **session)
             return list(bus), bus
+        return [Sensor(port, **session)], None
     if node is None:
         return [Sensor(args.port, **session)], None
     bus = Bus(args.port, **session)
@@ -121,14 +121,13 @@ def _setup(args) -> int:
 
 
 def _info(args) -> int:
-    from opentac.device import Bus, DeviceError
-    from opentac.device.link import find
+    from opentac.device import Bus
+    from opentac.device.link import find_any
 
-    if args.node is None:
-        try:
-            find("board")
-        except DeviceError:
-            with Bus(args.port, **READ_ONLY) as bus:
+    if args.node is None and not args.port:
+        kind, port = find_any()
+        if kind == "bus":
+            with Bus(port, **READ_ONLY) as bus:
                 print(f"bus controller, protocol v{bus.version}: {len(bus.nodes)} node(s)")
                 for n in bus.nodes:
                     line = f"  node {n['node']:2}  {n['board']:<9}  uid {n['uid']}  "
@@ -141,6 +140,7 @@ def _info(args) -> int:
                     print(line + skin + ("" if s.manifest or not s.stored else
                                          "  (no manifest on this computer)"))
             return 0
+        args.port = port
     # Read-only: do not assert a session on the board just to look at it.
     sensors, bus = _open(args, session=READ_ONLY)
     try:

@@ -247,7 +247,7 @@ def from_qr(payload: str) -> Manifest:
     from opentac.cad.export.taxel_core import TaxelCoreError, manifest_from_scan
     try:
         raw = manifest_from_scan(payload)
-    except TaxelCoreError as exc:
+    except (TaxelCoreError, ValueError, IndexError) as exc:   # a damaged payload can fail deep in decoding
         raise ManifestError(f"cannot read the QR text: {exc}") from None
     m = load(raw, scan=True)
     m.name = "recovered from QR"
