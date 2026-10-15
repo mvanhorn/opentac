@@ -1,0 +1,6 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "74HC595BQ")(type "KiCad")(uri "${KIPRJMOD}/../../libs/symbols/74HC595BQ.kicad_sym")(options "")(descr ""))
+  (lib (name "ADG706BRUZ")(type "KiCad")(uri "${KIPRJMOD}/../../libs/symbols/ADG706BRUZ.kicad_sym")(options "")(descr ""))
+  (lib (name "TLV9362IDDFR")(type "KiCad")(uri "${KIPRJMOD}/../../libs/symbols/TLV9362IDDFR.kicad_sym")(options "")(descr ""))
+)
