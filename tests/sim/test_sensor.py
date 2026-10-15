@@ -46,12 +46,14 @@ def test_mujoco_needs_a_shear_block():
         Sensor(raw, model="mujoco")
 
 
-def test_curved_sensors_are_refused_by_mujoco():
-    raw = json.loads(SQUARE.read_text())
-    raw = copy.deepcopy(raw)
+@pytest.mark.parametrize("model", ["foam", "mujoco"])
+def test_curved_sensors_are_refused(model):
+    """A wrapped fingertip simulated as a flat pad gets every contact normal
+    wrong and still produces reasonable-looking readings."""
+    raw = copy.deepcopy(json.loads(SQUARE.read_text()))
     raw["sim3d"] = {"taxels3d": {"pos": [[0, 0, 0]] * len(raw["pixels"])}}
     with pytest.raises(ManifestError, match="curved"):
-        Sensor(raw, model="mujoco")
+        Sensor(raw, model=model)
 
 
 def test_mujoco_press_conserves_force_and_keeps_order():

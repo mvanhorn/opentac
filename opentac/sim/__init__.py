@@ -29,7 +29,7 @@ import warnings
 import numpy as np
 
 from opentac.frame import Frame
-from opentac.manifest import Manifest, load
+from opentac.manifest import Manifest, ManifestError, load
 
 from . import foam
 from .readout import Readout, available_profiles
@@ -55,6 +55,9 @@ def Sensor(manifest, model: str = "foam", readout=None, **params):
     `bump_height_mm`, ...) for mujoco.
     """
     m = manifest if isinstance(manifest, Manifest) else load(manifest)
+    if (m.get("sim3d") or {}).get("taxels3d"):
+        raise ManifestError("this sensor is mounted on a curved surface (the manifest has a "
+                            "'sim3d' block); opentac.sim handles flat sensors only")
     if model == "foam":
         return FoamSensor(m, readout=readout, **params)
     if model == "mujoco":
