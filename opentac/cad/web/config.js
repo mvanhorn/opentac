@@ -10,4 +10,4 @@
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 export const API_BASE = LOCAL_HOSTS.has(location.hostname)
   ? ""                                      // local FastAPI serves this page itself
-  : "https://custom-pcb-dev.onrender.com";  // GitHub Pages -> Render deployment
+  : "https://opentac-cad.onrender.com";     // opentac.github.io/cad/ -> Render (render.yaml)

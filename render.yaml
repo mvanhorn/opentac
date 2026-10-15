@@ -1,0 +1,14 @@
+# Render Blueprint for the hosted OpenTac CAD demo (opentac.github.io/cad/ calls it).
+# The page's config.js expects the service at https://opentac-cad.onrender.com.
+services:
+  - type: web
+    name: opentac-cad
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false

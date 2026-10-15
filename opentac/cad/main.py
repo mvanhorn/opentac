@@ -81,12 +81,12 @@ MAX_STL_UPLOAD_BYTES = 50 * 1024 * 1024
 
 app.add_middleware(
     CORSMiddleware,
+    # The hosted demo's page lives on GitHub Pages; a local run serves the page
+    # itself (same origin), so it needs no entry here. aslepyan.github.io is the
+    # old address, kept while it redirects.
     allow_origins=[
+        "https://opentac.github.io",
         "https://aslepyan.github.io",
-        "http://localhost:8000",
-        "http://localhost:3000",
-        "http://127.0.0.1:5500",
-        "*",  # Allow all for prototype
     ],
     allow_methods=["*"],
     allow_headers=["*"],
