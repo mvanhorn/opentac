@@ -574,79 +574,6 @@
 
         <!-- Last panel in the column, below the preview: you generate, inspect
              the board above, and only then download it. -->
-        <!-- Shear bumps: an optional second, 3D-printed part. Off by default,
-             because most sensors only need normal force and the sheet is extra
-             work to print and fit. -->
-        <div class="panel bump-panel" id="bump-panel">
-          <div class="bump-head">
-            <label class="check-field" title="Adds a printable TPU overlay: one bump over each 2x2 group of sensors. Pressing sideways tilts the bump, so those four sensors read differently and you can tell which way the surface was pushed.">
-              <input id="bump-enable" type="checkbox" />
-              Add shear-sensing bumps (separate 3D-printed part)
-            </label>
-            <a href="#" class="help-link" data-help-target="help-bumps" title="What is this?">(?)</a>
-          </div>
-          <div class="bump-body" id="bump-body" hidden>
-            <p class="hint">
-              A soft sheet that snaps over the finished sensor. Each bump covers
-              a block of four sensors; slits between the bumps stop one bump
-              from dragging its neighbours. Blocks the board edge cuts short
-              still get a bump, so no sensor is left uncovered.
-            </p>
-            <div class="bump-fields">
-              <label title="How tall each bump stands above the sheet.">
-                Bump height
-                <input id="bump-height" type="number" min="0.4" max="10" step="0.2" value="2.0" />
-              </label>
-              <label title="Thickness of your finished PCB. The sheet has a pocket this deep so the sensor sits flush inside it.">
-                Sensor thickness
-                <input id="bump-recess" type="number" min="0.2" max="5" step="0.1" value="1.0" />
-              </label>
-              <label title="Thickness of the flexible sheet itself. Thinner is more compliant; under about 0.6mm gets hard to print.">
-                Sheet thickness
-                <input id="bump-sheet" type="number" min="0.4" max="3" step="0.1" value="0.8" />
-              </label>
-              <label title="Width of the solid rim around the sensor. This is the part you glue or clamp.">
-                Skirt width
-                <input id="bump-skirt" type="number" min="1" max="12" step="0.5" value="3.0" />
-              </label>
-            </div>
-            <details class="advanced bump-advanced">
-              <summary>Fine tuning</summary>
-              <div class="bump-fields">
-                <label title="Extra clearance cut around the board edge so the sensor slides into the pocket. Larger is easier to fit but lets the sensor shift; smaller grips by friction. 0.2mm suits a printer in good calibration.">
-                  Fit tolerance
-                  <input id="bump-tolerance" type="number" min="0" max="1.5" step="0.05" value="0.2" />
-                </label>
-                <label title="Width of the little bridges that hold neighbouring bumps together. Narrower lets each bump move more freely, so shear reads more cleanly — but too narrow and the tabs tear.">
-                  Tab width
-                  <input id="bump-tab-width" type="number" min="0.4" max="5" step="0.1" value="1.2" />
-                </label>
-                <label title="How many bridges span each cut between two bumps. More tabs make the sheet stiffer and more robust; fewer let each bump move more independently.">
-                  Tabs per edge
-                  <input id="bump-tabs" type="number" min="1" max="4" step="1" value="1" />
-                </label>
-                <label title="Bump base diameter as a percentage of the 2x2 block it covers. 100% means neighbouring bumps touch each other.">
-                  Bump width (% of block)
-                  <input id="bump-base-pct" type="number" min="30" max="100" step="5" value="80" />
-                </label>
-                <label title="Bump top diameter as a percentage of its base. Lower is a more pointed cone, which tips more readily; 100% is a straight-sided post.">
-                  Bump taper (top % of base)
-                  <input id="bump-top-pct" type="number" min="20" max="100" step="5" value="70" />
-                </label>
-              </div>
-            </details>
-            <div class="bump-actions">
-              <button id="bump-generate" type="button" class="primary" disabled>Generate bump sheet</button>
-              <button id="bump-download" type="button" class="secondary" disabled>Download STL</button>
-              <button id="bump-reset-view" type="button" class="secondary" disabled>Reset view</button>
-            </div>
-            <div id="bump-status" class="mini"></div>
-            <div id="bump-container" class="stl-container bump-container" hidden></div>
-            <div id="bump-stats" class="mini" hidden></div>
-          </div>
-        </div>
-
-
         <!-- Two-piece printed case. The shear bumps are a version of the TOP
              piece, not a separate part: flat lid or bumped lid. -->
         <div class="panel bump-panel" id="case-panel">
@@ -655,6 +582,7 @@
               <input id="case-enable" type="checkbox" />
               Add a printed case (two 3D-printed parts)
             </label>
+            <a href="#" class="help-link" data-help-target="help-bumps" title="What is this?">(?)</a>
           </div>
           <div class="bump-body" id="case-body" hidden>
             <p class="hint">
@@ -818,7 +746,7 @@
         <a href="#" data-help-target="help-routes">Route editing</a>
         <a href="#" data-help-target="help-mirror">Mirroring a design</a>
         <a href="#" data-help-target="help-export">Exporting</a>
-        <a href="#" data-help-target="help-bumps">Shear-sensing bumps</a>
+        <a href="#" data-help-target="help-bumps">Printed case and shear bumps</a>
         <a href="#" data-help-target="help-faq">FAQ / troubleshooting</a>
       </nav>
       <div class="help-content">
@@ -928,43 +856,32 @@
         </section>
 
         <section id="help-bumps" class="panel help-section">
-          <h2>Shear-sensing bumps</h2>
-          <p>A flat sensor tells you <em>how hard</em> something pressed, but not <em>which way</em> it slid. The bump sheet is an optional second part — a soft rubbery cover you 3D-print and snap over the finished board — that adds that missing direction.</p>
-          <p>It works by geometry. One bump sits over each group of four sensors. Press straight down and all four read about the same. Push sideways and the bump tips, so it presses harder on the two sensors it leans toward and lighter on the two it leans away from. That difference is the direction of the push.</p>
-          <h3>What you get</h3>
-          <ul>
-            <li>A pocket on the underside, sized to your PCB's thickness, so the sensor drops in and sits flush.</li>
-            <li>A solid rim (the <strong>skirt</strong>) around the outside — the part you glue or clamp down. It stops at the cable, so the connector stays reachable.</li>
-            <li>Narrow slits cut between neighbouring bumps, so pushing one bump doesn't drag the ones next to it. Small tabs hold everything together as one printable piece.</li>
-          </ul>
-          <h3>Settings</h3>
+          <h2>Printed case and shear bumps</h2>
+          <p>The case is two 3D-printed parts: a bottom with a pocket that the sensor and its piezoresistive layer drop into, and a lid held on by a ribbed rim. No glue and no screws. Both halves stop at the cable edge, so the tail leaves through the open side.</p>
+          <p>The lid comes in three versions:</p>
+          <dl class="help-glossary">
+            <dt>Flat</dt>
+            <dd>A plain lid. Reads normal force only.</dd>
+            <dt>Hatched</dt>
+            <dd>Cuts or grooves along the boundaries between sensors, so a press lands where you put it instead of spreading to the neighbours. An optional small bump on each sensor concentrates contact from curved objects.</dd>
+            <dt>Shear-sensing bumps</dt>
+            <dd>One bump over each group of four sensors. Press straight down and all four read about the same. Push sideways and the bump tips, pressing harder on the two sensors it leans toward and lighter on the two it leans away from. That difference is the direction of the push.</dd>
+          </dl>
+          <h3>Bump settings</h3>
           <dl class="help-glossary">
             <dt>Bump height</dt>
-            <dd>How far each bump stands proud of the sheet. Taller tips more for the same sideways push, so it reads shear more strongly — but it also raises the whole surface and is easier to snag.</dd>
-            <dt>Sensor thickness</dt>
-            <dd>The thickness of your finished PCB. The pocket is cut this deep. Get it wrong and the sheet either rocks on the board or won't seat.</dd>
-            <dt>Sheet thickness</dt>
-            <dd>How thick the flexible part is. Thinner transmits force more faithfully; below about 0.6&nbsp;mm it gets difficult to print.</dd>
-            <dt>Skirt width</dt>
-            <dd>How wide the solid rim is. Wider is easier to glue and holds its shape better; narrower keeps the part compact.</dd>
-          </dl>
-          <p>Under <strong>Fine tuning</strong> are the settings you would only change after a test print:</p>
-          <dl class="help-glossary">
-            <dt>Fit tolerance</dt>
-            <dd>Extra clearance cut around the board edge so the sensor slides in. The default 0.2&nbsp;mm suits a well-calibrated printer. Increase it if the sheet won't seat; decrease it if you want the sensor gripped by friction rather than glue.</dd>
-            <dt>Tab width and Tabs per edge</dt>
-            <dd>Together these set how freely one bump moves without dragging its neighbours — the single most important setting for how cleanly shear reads. Narrower or fewer tabs mean more independent bumps and a more delicate part; wider or more tabs mean a tougher part that reads shear more mushily.</dd>
+            <dd>How far each bump stands above the lid. Taller tips more for the same sideways push, so shear reads more strongly, but it raises the surface and snags more easily.</dd>
             <dt>Bump width (% of block)</dt>
-            <dd>How much of its four-sensor block each bump covers. At 100% neighbouring bumps touch, which defeats the slits, so the app warns you.</dd>
+            <dd>How much of its four-sensor block each bump covers. At 100% neighbouring bumps touch.</dd>
             <dt>Bump taper (top % of base)</dt>
-            <dd>How pointed each bump is. Lower is more cone-like and tips more readily for the same push; 100% is a straight-sided post. Above 100% the bump overhangs its own base and needs print support.</dd>
+            <dd>How pointed each bump is. Lower is more cone-like and tips more readily for the same push; 100% is a straight-sided post.</dd>
           </dl>
           <h3>Things to know</h3>
           <ul>
-            <li><strong>Every sensor gets covered.</strong> Bumps are placed on a regular grid of four-sensor blocks. Where the board's edge cuts a block short — an odd row, a curved outline — that block still gets a full-size bump, so part of it hangs over empty space. That is intentional: the sensors that <em>are</em> there stay under the bump and keep reading direction. The panel tells you how many bumps overhang this way.</li>
-            <li><strong>Non-square sensors get oval bumps.</strong> A bump is sized from the block it covers, so a grid of wide sensors gets a bump that is wide to match.</li>
+            <li><strong>Every sensor gets covered.</strong> Bumps are placed on a regular grid of four-sensor blocks. Where the board's edge cuts a block short, that block still gets a full-size bump, so the sensors that are there keep reading direction.</li>
+            <li><strong>Non-square sensors get oval bumps.</strong> A bump is sized from the block it covers.</li>
             <li><strong>Print it in something soft.</strong> TPU (roughly 85–95A) is the usual choice. A rigid plastic will not tip, so it will not read shear.</li>
-            <li><strong>Rebuild it if you rebuild the board.</strong> The sheet is cut to fit one exact board outline. Changing anything and pressing Generate clears the old sheet on purpose.</li>
+            <li><strong>Rebuild it if you rebuild the board.</strong> The case is cut to fit one exact board outline. Pressing Generate again clears the old case on purpose.</li>
           </ul>
         </section>
 
@@ -992,7 +909,6 @@
   <script type="module" src="hash-import.js"></script>
   <script type="module" src="app.js"></script>
   <script type="module" src="stl-viewer.js"></script>
-  <script type="module" src="bump-sheet.js"></script>
   <script type="module" src="case.js"></script>
   <script type="module" src="dxf-import.js"></script>
   <script type="module" src="design-import.js"></script>

@@ -158,7 +158,7 @@ async function openDesign(file) {
         notes: opened.warnings || [],
       },
     }));
-    say(`Reopened ${source} as a finished board — case and bump sheet are available. ` +
+    say(`Reopened ${source} as a finished board — the case is available. ` +
         `It predates stored settings, so new manufacturing files cannot be built from it.`);
     return;
   }

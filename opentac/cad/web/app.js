@@ -1204,7 +1204,7 @@ window.addEventListener("otc:restore-design", (e) => {
           zipB64, label = "design",
           // A board recovered from a pre-design-block manifest: its geometry is
           // exactly as fabricated, but the wiring was never in the file. The
-          // case and the bump sheet are geometry and still work; route editing
+          // case is geometry and still works; route editing
           // and a manufacturing re-export do not, and must not be offered as
           // if they did.
           geometryOnly = false, notes = [] } = e.detail || {};
@@ -1237,14 +1237,12 @@ window.addEventListener("otc:restore-design", (e) => {
   updateCadButtons();
   hideCableEdgeBanner();
 
-  // Any bump sheet or case in the page belongs to whatever board was here
-  // before. Drop them before the restored board lands.
-  window.otcBumpInvalidate?.();
+  // Any case in the page belongs to whatever board was here before. Drop it
+  // before the restored board lands.
   window.otcCaseInvalidate?.();
   routeEditor.load(editData, svg);
-  // Both paths enable the case and the bump sheet: they are built from the
-  // board's geometry, which a recovered design has in full.
-  window.otcBumpBoardReady?.(true);
+  // Both paths enable the case: it is built from the board's geometry, which a
+  // recovered design has in full.
   window.otcCaseBoardReady?.(true);
   tailExtensionPromptDismissed = false;
   hideTailExtensionPrompt();
@@ -1259,8 +1257,8 @@ window.addEventListener("otc:restore-design", (e) => {
     renderRecoveredStats(editData, notes);
     updateConnectorUpsizeControl(null);
     genStatus.innerHTML =
-      `Reopened <strong>${label}</strong> as a finished board. Build a case or a bump ` +
-      `sheet from it below — those are shaped from the board, so they fit the one you ` +
+      `Reopened <strong>${label}</strong> as a finished board. Build a case from it ` +
+      `below — it is shaped from the board, so it fits the one you ` +
       `already had made. Downloading new manufacturing files is not possible: the wiring ` +
       `was never stored in this file.`;
     return;
@@ -1736,9 +1734,8 @@ async function runGenerate(overrides = {}) {
   setPrintPdf(null);
   lastZipB64 = null;
   clearPrinted();
-  // Any previously built bump sheet belongs to the OLD board. Drop it before
-  // the new one lands, so a stale STL can never be downloaded as if it fitted.
-  window.otcBumpInvalidate?.();
+  // Any previously built case belongs to the OLD board. Drop it before the new
+  // one lands, so a stale STL can never be downloaded as if it fitted.
   window.otcCaseInvalidate?.();
   try {
     const resp = await fetch(`${API_BASE}/generate`, {
@@ -1763,7 +1760,6 @@ async function runGenerate(overrides = {}) {
     markPrinted(body.design_name ?? "");
     downloadBtn.disabled = false;
     setPrintPdf(data.stats);
-    window.otcBumpBoardReady?.(!!data.edit_data);
     window.otcCaseBoardReady?.(!!data.edit_data);
     renderStats(data.stats, data.drc);
     updateConnectorUpsizeControl(data.stats.connector_pos);
@@ -1780,9 +1776,6 @@ async function runGenerate(overrides = {}) {
     generateInFlight = false;
   }
 }
-
-// The bump sheet is built from the board's edit_data, so bump-sheet.js reads
-// it through here instead of holding its own copy that could go stale.
 
 // ---- mirror ----
 // Flips the whole design in place: outline, sensorize zone and any fold lines

@@ -1,8 +1,8 @@
-// Read-only 3D preview for the generated bump sheet.
+// Read-only 3D preview for the generated case parts.
 //
 // Deliberately NOT the STL-import viewer in stl-viewer.js: that one owns face
 // selection, seam picking and the unfold pipeline, and it lives inside the STL
-// input mode. The bump sheet is an output, and it must be viewable no matter
+// input mode. The case is an output, and it must be viewable no matter
 // which input mode built the board (draw / DXF / STL). So this is its own
 // minimal scene — load, orbit, reset — with nothing pickable.
 import * as THREE from "three";

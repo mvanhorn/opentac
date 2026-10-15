@@ -1,8 +1,7 @@
 // Two-piece printed case: generate, preview either half, download both.
 //
-// Separate from bump-sheet.js for the same reason that one is separate from
-// app.js — it is another output part with its own lifecycle, rebuilt several
-// times against one board while tuning the fit.
+// Separate from app.js because it is another output part with its own
+// lifecycle, rebuilt several times against one board while tuning the fit.
 //
 // The shear bumps are a SETTING here, not a separate part: "flat lid" and
 // "bumped lid" are two versions of the same top piece.

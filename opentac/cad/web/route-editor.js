@@ -834,7 +834,7 @@ export function createRouteEditor({
     resizeConnector,
     getConnectorPos,
     // The live edit_data, including anything redo-padding or a connector swap
-    // changed. The bump sheet wraps the FINAL outline, so it has to read this
+    // changed. The case wraps the FINAL outline, so it has to read this
     // rather than the response the board was first generated from.
     getEditData: () => editData,
   };
