@@ -1,4 +1,4 @@
-"""The OpenTac CAD tool surface offered to an LLM, and its dispatch.
+"""The OpenTac-CAD tool surface offered to an LLM, and its dispatch.
 
 In process: this calls `main.generate()` directly, the same entry point the
 /generate route uses, so a described board goes through the identical
@@ -146,7 +146,7 @@ TOOL_SPECS = [
     {
         "name": "generate_sensor_board",
         "description": (
-            "Run the real OpenTac CAD pipeline: taxels, routing, "
+            "Run the real OpenTac-CAD pipeline: taxels, routing, "
             "connector, DRC. Takes 10-40 seconds. Report the taxel count, "
             "board size and DRC result it returns - not the numbers that were "
             "asked for. The board is then shown in the user's editor "

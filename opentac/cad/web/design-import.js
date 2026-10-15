@@ -113,7 +113,7 @@ async function fileToDesign(file) {
   const entry = await readZipEntry(await file.arrayBuffer(), ["design.json", "manifest.json"]);
   if (!entry) {
     throw new Error(
-      "this ZIP has no design.json or manifest.json — it may not be an OpenTac CAD export");
+      "this ZIP has no design.json or manifest.json — it may not be an OpenTac-CAD export");
   }
   return { source: `${file.name} (${entry.name})`, data: JSON.parse(entry.text) };
 }

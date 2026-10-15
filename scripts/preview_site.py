@@ -2,7 +2,7 @@
 
     uv run --extra docs python scripts/preview_site.py [--port 8100] [--no-build] [--no-browser]
 
-Serves the website (built from docs/ into site/) at /, OpenTac CAD at /cad/, and
+Serves the website (built from docs/ into site/) at /, OpenTac-CAD at /cad/, and
 the CAD backend at the same address, so "Try it online" works without Render.
 """
 from __future__ import annotations
@@ -58,7 +58,7 @@ def main() -> int:
         subprocess.run([sys.executable, "-m", "mkdocs", "build", "-q", "-d", str(SITE)],
                        cwd=ROOT, check=True)
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"\n  Preview: {url}   (OpenTac CAD at {url}cad/)\n  Ctrl-C stops it.\n")
+    print(f"\n  Preview: {url}   (OpenTac-CAD at {url}cad/)\n  Ctrl-C stops it.\n")
     if not args.no_browser:
         def _open():
             for _ in range(240):

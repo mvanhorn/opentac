@@ -1,4 +1,4 @@
-"""Run OpenTac CAD on this computer and open it in the default browser.
+"""Run OpenTac-CAD on this computer and open it in the default browser.
 
 This is `opentac cad`, which the double-click launchers (Start_OpenTac.bat on
 Windows, Start_OpenTac.command on macOS/Linux, both at the repository root) run
@@ -52,7 +52,7 @@ def main(host: str = "127.0.0.1", port: int | None = None, open_browser: bool = 
     port = port or pick_free_port()
     url = f"http://127.0.0.1:{port}/"
     print()
-    print("  OpenTac CAD is starting...")
+    print("  OpenTac-CAD is starting...")
     if open_browser:
         print(f"  It will open in your browser at {url}")
         threading.Thread(target=open_browser_when_ready, args=(url,), daemon=True).start()

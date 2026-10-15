@@ -25,7 +25,7 @@ def test_instructions_build_and_carry_the_rules():
     from opentac.cad.chat import context
 
     text = context.system_instructions()
-    assert "OpenTac CAD design assistant" in text     # preamble
+    assert "OpenTac-CAD design assistant" in text     # preamble
     assert "## Board mode" in text                        # skill body
     assert "## Setup" not in text                         # dropped
     assert "The router is not a choice" in text           # hug-only rule

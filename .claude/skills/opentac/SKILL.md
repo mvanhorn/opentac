@@ -1,9 +1,9 @@
 ---
 name: opentac
-description: Design a tactile sensor PCB from a plain-English description — "a sensor shaped like a size 9 insole with the cable at the heel". Builds and validates the outline, runs the OpenTac CAD pipeline locally, and returns KiCad files and Gerbers. Use for any tactile sensor, taxel array, pressure-sensing PCB, or sensor built from a described shape, a DXF outline, or a surface of an STL part.
+description: Design a tactile sensor PCB from a plain-English description — "a sensor shaped like a size 9 insole with the cable at the heel". Builds and validates the outline, runs the OpenTac-CAD pipeline locally, and returns KiCad files and Gerbers. Use for any tactile sensor, taxel array, pressure-sensing PCB, or sensor built from a described shape, a DXF outline, or a surface of an STL part.
 ---
 
-# OpenTac CAD
+# OpenTac-CAD
 
 Turn a described sensor into a manufacturable PCB: a grid of taxels
 packed into a shape, wired to an FPC connector, exported as KiCad + Gerbers.

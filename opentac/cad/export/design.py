@@ -53,7 +53,7 @@ DESIGN_SCHEMA = 1
 # snapshot export a different board than the one it previewed.
 PIPELINE_VERSION = "2026.09.04"
 
-APP_NAME = "OpenTac CAD"
+APP_NAME = "OpenTac-CAD"
 
 
 def params_to_dict(params: Params) -> dict:

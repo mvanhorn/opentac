@@ -1,4 +1,4 @@
-# The hosted OpenTac CAD demo (Render). Same package as a local run, plus the
+# The hosted OpenTac-CAD demo (Render). Same package as a local run, plus the
 # [demo] extra for the Gemini design chat. Built from the repository root:
 #   docker build -f deploy/Dockerfile .
 FROM python:3.13-slim

@@ -1,6 +1,6 @@
 """Read OpenTac sensor manifests: the one reader every other part of the package uses.
 
-A manifest (manifest.json, written by OpenTac CAD) describes one sensor: where each
+A manifest (manifest.json, written by OpenTac-CAD) describes one sensor: where each
 taxel is, which connector pads its row and column use, and which taxels share a
 shear bump. `load()` takes a manifest.json, a design export .zip, or a dict, and
 checks that the fields it carries agree with each other. `from_qr()` rebuilds one

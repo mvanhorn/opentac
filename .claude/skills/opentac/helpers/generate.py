@@ -1,4 +1,4 @@
-"""Run the OpenTac CAD pipeline in process and report what came out.
+"""Run the OpenTac-CAD pipeline in process and report what came out.
 
 No HTTP server. main.generate() is the same entry point the web app's
 /generate route uses, so this shares the web app's behaviour exactly — the

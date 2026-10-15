@@ -120,7 +120,7 @@ def test_drawn_layout_uses_pixels_true():
     assert manifest.drawn(raw("square_9x9_30pin.json"))["pixels"] == raw("square_9x9_30pin.json")["pixels"]
 
 
-# Only boards OpenTac CAD lays out carry the QR, and CAD puts the column pads
+# Only boards OpenTac-CAD lays out carry the QR, and CAD puts the column pads
 # right after the row pads, which the QR format relies on (taxel_core: "cp0 ==
 # rp0 + r"). pinky_tip_30pin.json came from another tool with the columns on the
 # lower pads, so it is left out: its QR would decode with the wrong column pads.

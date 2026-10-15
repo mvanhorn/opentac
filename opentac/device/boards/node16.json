@@ -1,6 +1,6 @@
 {
   "_readme": [
-    "'pads' rows are [pad, board_pin, net, line]: pad is the number OpenTac CAD writes in a manifest's rp/cp; board_pin is the readout board connector pin it reaches (the cable mirrors the connector, pin = N + 1 - pad); net is that pin's net on the board; line 0-31 is the shift-register step that drives it, 32-63 is mux channel line-32 that reads it."
+    "'pads' rows are [pad, board_pin, net, line]: pad is the number OpenTac-CAD writes in a manifest's rp/cp; board_pin is the readout board connector pin it reaches (the cable mirrors the connector, pin = N + 1 - pad); net is that pin's net on the board; line 0-31 is the shift-register step that drives it, 32-63 is mux channel line-32 that reads it."
   ],
   "board": "NODE16",
   "title": "30-pin board (two stacked boards)",

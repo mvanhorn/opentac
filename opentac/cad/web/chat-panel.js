@@ -2,7 +2,7 @@
 // designs it, then hands the result straight into this editor.
 //
 // The design itself is never invented by the model. The backend runs the real
-// OpenTac CAD pipeline against the OpenTac Skill (SKILL.md as system
+// OpenTac-CAD pipeline against the OpenTac Skill (SKILL.md as system
 // instructions, outline/preflight/generate as function-calling tools), so what
 // comes back is a board that was actually built and DRC-checked, with a real
 // taxel count.

@@ -1,4 +1,4 @@
-"""Load a real OpenTac CAD sensor from its manifest.
+"""Load a real OpenTac-CAD sensor from its manifest.
 
 This is the link that was missing: everything in this package described a
 regular lattice of identical bumps, and a real OpenTac board is not that. It has an
@@ -82,7 +82,7 @@ class TactileSensor:
         if not bumps:
             raise ManifestError(
                 f"manifest (v{self.v}) has no usable 'shear' block, so there is "
-                "no way to know which taxels share a bump. OpenTac CAD added "
+                "no way to know which taxels share a bump. OpenTac-CAD added "
                 "it in v5; re-export from a current version. Without it the "
                 "board may still be real, but this package cannot place bumps "
                 "on it.")

@@ -1,4 +1,4 @@
-# Render Blueprint for the hosted OpenTac CAD demo (opentac.github.io/cad/ calls it).
+# Render Blueprint for the hosted OpenTac-CAD demo (opentac.github.io/cad/ calls it).
 # The page's config.js expects the service at https://opentac-cad.onrender.com.
 services:
   - type: web

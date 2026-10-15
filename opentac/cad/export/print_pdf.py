@@ -238,7 +238,7 @@ def _draw_board(c, chains, taxels, pixel_w, pixel_h, show_taxels=True):
 
 
 def generate_print_pdf(layout, outline_xy, params, removed, connector_dir,
-                       title="OpenTac CAD sensor", info=None) -> bytes:
+                       title="OpenTac-CAD sensor", info=None) -> bytes:
     """Build the 1:1 cutting template.
 
     Draws the board's REAL manufactured boundary (Edge.Cuts, connector body

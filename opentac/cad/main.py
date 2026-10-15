@@ -69,7 +69,7 @@ from opentac.cad.export.connector_geometry import (
 from opentac.cad.export.svg_preview import generate_svg
 from opentac.cad.importers.dxf import parse_dxf_outline, DxfImportError
 
-app = FastAPI(title="OpenTac CAD API", version="0.1.0")
+app = FastAPI(title="OpenTac-CAD API", version="0.1.0")
 
 MAX_DXF_UPLOAD_BYTES = 10 * 1024 * 1024
 # Guard for the STL-upload endpoints (/unroll-mesh, /grow-region,
@@ -2422,7 +2422,7 @@ def open_design(req: OpenDesignRequest):
         schema = data.get("schema") if "edit_data" in data else (data.get("design") or {}).get("schema")
         if schema is not None and int(schema) > DESIGN_SCHEMA:
             raise ValueError(
-                f"This design was written by a newer version of OpenTac CAD "
+                f"This design was written by a newer version of OpenTac-CAD "
                 f"(design schema {schema}, this build reads {DESIGN_SCHEMA}). Update the app.")
 
         warnings: list[str] = []
@@ -2442,7 +2442,7 @@ def open_design(req: OpenDesignRequest):
                 label = data.get("label") or "recovered design"
             warnings.extend(notes)
             warnings.append(
-                "This design was exported before OpenTac CAD stored its settings, so only "
+                "This design was exported before OpenTac-CAD stored its settings, so only "
                 "the board itself could be recovered: its outline, its cut edge and where every "
                 "taxel sits, exactly as manufactured. You can build a case or a bump sheet from "
                 "it. Route editing and a new Gerber/KiCad export are not available, because the "
@@ -2467,7 +2467,7 @@ def open_design(req: OpenDesignRequest):
             if missing:
                 raise ValueError(
                     f"design.json is missing {', '.join(missing)} — it is incomplete or not an "
-                    "OpenTac CAD design file.")
+                    "OpenTac-CAD design file.")
             routes = data.get("routes") or edit_data.get("routes") or []
             stored_pipeline = data.get("pipeline")
             router = (edit_data.get("layout", {}).get("tail") or {}).get("router", "legacy")
@@ -2501,7 +2501,7 @@ def open_design(req: OpenDesignRequest):
         design = data.get("design")
         if not design:
             # is_legacy_manifest already claimed anything with taxels, above.
-            raise ValueError("Not an OpenTac CAD manifest.json or design.json.")
+            raise ValueError("Not an OpenTac-CAD manifest.json or design.json.")
 
         outline = data.get("outline") or []
         if len(outline) < 3:

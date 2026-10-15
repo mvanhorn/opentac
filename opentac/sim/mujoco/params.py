@@ -1,7 +1,7 @@
 """Bump-lattice parameters and the lumped-element stiffnesses derived from them.
 
 Geometry names mirror OpenTac's `pipeline/bump_sheet.py::BumpParams` on purpose, so
-a design exported from OpenTac CAD can be dropped in without a translation
+a design exported from OpenTac-CAD can be dropped in without a translation
 layer.  See NOTES.md, "Mapping to OpenTac".
 
 The whole point of this model is that a bump is NOT simulated as a deformable

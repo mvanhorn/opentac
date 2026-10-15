@@ -9,7 +9,7 @@ same failure mode NOTES.md catalogues for MuJoCo.
 
 Ported from TactileSim's tests/test_loader.py; only the imports changed.
 
-Fixtures are REAL manifests exported by OpenTac CAD, not hand-written:
+Fixtures are REAL manifests exported by OpenTac-CAD, not hand-written:
 
   flat_square.json  48 taxels, 12 bumps, every 2x2 block full
   flat_disc.json    41 taxels, 15 bumps, 9 blocks cut short by the curved edge
@@ -317,7 +317,7 @@ def test_a_manifest_without_the_shear_block_is_refused(square):
 def test_an_old_version_number_with_a_shear_block_is_accepted(square):
     """Check the BLOCK, not the version number.
 
-    A real export from a deployed OpenTac CAD arrived carrying "v": 3 with
+    A real export from a deployed OpenTac-CAD arrived carrying "v": 3 with
     a complete shear block -- version numbers travel differently from
     features. Gating on v >= 5 would have refused a sensor this package can
     simulate perfectly.

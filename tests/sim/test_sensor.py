@@ -16,7 +16,7 @@ SQUARE = FIX / "flat_square.json"
 
 
 def test_default_model_is_foam_even_with_a_shear_block():
-    """OpenTac CAD writes a `shear` block on every export, printed sheet or not,
+    """OpenTac-CAD writes a `shear` block on every export, printed sheet or not,
     so the block cannot say whether bumps exist. The default stays foam."""
     m = manifest.load(SQUARE)
     assert m.get("shear")

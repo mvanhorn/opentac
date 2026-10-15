@@ -1,5 +1,5 @@
 #!/bin/bash
-# OpenTac CAD on this computer (macOS / Linux).
+# OpenTac-CAD on this computer (macOS / Linux).
 #   macOS: double-click this file.   Linux: bash Start_OpenTac.command
 # The first run downloads what the app needs (a few minutes, once). Later runs start in seconds.
 cd "$(dirname "$0")"

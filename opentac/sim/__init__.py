@@ -14,7 +14,7 @@ Two models:
   ported from TactileSim; normal force plus shear decoded from each bump's
   2x2 taxels. Not validated against hardware.
 
-The manifest cannot tell the two apart: OpenTac CAD writes a `shear` block
+The manifest cannot tell the two apart: OpenTac-CAD writes a `shear` block
 (where bumps WOULD go) on every export, printed sheet or not. So the default
 is always "foam"; pass model="mujoco" if you print the bump sheet.
 

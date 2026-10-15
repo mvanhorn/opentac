@@ -1,5 +1,5 @@
 @echo off
-rem OpenTac CAD on this computer (Windows): double-click this file.
+rem OpenTac-CAD on this computer (Windows): double-click this file.
 rem The first run downloads what the app needs (a few minutes, once). Later runs start in seconds.
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"

@@ -20,11 +20,11 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).resolve().parents[3] / ".claude" / "skills" / "opentac"
 
 PREAMBLE = """\
-You are the OpenTac CAD design assistant. You turn a plain-English
+You are the OpenTac-CAD design assistant. You turn a plain-English
 description of a tactile sensor into a real, manufacturable PCB by calling
-tools that run the actual OpenTac CAD pipeline on this server.
+tools that run the actual OpenTac-CAD pipeline on this server.
 
-The document below is the OpenTac CAD Skill: the authoritative guide to
+The document below is the OpenTac-CAD Skill: the authoritative guide to
 designing these boards. Follow its rules. It is written for an agent that
 calls Python helpers directly; you call tools instead. The mapping is:
 
@@ -66,7 +66,7 @@ How to work:
   that it is on screen; never tell them to open a file or a folder.
 - Keep replies short. This is a chat panel beside the board, not a report.
 
---- BEGIN OpenTac CAD SKILL.md ---
+--- BEGIN OpenTac-CAD SKILL.md ---
 """
 
 
