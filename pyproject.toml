@@ -1,0 +1,53 @@
+[project]
+name = "opentac"
+version = "0.1.0.dev0"
+description = "OpenTac: design, build, read and simulate custom tactile sensors"
+readme = "README.md"
+requires-python = ">=3.12"
+# Lower bounds are the versions the CAD pipeline was verified with; uv.lock pins exact ones.
+dependencies = [
+    # CAD tool (opentac.cad)
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.6",
+    "pydantic>=2.13.4",
+    "python-multipart>=0.0.12",
+    "numpy>=2.5.1",
+    "scipy>=1.18.0",
+    "shapely>=2.0.6",
+    "ezdxf>=1.3.5",
+    "trimesh>=4.12.2",
+    # trimesh has no geometry kernel of its own: earcut triangulates, manifold3d
+    # does the booleans, networkx is needed by fill_holes (bump sheet repair).
+    "mapbox-earcut>=2.0.0",
+    "manifold3d>=3.5.2",
+    "networkx>=3.6.1",
+    # back-silkscreen QR
+    "segno>=1.6.6",
+    "matplotlib",
+    # readout boards (opentac.device)
+    "pyserial",
+]
+
+[project.optional-dependencies]
+# MuJoCo backend for skins with a bump sheet (opentac.sim)
+sim = ["mujoco>=3.2"]
+# hosted demo only: the Gemini design chat
+demo = ["google-genai>=2.20.0", "python-dotenv>=1.2.3"]
+# building the website
+docs = ["mkdocs-material"]
+
+[project.scripts]
+opentac = "opentac.cli:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["opentac"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

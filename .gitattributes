@@ -1,0 +1,19 @@
+# One line ending in the repo, whatever the machine. OneDrive and Windows checkouts
+# rewrote every line of the old repos; this stops that.
+* text=auto eol=lf
+
+*.bat  text eol=crlf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.mp4  binary
+*.webm binary
+*.glb  binary
+*.stl  binary
+*.step binary
+*.zip  binary
+*.bin  binary
+*.pdf  binary
+*.npz  binary

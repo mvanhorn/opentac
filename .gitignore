@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+site/
+.env
+.DS_Store
+
+# data stays out of git (Zenodo / Releases)
+recordings/
+*.npz
