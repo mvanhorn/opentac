@@ -103,7 +103,7 @@ done
 if [ "$PREBUILT" = 1 ]; then
   mkdir -p "$HERE/prebuilt"
   for f in READOUT60.bin NODE16.bin READOUT32.bin NODE16_bus.bin bus_controller.hex; do
-    [ -f "$OUT/$f" ] && cp "$OUT/$f" "$HERE/prebuilt/$f"
+    [ -f "$OUT/$f" ] && cp "$OUT/$f" "$HERE/prebuilt/$f" && chmod 644 "$HERE/prebuilt/$f"
   done
   (cd "$HERE/prebuilt" && shasum -a 256 *.bin *.hex > SHA256SUMS)
   echo "== copied to $HERE/prebuilt"
