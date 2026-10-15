@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
+# ...but not the website's Build section
+!docs/build/
 site/
 .env
 .DS_Store
