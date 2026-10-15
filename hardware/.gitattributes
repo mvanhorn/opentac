@@ -1,0 +1,4 @@
+# Keep fab outputs and vendor 3D models byte for byte as they came:
+# the JLCPCB CSVs and many STEP files use CRLF line endings.
+**/production/** -text
+libs/3dmodels/** -text

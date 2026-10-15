@@ -1,0 +1,7 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "LSM6DSV16BXTR")(type "KiCad")(uri "${KIPRJMOD}/../../libs/symbols/LSM6DSV16BXTR.kicad_sym")(options "")(descr ""))
+  (lib (name "STM32G491KEU6")(type "KiCad")(uri "${KIPRJMOD}/../../libs/symbols/STM32G491KEU6.kicad_sym")(options "")(descr ""))
+  (lib (name "TS-1088-AR02016")(type "KiCad")(uri "${KIPRJMOD}/../../libs/symbols/TS-1088-AR02016.kicad_sym")(options "")(descr ""))
+  (lib (name "lcsc_imported")(type "KiCad")(uri "${KIPRJMOD}/../../libs/symbols/lcsc_imported.kicad_sym")(options "")(descr ""))
+)
