@@ -1,4 +1,4 @@
-"""Xampling: read 64 taxels per frame instead of all of them, and compare frame rates.
+"""Xampling: read part of the sensor each frame instead of all of it, and compare frame rates.
 
     uv run python examples/xampling.py
 
@@ -21,12 +21,12 @@ with Sensor() as s:
     print(f"raster: {fps(s):.0f} fps, {s.stored['active']} taxels per frame")
     z = s.zero()                              # nothing touching
     print(f"zeroed: noise median <= {z['noise_median']}, max {z['noise_max']} counts")
-    s.xampling(budget=64)                     # fixed: 64 reads per frame
+    s.xampling(budget=64, grow=False)         # fixed: exactly 64 reads per frame
     frame = s.read()
-    print(f"xampling: {fps(s):.0f} fps, {int(frame.mask.sum())} taxels per frame")
-    s.xampling(budget=64, grow=True)          # 64 search reads, then grow around contacts
+    print(f"xampling, fixed: {fps(s):.0f} fps, {int(frame.mask.sum())} taxels per frame")
+    s.xampling(budget=64)                     # the default: 64 search reads, then grow around contacts
     print("press the sensor...")
     for frame in s.frames(limit=500):
         pass
-    print(f"grow: last frame read {int(frame.mask.sum())} taxels")
+    print(f"xampling, grow: last frame read {int(frame.mask.sum())} taxels")
     s.raster()

@@ -172,8 +172,8 @@ def _start_xampling(sensors, args):
         print(f"  node {s.node}: " if s.node is not None else "  ", end="")
         print(f"noise median <= {z['noise_median']}, max {z['noise_max']}, "
               f"{z['noisy']} taxels >= 100 counts")
-        got = s.xampling(args.xampling, grow=args.grow)
-        print(f"  xampling {'grow' if args.grow else 'fixed'}, {got} reads per frame")
+        got = s.xampling(args.xampling, grow=not args.fixed)
+        print(f"  xampling {'fixed' if args.fixed else 'grow'}, M = {got}")
 
 
 def _view(args) -> int:
@@ -263,8 +263,9 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--imu", action="store_true", help="keep the IMU on (off by default)")
         p.add_argument("--xampling", type=int, metavar="M",
                        help="Xampling: read M taxels per frame (zeroes first: hands off)")
-        p.add_argument("--grow", action="store_true",
-                       help="with --xampling: M search reads, then grow around every contact")
+        p.add_argument("--fixed", action="store_true",
+                       help="with --xampling: exactly M reads per frame, for a steady frame "
+                            "rate (default: M search reads, then grow around every contact)")
 
     p = sub.add_parser("setup", help="tell the board which sensor is plugged in (once per sensor)")
     p.add_argument("manifest", help="the sensor's manifest.json or design .zip")

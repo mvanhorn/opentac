@@ -96,10 +96,10 @@ def test_xampling_needs_a_zero_then_streams_sparse_frames():
         s.xampling(budget=16)
     z = s.zero()
     assert z["frames"] == 64 and z["noise_max"] == 27
-    assert s.xampling(budget=16) == 16 and fake.values[2] == 1
+    assert s.xampling(budget=16, grow=False) == 16 and fake.values[2] == 1   # fixed
     f = s.read()
     assert f.sparse and int(f.mask.sum()) == 16 and np.isnan(f.taxels[~f.mask]).all()
-    s.xampling(budget=16, grow=True)
+    s.xampling(budget=16)                    # grow is the default
     assert fake.values[2] == 2
     s.raster()
     assert s.read().mask.all()

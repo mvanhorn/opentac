@@ -355,13 +355,14 @@ class Sensor:
             self.link.timeout = saved
         return parse_zero(reply)
 
-    def xampling(self, budget: int = 128, grow: bool = False) -> int:
-        """Switch to Xampling: each frame reads `budget` taxels (XAMP_M) chosen by the board.
+    def xampling(self, budget: int = 128, grow: bool = True) -> int:
+        """Switch to Xampling: each frame reads part of the sensor, chosen by the board.
 
-        grow=False (TAC_MODE xamp_fixed): exactly `budget` reads per frame,
-        growth included, for a steady frame rate. grow=True (xamp_grow): `budget`
-        search reads, then every neighbour of a contact on top. Call zero() first,
-        with nothing touching. Values are counts above that zero; unread taxels NaN.
+        grow=True (the default, TAC_MODE xamp_grow): `budget` (XAMP_M) search reads,
+        then growth around every contact for as far as it reaches, so a large contact
+        is read whole. grow=False (xamp_fixed): exactly `budget` reads per frame,
+        growth included, for a steady frame rate. Call zero() first, with nothing
+        touching. Values are counts above that zero; unread taxels NaN.
         Returns the budget the board stored.
         """
         stored = self.set("XAMP_M", budget)

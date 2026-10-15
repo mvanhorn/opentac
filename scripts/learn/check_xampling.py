@@ -75,9 +75,9 @@ def main():
             manifest = json.loads((stm / skin["manifest"]).read_text())
             cfg = tmp / "config.bin"
             cfg.write_bytes(device.build_config(device.extract(manifest, device.readout_32x32_line), 1))
-            for m in BUDGETS:
+            for mode, m in [(mode, m) for mode in (1, 2) for m in BUDGETS]:
                 job = {"scan": skin["scan"], "t_ms": take["t_ms"], "fps": xm["fps"][str(m)],
-                       "settings": {"mode": 1, "m": m, "threshold": d["XAMP_THRESH"],
+                       "settings": {"mode": mode, "m": m, "threshold": d["XAMP_THRESH"],
                                     "searchMin": d["XAMP_SEARCH_MIN"], "bumpFill": False},
                        "z_base": take["z_base"], "z_noise": take["z_noise"],
                        "raw": take["raw"], "pattern": xm["pattern"]}
@@ -86,7 +86,7 @@ def main():
                 js = json.loads(subprocess.run(["node", str(driver), str(JS), str(jf)],
                                                check=True, capture_output=True, text=True).stdout)
                 n = len(take["z_base"])
-                lines = [f"{n} {len(js['idx'])} 1 {m} {d['XAMP_SEARCH_MIN']} {d['XAMP_THRESH']}",
+                lines = [f"{n} {len(js['idx'])} {mode} {m} {d['XAMP_SEARCH_MIN']} {d['XAMP_THRESH']}",
                          " ".join(map(str, take["z_base"])), " ".join(map(str, take["z_noise"]))]
                 lines += [" ".join(map(str, take["raw"][i])) for i in js["idx"]]
                 ff = tmp / "frames.txt"
@@ -96,10 +96,10 @@ def main():
                 bad = [k for k, (a, b) in enumerate(zip(c, js["lines"])) if a.strip() != b.strip()]
                 if len(c) != len(js["lines"]) or bad:
                     k = bad[0] if bad else -1
-                    print(f"MISMATCH {entry['take']} M={m} frame {k}:\n  C : {c[k][:200]}\n  JS: {js['lines'][k][:200]}")
+                    print(f"MISMATCH {entry['take']} mode={mode} M={m} frame {k}:\n  C : {c[k][:200]}\n  JS: {js['lines'][k][:200]}")
                     sys.exit(1)
                 frames_checked += len(c)
-            print(f"  {entry['take']} ({take['skin']}): identical for M = {', '.join(map(str, BUDGETS))}")
+            print(f"  {entry['take']} ({take['skin']}): identical in fixed and grow mode for M = {', '.join(map(str, BUDGETS))}")
         print(f"OK: {frames_checked} xampling frames, JS port == ot_xampling.h")
 
 
