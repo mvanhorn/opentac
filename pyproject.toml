@@ -4,6 +4,7 @@ version = "0.1.0.dev0"
 description = "OpenTac: design, build, read and simulate custom tactile sensors"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
 # Lower bounds are the versions the CAD pipeline was verified with; uv.lock pins exact ones.
 dependencies = [
     # CAD tool (opentac.cad)
