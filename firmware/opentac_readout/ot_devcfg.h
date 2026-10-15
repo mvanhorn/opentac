@@ -72,14 +72,27 @@
 
 // ----- Board ------------------------------------------------------------------
 //
-// One sketch, two boards. The 32x32 readout has four cascaded '595s and a 32:1
-// mux (MUX0..MUX4). The small v1 node has two '595s and a 16:1 mux (MUX0..MUX3
-// only; PB5 is not part of it). Pins, ADC, IMU and RGB are otherwise shared.
-// Build the node with -DOT_BOARD_NODE16.
+// One sketch, three boards, and a build is for exactly one of them
+// (opentac_readout.ino says how to choose):
+//   READOUT60  the 60-pin readout: four cascaded '595s and a 32:1 mux
+//              (MUX0..MUX4), 30 of each on the connector, an I2C gain switch,
+//              and its own '595 pin order (see the sketch's pinout).
+//   NODE16     the 30-pin board: two '595s and a 16:1 mux (MUX0..MUX3 only;
+//              PB5 is not part of it).
+//   READOUT32  the 70-pin readout of the older boards: four '595s and a 32:1
+//              mux.
+// Pins, ADC, IMU and RGB are otherwise shared.
+#if (defined(OT_BOARD_READOUT60) + defined(OT_BOARD_NODE16) + defined(OT_BOARD_READOUT32)) != 1
+#error "Build for exactly one board: OT_BOARD_READOUT60, OT_BOARD_NODE16 or OT_BOARD_READOUT32 (see the top of opentac_readout.ino)"
+#endif
 #if defined(OT_BOARD_NODE16)
 #define OTCFG_SR_STEPS       16
 #define OTCFG_MUX_CHANNELS   16
 #define OT_BOARD_NAME        "NODE16"
+#elif defined(OT_BOARD_READOUT60)
+#define OTCFG_SR_STEPS       32
+#define OTCFG_MUX_CHANNELS   32
+#define OT_BOARD_NAME        "READOUT60"
 #else
 #define OTCFG_SR_STEPS       32
 #define OTCFG_MUX_CHANNELS   32

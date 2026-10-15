@@ -104,7 +104,7 @@ static inline bool otTacModeIsXampling(uint16_t mode) {
 // 1 VIB_AXIS, 10-12 projection weights, 13-18 per-modality LED channels/gains,
 // 20-23 binary thresholds and the transition counter -- all bus-node concerns.
 // 24-28 are the knobs v1/API.md 2.6 lists as "currently forces a reflash";
-// 29-34 are xampling's.
+// 29-34 are xampling's; 35 is the 60-pin board's gain switch.
 
 #define OT_P_TAC_MODE       2
 #define OT_P_LED_MODE       3
@@ -126,6 +126,15 @@ static inline bool otTacModeIsXampling(uint16_t mode) {
 #define OT_P_XAMP_ZERO_FRAMES 32 // raster frames `Z` measures noise over
 #define OT_P_XAMP_BUMP_FILL 33  // 1 = growth fills whole shear bumps
 #define OT_P_XAMP_CONFIRM_US 34 // extra settle before re-reading a trigger
+#define OT_P_GAIN_SW       35   // 60-pin board: gain switches closed, bit k = SW(k+1)
+
+// 60-pin board: the gain at boot. 0 closes no switch, which leaves the 10 kOhm
+// feedback resistor alone: the highest gain, and the gain switch's own
+// power-on state, so the board reads the same before and after the firmware
+// first writes it.
+#ifndef OT_GAIN_SW_DEFAULT
+#define OT_GAIN_SW_DEFAULT 0
+#endif
 
 // Whether VIB_ENABLE and ORIENT_ENABLE boot on. A USB board boots with both on,
 // as it always has; a bus node (-DOT_BUS_NODE) defines this 0 before including
@@ -176,6 +185,13 @@ static const OtParamSpec OT_PARAMS[] = {
   // 50 us, hands-off on the 32x32 at MUX_SETTLE_US 8: false growth 92% of
   // frames -> 0%, and every taxel's noise <= 27 counts (was up to ~900).
   {OT_P_XAMP_CONFIRM_US, "XAMP_CONFIRM_US", 0, 500,   50},
+#if defined(OT_BOARD_READOUT60)
+  // Which MAX14662 switches are closed. Each puts a resistor across the
+  // amplifier's 10k feedback resistor: SW1 4.7k, SW2 1.1k, SW3 270, SW4 68 ohm,
+  // so alone they give 3.2k, 990, 263 and 68 ohm. Less feedback, fewer counts
+  // for the same press. Any combination works (they add in parallel).
+  {OT_P_GAIN_SW,        "GAIN_SW",          0, 15,    OT_GAIN_SW_DEFAULT},
+#endif
 };
 
 #define OT_PARAM_COUNT ((uint8_t)(sizeof(OT_PARAMS) / sizeof(OT_PARAMS[0])))

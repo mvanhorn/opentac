@@ -39,7 +39,7 @@
 // command set, RGB -- but emits no F records at all. Guessing a geometry would
 // produce a plausible-looking frame that silently means nothing.
 //
-// Commands in, one per line, '\n' terminated (see opentac_device.py). The
+// Commands in, one per line, '\n' terminated (host side: opentac/device). The
 // letters follow v1/API.md's controller commands so one vocabulary covers the
 // bus nodes and this board:
 //   ?            capabilities, then the whole parameter table
@@ -78,6 +78,10 @@
 //
 // ----- Hardware this assumes ------------------------------------------------
 //
+// Three boards share this file; see "Which board" below and ot_devcfg.h. The
+// 60-pin board (READOUT60) differs in its '595 pin order and adds a gain
+// switch (GAIN_SW); the description below holds for all three.
+//
 // Drive: four cascaded 74HC595 stages, walked by a single travelling 1. Because
 // the 1 can only shift forward, the scan visits steps in order and reads, at
 // each, every taxel with a line on that step; steps no taxel uses are clocked
@@ -95,10 +99,25 @@
 // is gone: a board that needs a different mapping is provisioned differently,
 // not rebuilt.
 
+// ----- Which board ------------------------------------------------------------
+//
+// A build is for one board. firmware/build.sh passes the flag for each. In the
+// Arduino IDE, delete the // at the start of your board's line:
+//
+// #define OT_BOARD_READOUT60   // 60-pin readout board
+// #define OT_BOARD_NODE16      // 30-pin board
+// #define OT_BOARD_READOUT32   // 70-pin readout board (older boards)
+
 #include <Wire.h>
 #include <math.h>
 #include <LSM6DSV16BXSensor.h>
 #include <Adafruit_NeoPixel.h>
+
+#if defined(OT_BUS_NODE) && defined(OT_BOARD_READOUT60)
+// A 1024-taxel node needs more RAM for its frame buffers than the G431 build
+// has left; the bus node is the 30-pin board for now.
+#error "The bus node build is for OT_BOARD_NODE16 only"
+#endif
 
 #if defined(OT_BUS_NODE)
 // A bus node boots with the IMU off: the host asks for it when it wants it.
@@ -117,11 +136,31 @@
 // ----- Pinout ---------------------------------------------------------------
 
 #define TACTILE_ADC  PA0
+#if defined(OT_BOARD_READOUT60)
+// The 60-pin board wires the '595 control lines to PA1..PA5 in a different
+// order (read off its KiCad netlist at the '595 pins). The rest is the same.
+#define SR_MR        PA1
+#define SR_SHCP      PA2
+#define SR_STCP      PA3
+#define SR_OE        PA4
+#define SR_DS        PA5
+#define SR_MR_BIT    GPIO_PIN_1
+#define SR_SHCP_BIT  GPIO_PIN_2
+#define SR_STCP_BIT  GPIO_PIN_3
+#define SR_DS_BIT    GPIO_PIN_5
+#else
 #define SR_DS        PA1
 #define SR_OE        PA2
 #define SR_STCP      PA3
 #define SR_SHCP      PA4
 #define SR_MR        PA5
+#define SR_DS_BIT    GPIO_PIN_1
+#define SR_STCP_BIT  GPIO_PIN_3
+#define SR_SHCP_BIT  GPIO_PIN_4
+#define SR_MR_BIT    GPIO_PIN_5
+#endif
+// The *_BIT masks are the same pins on GPIOA, for the direct BSRR writes the
+// scan makes; keep the two lists in step.
 #define MUX0_PIN     PA6
 #define MUX1_PIN     PA7
 #define MUX2_PIN     PA10
@@ -364,12 +403,12 @@ static inline void selectMuxChannel(uint8_t channel) {
 
 // MR clears the shift register; the latch pushes all-zero to the outputs.
 static void rowsOff() {
-  GPIOA->BSRR = GPIO_PIN_5 << 16;
+  GPIOA->BSRR = SR_MR_BIT << 16;
   __NOP(); __NOP(); __NOP(); __NOP();
-  GPIOA->BSRR = GPIO_PIN_5;
-  GPIOA->BSRR = GPIO_PIN_3 << 16;
+  GPIOA->BSRR = SR_MR_BIT;
+  GPIOA->BSRR = SR_STCP_BIT << 16;
   __NOP(); __NOP();
-  GPIOA->BSRR = GPIO_PIN_3;
+  GPIOA->BSRR = SR_STCP_BIT;
 }
 
 static void tactileBegin() {
@@ -454,6 +493,36 @@ static bool imuBegin() {
   return true;
 }
 
+#if defined(OT_BOARD_READOUT60)
+// ----- Gain (60-pin board) ----------------------------------------------------
+//
+// A MAX14662 eight-switch chip at I2C 0x4C (AD0 = AD1 = GND), on the IMU's
+// bus, puts resistors across the transimpedance amplifier's 10k feedback
+// resistor. Its only register, 0x00, holds the switch states: bit k is SW(k+1),
+// 1 closed. It powers up all open. Written from loop(), never mid-scan.
+#define GAIN_SWITCH_ADDR 0x4C
+
+static bool gainApply() {
+  const uint8_t want = (uint8_t)param(OT_P_GAIN_SW);
+  IMU_WIRE.beginTransmission(GAIN_SWITCH_ADDR);
+  IMU_WIRE.write((uint8_t)0x00);
+  IMU_WIRE.write(want);
+  if (IMU_WIRE.endTransmission() != 0) return false;
+  // Read it back: the chip always answers with that one register.
+  if (IMU_WIRE.requestFrom((uint8_t)GAIN_SWITCH_ADDR, (uint8_t)1) != 1) return false;
+  return (uint8_t)IMU_WIRE.read() == want;
+}
+#endif
+
+// Extra wait after each IMU FIFO drain, in microseconds; 0 (the default) adds
+// none. On one 70-pin board the reads just after a drain spiked by 600-750
+// counts, within ~30-90 us of it (README, 2026-09-21). Building with
+// -DOT_POST_DRAIN_US=100 lets those settle before the scan reads on, at the
+// cost of the wait on every drain. Not yet tried on hardware.
+#ifndef OT_POST_DRAIN_US
+#define OT_POST_DRAIN_US 0
+#endif
+
 static void drainFifo() {
   if (!imuReady) return;
   // With both IMU streams off nothing is batched, and the FIFO status poll
@@ -498,32 +567,35 @@ static void drainFifo() {
       imu.FIFO_Get_Data(discarded);
     }
   }
+#if OT_POST_DRAIN_US > 0
+  delayMicroseconds(OT_POST_DRAIN_US);
+#endif
 }
 
 // Clear, then clock in a single 1 so the first storage stage is active.
 static void rowWalkReset() {
-  GPIOA->BSRR = GPIO_PIN_5 << 16;     // MR low
+  GPIOA->BSRR = SR_MR_BIT << 16;     // MR low
   __NOP(); __NOP(); __NOP(); __NOP();
-  GPIOA->BSRR = GPIO_PIN_5;           // MR high
-  GPIOA->BSRR = GPIO_PIN_3 << 16;     // STCP low
-  GPIOA->BSRR = GPIO_PIN_1;           // DS high
+  GPIOA->BSRR = SR_MR_BIT;           // MR high
+  GPIOA->BSRR = SR_STCP_BIT << 16;     // STCP low
+  GPIOA->BSRR = SR_DS_BIT;           // DS high
   __NOP(); __NOP();
-  GPIOA->BSRR = GPIO_PIN_4;           // SHCP rising
+  GPIOA->BSRR = SR_SHCP_BIT;           // SHCP rising
   __NOP(); __NOP(); __NOP();
-  GPIOA->BSRR = GPIO_PIN_4 << 16;     // SHCP falling
-  GPIOA->BSRR = GPIO_PIN_1 << 16;     // DS low: every later shift injects 0
-  GPIOA->BSRR = GPIO_PIN_3;           // STCP high latches P0 active
+  GPIOA->BSRR = SR_SHCP_BIT << 16;     // SHCP falling
+  GPIOA->BSRR = SR_DS_BIT << 16;     // DS low: every later shift injects 0
+  GPIOA->BSRR = SR_STCP_BIT;           // STCP high latches P0 active
 }
 
 // One clock walks the active bit to the next stage.
 static inline void rowWalkAdvance() {
-  GPIOA->BSRR = GPIO_PIN_3 << 16;     // STCP low
+  GPIOA->BSRR = SR_STCP_BIT << 16;     // STCP low
   __NOP(); __NOP();
-  GPIOA->BSRR = GPIO_PIN_4;           // SHCP rising
+  GPIOA->BSRR = SR_SHCP_BIT;           // SHCP rising
   __NOP(); __NOP(); __NOP();
-  GPIOA->BSRR = GPIO_PIN_4 << 16;     // SHCP falling
+  GPIOA->BSRR = SR_SHCP_BIT << 16;     // SHCP falling
   __NOP(); __NOP();
-  GPIOA->BSRR = GPIO_PIN_3;           // STCP high latches the next row
+  GPIOA->BSRR = SR_STCP_BIT;           // STCP high latches the next row
 }
 
 // The walking 1 only moves forward, so shift-register steps are visited in
@@ -585,28 +657,28 @@ uint32_t xampLastDrainUs = 0;
 
 static void xampWalkTo(uint8_t step) {
   uint8_t at = xampStep;
-  GPIOA->BSRR = GPIO_PIN_3 << 16;     // STCP low: outputs hold until the end
+  GPIOA->BSRR = SR_STCP_BIT << 16;     // STCP low: outputs hold until the end
   if (at == 0xFF || step < at) {
-    GPIOA->BSRR = GPIO_PIN_5 << 16;   // MR low: clear the shift register
+    GPIOA->BSRR = SR_MR_BIT << 16;   // MR low: clear the shift register
     __NOP(); __NOP(); __NOP(); __NOP();
-    GPIOA->BSRR = GPIO_PIN_5;         // MR high
-    GPIOA->BSRR = GPIO_PIN_1;         // DS high
+    GPIOA->BSRR = SR_MR_BIT;         // MR high
+    GPIOA->BSRR = SR_DS_BIT;         // DS high
     __NOP(); __NOP();
-    GPIOA->BSRR = GPIO_PIN_4;         // SHCP rising: the 1 enters stage 0
+    GPIOA->BSRR = SR_SHCP_BIT;         // SHCP rising: the 1 enters stage 0
     __NOP(); __NOP(); __NOP();
-    GPIOA->BSRR = GPIO_PIN_4 << 16;   // SHCP falling
-    GPIOA->BSRR = GPIO_PIN_1 << 16;   // DS low: every later shift injects 0
+    GPIOA->BSRR = SR_SHCP_BIT << 16;   // SHCP falling
+    GPIOA->BSRR = SR_DS_BIT << 16;   // DS low: every later shift injects 0
     at = 0;
   }
   while (at < step) {
     __NOP(); __NOP();
-    GPIOA->BSRR = GPIO_PIN_4;         // SHCP rising
+    GPIOA->BSRR = SR_SHCP_BIT;         // SHCP rising
     __NOP(); __NOP(); __NOP();
-    GPIOA->BSRR = GPIO_PIN_4 << 16;   // SHCP falling
+    GPIOA->BSRR = SR_SHCP_BIT << 16;   // SHCP falling
     ++at;
   }
   __NOP(); __NOP();
-  GPIOA->BSRR = GPIO_PIN_3;           // STCP high: one latch, straight to `step`
+  GPIOA->BSRR = SR_STCP_BIT;           // STCP high: one latch, straight to `step`
   xampStep = step;
 }
 uint16_t xampRowSettleUs = 0;
@@ -1287,7 +1359,12 @@ static void printConfigReply() {
 // have moved: at boot, and after any successful commit or erase.
 static void printFrameHeader() {
   if (!deviceConfig.valid) {
+#if defined(OT_BOARD_READOUT60)
+    printLine("# no device config -- run: opentac setup <manifest>");
+#else
+    // Older wording, kept so these boards' binaries stay the released ones.
     printLine("# no device config -- run: opentac_device.py provision <manifest>");
+#endif
     return;
   }
   char *cursor = lineBuffer;
@@ -1622,9 +1699,26 @@ static void handleSetParam(const char *args) {
   }
 
   const bool changed = (paramValue[slot] != value);
+#if defined(OT_BOARD_READOUT60)
+  const uint16_t previous = paramValue[slot];
+#endif
   paramValue[slot] = value;
   if (changed) {
     switch (OT_PARAMS[slot].id) {
+#if defined(OT_BOARD_READOUT60)
+      case OT_P_GAIN_SW:
+        // A switch that did not take keeps the old value, so the table never
+        // claims a gain the hardware is not at.
+        if (!gainApply()) {
+          paramValue[slot] = previous;
+          gainApply();
+          replyError("GAIN");
+          return;
+        }
+        // The baseline was measured at the old gain.
+        baselineValid = false;
+        break;
+#endif
       case OT_P_VIB_ENABLE:
       case OT_P_ORIENT_ENABLE:
       case OT_P_VIB_ODR_HZ:
@@ -1915,6 +2009,9 @@ void setup() {
 #endif
 
   imuReady = imuBegin();
+#if defined(OT_BOARD_READOUT60)
+  const bool gainOk = gainApply();
+#endif
 
   loadDeviceConfig();
   loadXampling();
@@ -1922,6 +2019,9 @@ void setup() {
   OT_OUT.println(F("# OpenTAC single-board API, board " OT_BOARD_NAME " -- `?` for capabilities"));
   OT_OUT.println(F("# V,seq,accel_mg[3]"));
   OT_OUT.println(F("# M,gen,mode,tac_en,vib_en,ori_en,active,shear"));
+#if defined(OT_BOARD_READOUT60)
+  if (!gainOk) printLine("# gain switch did not answer at I2C 0x4C; GAIN_SW has no effect");
+#endif
   printFrameHeader();
   printConfigReply();
   printStatus();
