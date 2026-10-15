@@ -187,7 +187,7 @@
 				)
 			)
 		)
-		(property "LCSC Part #" "C28233"
+		(property "LCSC Part #" "C1525"
 			(at 0 0 0)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -399,7 +399,7 @@
 				)
 			)
 		)
-		(property "LCSC Part #" "C17513"
+		(property "LCSC Part #" "C11702"
 			(at 0 0 270)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -1198,7 +1198,7 @@
 				)
 			)
 		)
-		(property "LCSC Part #" "C17513"
+		(property "LCSC Part #" "C11702"
 			(at 0 0 0)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -2164,7 +2164,7 @@
 				(xyz -0 -0 -0)
 			)
 		)
-		(model "${KIPRJMOD}/readoutboard_top.step"
+		(model "${KIPRJMOD}/../../libs/3dmodels/readoutboard_top.step"
 			(offset
 				(xyz -7.8 0 5.7)
 			)
@@ -2637,7 +2637,7 @@
 				)
 			)
 		)
-		(property "LCSC Part #" "C28233"
+		(property "LCSC Part #" "C1525"
 			(at 0 0 0)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -2849,7 +2849,7 @@
 				)
 			)
 		)
-		(property "LCSC Part #" "C17513"
+		(property "LCSC Part #" "C11702"
 			(at 0 0 0)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -3061,7 +3061,7 @@
 				)
 			)
 		)
-		(property "LCSC Part #" "C28233"
+		(property "LCSC Part #" "C1525"
 			(at 0 0 270)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -4027,7 +4027,7 @@
 				(xyz 0 0 0)
 			)
 		)
-		(model "${KIPRJMOD}/readoutboard_top.step"
+		(model "${KIPRJMOD}/../../libs/3dmodels/readoutboard_top.step"
 			(hide yes)
 			(offset
 				(xyz -7.75 0.1 5.6)
@@ -4096,7 +4096,7 @@
 				)
 			)
 		)
-		(property "LCSC Part #" "C28233"
+		(property "LCSC Part #" "C1525"
 			(at 0 0 90)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -5434,7 +5434,7 @@
 				(justify mirror)
 			)
 		)
-		(property "LCSC Part #" "C53067"
+		(property "LCSC Part #" "C52923"
 			(at 0 0 270)
 			(unlocked yes)
 			(layer "B.Fab")
@@ -6368,7 +6368,7 @@
 				(justify mirror)
 			)
 		)
-		(property "LCSC Part #" "C28233"
+		(property "LCSC Part #" "C1525"
 			(at 0 0 180)
 			(unlocked yes)
 			(layer "B.Fab")
@@ -7200,7 +7200,7 @@
 				(justify mirror)
 			)
 		)
-		(property "LCSC Part #" "C53067"
+		(property "LCSC Part #" "C52923"
 			(at 0 0 270)
 			(unlocked yes)
 			(layer "B.Fab")
