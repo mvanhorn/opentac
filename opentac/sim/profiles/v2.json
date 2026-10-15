@@ -1,0 +1,168 @@
+{
+ "name": "v2",
+ "material": "LINQSTAT",
+ "model": {
+  "b": 1.2500000000000009,
+  "k": 1.4502055004663603,
+  "s": 1.5083984676132116,
+  "adc_max": 3884.0,
+  "noise_counts": 4.298846000293919,
+  "gain_range": [
+   0.7950466873468006,
+   2.3423950029284475
+  ],
+  "calibrated_kpa": [
+   1.154627294238359,
+   108.91641447314107
+  ]
+ },
+ "source": {
+  "fitted": "2026-09-14",
+  "method": "scripts/fit_readout.py; see tactilesim/readout.py",
+  "rig": "manual vertical press through a foam layer, no bump sheet, load cell under the sensor square",
+  "press_dir": "press_data",
+  "gaps_mm": [
+   0.1,
+   0.2,
+   0.3,
+   0.4,
+   0.5
+  ],
+  "pitches_mm": [
+   1.5,
+   2.0,
+   4.0
+  ],
+  "fit": {
+   "b_taxel_slopes_quartiles": [
+    0.7911153865542718,
+    1.1933326989604058,
+    1.594943171869423
+   ],
+   "taxel_curves": 2005,
+   "frames": 17165,
+   "hysteresis_unload_over_load": [
+    1.2401523116843152,
+    1.4725284671810073,
+    1.5223359849558902
+   ],
+   "sessions": [
+    {
+     "session": "20260914_155539_p2.0_gap0.1_v2",
+     "pitch_mm": 2.0,
+     "gap_mm": 0.1,
+     "a": 9.33186717705174,
+     "a_loading": 8.71273712429079,
+     "a_unloading": 13.068256543492538,
+     "frames": 2950
+    },
+    {
+     "session": "20260914_160256_p2.0_gap0.2_v2",
+     "pitch_mm": 2.0,
+     "gap_mm": 0.2,
+     "a": 10.85038025759608,
+     "a_loading": 10.496617584140012,
+     "a_unloading": 15.979378668657102,
+     "frames": 4032
+    },
+    {
+     "session": "20260914_160807_p2.0_gap0.3_v2",
+     "pitch_mm": 2.0,
+     "gap_mm": 0.3,
+     "a": 16.73360937267421,
+     "a_loading": 15.893310592516436,
+     "a_unloading": 19.71012587162607,
+     "frames": 2383
+    },
+    {
+     "session": "20260914_161303_p2.0_gap0.4_v2",
+     "pitch_mm": 2.0,
+     "gap_mm": 0.4,
+     "a": 9.377279492795033,
+     "a_loading": 9.197816985720321,
+     "a_unloading": 13.475066956891094,
+     "frames": 2979
+    },
+    {
+     "session": "20260914_161709_p2.0_gap0.5_v2",
+     "pitch_mm": 2.0,
+     "gap_mm": 0.5,
+     "a": 18.06032394435461,
+     "a_loading": 15.778316316511738,
+     "a_unloading": 23.234019940250107,
+     "frames": 1810
+    },
+    {
+     "session": "20260914_162058_p1.5_gap0.2_v2",
+     "pitch_mm": 1.5,
+     "gap_mm": 0.2,
+     "a": 4.120756901632183,
+     "a_loading": 3.5884523335702494,
+     "a_unloading": 5.009053358975828,
+     "frames": 1471
+    },
+    {
+     "session": "20260914_162458_p4.0_gap0.2_v2",
+     "pitch_mm": 4.0,
+     "gap_mm": 0.2,
+     "a": 88.20241170303197,
+     "a_loading": 86.80772385513272,
+     "a_unloading": 128.56129720531038,
+     "frames": 1540
+    }
+   ]
+  },
+  "leave_one_out": [
+   {
+    "sensor": "p2.0_gap0.1",
+    "pitch_not_in_fit": false,
+    "median_ratio": 0.8067620039050967,
+    "median_abs_error": 0.20314602157601758,
+    "frames": 2950
+   },
+   {
+    "sensor": "p2.0_gap0.2",
+    "pitch_not_in_fit": false,
+    "median_ratio": 0.9503413378387923,
+    "median_abs_error": 0.12213839666512466,
+    "frames": 4032
+   },
+   {
+    "sensor": "p2.0_gap0.3",
+    "pitch_not_in_fit": false,
+    "median_ratio": 1.4083279773173516,
+    "median_abs_error": 0.4083279773173516,
+    "frames": 2383
+   },
+   {
+    "sensor": "p2.0_gap0.4",
+    "pitch_not_in_fit": false,
+    "median_ratio": 0.8120471250510792,
+    "median_abs_error": 0.18816845804055238,
+    "frames": 2979
+   },
+   {
+    "sensor": "p2.0_gap0.5",
+    "pitch_not_in_fit": false,
+    "median_ratio": 1.5070239297527812,
+    "median_abs_error": 0.5070239297527811,
+    "frames": 1810
+   },
+   {
+    "sensor": "p1.5_gap0.2",
+    "pitch_not_in_fit": true,
+    "median_ratio": 0.7909952711640136,
+    "median_abs_error": 0.20900472883598642,
+    "frames": 1471
+   },
+   {
+    "sensor": "p4.0_gap0.2",
+    "pitch_not_in_fit": true,
+    "median_ratio": 0.5829290775184184,
+    "median_abs_error": 0.4170709224815816,
+    "frames": 1540
+   }
+  ],
+  "deadweight_median_ratio": 1.6647991864330929
+ }
+}
