@@ -1,56 +1,34 @@
 ---
-name: opentactilecad
-description: Design a tactile sensor PCB from a plain-English description — "a sensor shaped like a size 9 insole with the cable at the heel". Builds and validates the outline, runs the OpenTactileCAD pipeline locally, and returns KiCad files and Gerbers. Use for any tactile sensor, taxel array, pressure-sensing PCB, or sensor built from a described shape, a DXF outline, or a surface of an STL part.
+name: opentac
+description: Design a tactile sensor PCB from a plain-English description — "a sensor shaped like a size 9 insole with the cable at the heel". Builds and validates the outline, runs the OpenTac CAD pipeline locally, and returns KiCad files and Gerbers. Use for any tactile sensor, taxel array, pressure-sensing PCB, or sensor built from a described shape, a DXF outline, or a surface of an STL part.
 ---
 
-# OpenTactileCAD
+# OpenTac CAD
 
-Turn a described sensor into a manufacturable PCB: a grid of capacitive taxels
+Turn a described sensor into a manufacturable PCB: a grid of taxels
 packed into a shape, wired to an FPC connector, exported as KiCad + Gerbers.
 
 ## Setup
 
 Everything runs locally, in process. There is no server to start.
 
-**Use the project's own virtual environment** — the one the double-click
-launcher builds at `tactile-pcb-web/backend/.venv-win` (`.venv-mac` on
-macOS/Linux). It already has every pinned
-dependency, and it is the same interpreter the app itself runs on, so anything
-that works here works in the app:
+**Run Python through the repo's environment with uv**, from the repository root:
 
 ```bash
-# Windows
-tactile-pcb-web/backend/.venv-win/Scripts/python.exe -c "import numpy, shapely, ezdxf, trimesh, scipy"
-# macOS / Linux
-tactile-pcb-web/backend/.venv-mac/bin/python -c "import numpy, shapely, ezdxf, trimesh, scipy"
+uv run python my_sensor.py
 ```
 
-If that path does not exist yet, create it by running the launcher once
-(`Start_OpenTactileCAD.bat`, or `.command` on macOS/Linux) and letting it
-finish, or by hand:
+The first `uv run` installs the pinned dependencies (a few minutes, once); it is
+the same environment the app itself runs on, so anything that works here works in
+the app. Do NOT use a bare `python3` or `py`: a system interpreter almost
+certainly lacks these packages, and the error looks like a code fault rather than
+a missing environment.
 
-```bash
-py -3.12 -m venv tactile-pcb-web/backend/.venv-win      # Windows; .venv-mac elsewhere
-tactile-pcb-web/backend/.venv-win/Scripts/pip install -r tactile-pcb-web/backend/requirements.txt
-```
-
-The venv name is per-OS on purpose: this repo lives in a OneDrive folder
-synced between machines, and a single `.venv` shared across Windows and
-macOS overwrites its own `pyvenv.cfg` and leaves both broken. Do not
-collapse them back to one name.
-
-**Python 3.12+ is required** — the pinned scipy/numpy publish no 3.11 wheels,
-and 3.11 fails the dependency build. Do NOT reach for a bare `py -3.12` or
-`python3`: a system interpreter almost certainly lacks these packages (checked
-on this machine — `py -3.12` has no numpy), and the error looks like a code
-fault rather than a missing environment.
-
-The helpers find `tactile-pcb-web/backend/` themselves. Add both
-`helpers/` and that backend directory to `sys.path`, then call
-`main.generate()` directly — **never** start uvicorn and never use HTTP. The
-`/generate` route's handler holds the board-mode/router policy, the
-fixed-outline retry loop and the post-route smoothing; calling `pipeline/`
-modules directly would mean reimplementing all of it.
+Put this skill's `helpers/` on `sys.path` and call the helpers. They call
+`opentac.cad.main.generate()` directly — **never** start a server and never use
+HTTP. The `/generate` route's handler holds the board-mode/router policy, the
+fixed-outline retry loop and the post-route smoothing; calling
+`opentac.cad.pipeline` modules directly would mean reimplementing all of it.
 
 ## The flow
 

@@ -23,12 +23,14 @@ from pathlib import Path
 
 import numpy as np
 
-SKILL_DIR = Path(__file__).resolve().parent / "skill"
-if str(SKILL_DIR) not in sys.path:
-    sys.path.insert(0, str(SKILL_DIR))
+from .context import SKILL_DIR  # noqa: E402
 
-import outline as O            # noqa: E402  (vendored skill helper)
-import preflight as P          # noqa: E402  (vendored skill helper)
+HELPERS_DIR = SKILL_DIR / "helpers"
+if str(HELPERS_DIR) not in sys.path:
+    sys.path.insert(0, str(HELPERS_DIR))
+
+import outline as O            # noqa: E402  (the skill's own helper)
+import preflight as P          # noqa: E402  (the skill's own helper)
 
 CABLE_SIDES = ("bottom", "top", "left", "right")
 

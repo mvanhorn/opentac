@@ -7,10 +7,9 @@ interpreter to use, which is the server's problem, not the model's), and a
 preamble maps the Python helpers the document discusses onto the tools the
 model actually has.
 
-`skill/SKILL.md` here is a vendored copy of
-`.claude/skills/opentactilecad/SKILL.md`. It has to be, because the Docker
-build context is this backend directory and the canonical Skill lives outside
-it. `tests/test_chat_skill_sync.py` fails if the two drift apart.
+The Skill is read from `.claude/skills/opentac/` at the repository root, the same
+files Claude Code loads, so there is one copy. The hosted demo's image is built
+from the whole repository for that reason.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-SKILL_DIR = Path(__file__).resolve().parent / "skill"
+SKILL_DIR = Path(__file__).resolve().parents[3] / ".claude" / "skills" / "opentac"
 
 PREAMBLE = """\
 You are the OpenTactileCAD design assistant. You turn a plain-English

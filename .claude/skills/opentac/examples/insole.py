@@ -2,7 +2,7 @@
 
 Run it after cloning to confirm the skill is wired up:
 
-    python3 .claude/skills/opentactilecad/examples/insole.py /tmp/insole
+    uv run python .claude/skills/opentac/examples/insole.py /tmp/insole
 
 Expect a clean board of roughly 190 taxels at 96 x 252mm, DRC 0, in ~10s.
 
@@ -17,7 +17,6 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "helpers"))
 
 import outline as O          # noqa: E402
