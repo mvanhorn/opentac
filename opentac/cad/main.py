@@ -8,12 +8,14 @@ import os
 import shutil
 import subprocess
 import tempfile
+import traceback
 import zipfile
 from dataclasses import replace
 
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from shapely.geometry import LineString, Point, Polygon
@@ -82,6 +84,47 @@ MAX_DXF_UPLOAD_BYTES = 10 * 1024 * 1024
 # endpoints go unused again.
 MAX_STL_UPLOAD_BYTES = 50 * 1024 * 1024
 
+
+class JsonErrors:
+    """Unhandled exceptions as a JSON 500 that still carries the CORS headers.
+
+    Starlette turns an exception no handler caught into a plain-text 500 in
+    ServerErrorMiddleware, which sits OUTSIDE every user middleware, CORS
+    included. The hosted page is cross-origin (GitHub Pages -> Render), so that
+    500 reached the browser without Access-Control-Allow-Origin and surfaced as
+    "TypeError: Failed to fetch", indistinguishable from the server being down.
+    Registered before CORSMiddleware so CORS wraps it.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = False
+
+        async def send_tracking(message):
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_tracking)
+        except Exception as exc:
+            if started:      # half a response is already out; nothing clean to send
+                raise
+            traceback.print_exc()
+            msg = f"Server error: {type(exc).__name__}: {exc}"
+            await JSONResponse(status_code=500, content={"detail": msg, "error": msg})(
+                scope, receive, send)
+
+
+# Order matters: middleware added later wraps what was added before, so JsonErrors
+# must come first for its 500s to pass back out through CORS.
+app.add_middleware(JsonErrors)
 app.add_middleware(
     CORSMiddleware,
     # The hosted demo's page lives on GitHub Pages; a local run serves the page

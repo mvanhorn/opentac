@@ -41,7 +41,15 @@ build_sensor_outline already enforces the outline invariants the document
 insists on - counter-clockwise winding, an explicitly cut flat cable edge,
 splining only what is genuinely curved - so you do not need to reason about
 vertex order. You DO still choose the shape, the dimensions, the cable side,
-the taxel size and pitch, and the board mode.
+the taxel size and pitch, the board mode and the copper layers.
+
+generate_sensor_board defaults to grow mode (board_mode="expand") and 2 copper
+layers. Keep grow unless the user strictly needs the drawn outline as a hard
+limit; pass copper_layers=4 when they ask for 4 layers or when packing / full
+coverage is the priority. This server is a small shared instance, much slower
+than a laptop: grow mode takes seconds to a couple of minutes here, while a
+fixed outline re-routes many times, and a large fixed 4-layer board is refused
+as too slow. If a tool refuses, relay its reason and offer what it suggests.
 
 How to work:
 

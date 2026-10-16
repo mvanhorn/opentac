@@ -12,6 +12,7 @@ working exactly as before, with chat simply unavailable.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import traceback
@@ -79,6 +80,9 @@ def provider() -> GeminiProvider:
 class ChatIn(BaseModel):
     session_id: str = "default"
     message: str
+    # Echoed back by /last, so a page whose POST died mid-turn can tell its
+    # own finished turn from an older one (see chat-panel.js).
+    request_id: str | None = None
 
 
 def _starting(name: str, args: dict) -> str:
@@ -88,7 +92,12 @@ def _starting(name: str, args: dict) -> str:
     if name == "preflight_sensor":
         return "Checking whether it fits…"
     if name == "generate_sensor_board":
-        return "Routing the board — this is the slow part…"
+        mode = args.get("board_mode") or tools.DEFAULT_BOARD_MODE
+        layers = args.get("copper_layers") or 2
+        layers = int(layers) if isinstance(layers, (int, float)) else layers
+        return (f"Routing the board ({layers} layers, "
+                f"{'grow' if mode == 'expand' else 'fixed outline'}) — "
+                "this is the slow part…")
     return f"{name.replace('_', ' ')}…"
 
 
@@ -122,8 +131,21 @@ def progress(session_id: str = "default"):
     """
     sess = SESSIONS.get(session_id)
     if sess is None:
-        return {"busy": False, "steps": []}
-    return {"busy": sess.get("busy", False), "steps": sess.get("progress", [])}
+        # known=False after a turn was sent means the server lost its memory:
+        # it restarted mid-turn (on the free tier, almost always out of memory).
+        return {"busy": False, "steps": [], "known": False}
+    return {"busy": sess.get("busy", False), "steps": sess.get("progress", []),
+            "known": True}
+
+
+@router.get("/last")
+def last(session_id: str = "default"):
+    """The newest turn's reply, for a page whose POST died before the reply
+    arrived (a dropped connection while the server kept working)."""
+    sess = SESSIONS.get(session_id)
+    if sess is None or sess.get("last") is None:
+        return {"error": "No finished turn for this conversation on the server."}
+    return sess["last"]
 
 
 @router.get("/status")
@@ -165,37 +187,55 @@ def chat(body: ChatIn):
             return result
 
         turn = p.chat(sess["conversation"], body.message, tool_fn)
+
+        sess["turns"] += 1
+        designs = sess["tools"].designs
+        newest = designs[-1] if designs else None
+        say(f"[chat] ASSISTANT: {turn.text[:200]}")
+        # Round-tripped through json here, inside the try: a value FastAPI
+        # cannot encode (a numpy scalar in stats) would otherwise fail AFTER
+        # this handler returned, as a bare 500 the page cannot read.
+        out = _jsonable({
+            "text": turn.text,
+            "tool_calls": [{"name": c["name"], "args": c["args"]}
+                           for c in turn.tool_calls],
+            # Only the newest board is returned: the page loads it into the
+            # editor, and the SVG is large enough that shipping the whole
+            # history every turn would be wasteful.
+            "design": None if newest is None else {
+                "name": newest["name"],
+                "outline": newest["outline"],
+                "params": newest["params"],
+                "svg": newest["svg"],
+                "stats": newest["stats"],
+            },
+            "turns_left": MAX_TURNS_PER_SESSION - sess["turns"],
+        })
     except QuotaExhausted as exc:
         say(f"[chat] {exc}")
-        return {"error": str(exc)}
+        out = {"error": str(exc)}
     except Exception as exc:
         traceback.print_exc()
-        return {"error": f"{type(exc).__name__}: {exc}"}
+        out = {"error": f"The design assistant failed: {type(exc).__name__}: {exc}"}
     finally:
         # Always cleared, so a failed turn cannot leave the page polling a
         # spinner forever.
         sess["busy"] = False
 
-    sess["turns"] += 1
-    designs = sess["tools"].designs
-    newest = designs[-1] if designs else None
-    say(f"[chat] ASSISTANT: {turn.text[:200]}")
-    return {
-        "text": turn.text,
-        "tool_calls": [{"name": c["name"], "args": c["args"]}
-                       for c in turn.tool_calls],
-        # Only the newest board is returned: the page loads it into the
-        # editor, and the SVG is large enough that shipping the whole history
-        # every turn would be wasteful.
-        "design": None if newest is None else {
-            "name": newest["name"],
-            "outline": newest["outline"],
-            "params": newest["params"],
-            "svg": newest["svg"],
-            "stats": newest["stats"],
-        },
-        "turns_left": MAX_TURNS_PER_SESSION - sess["turns"],
-    }
+    out["request_id"] = body.request_id
+    sess["last"] = out
+    return out
+
+
+def _jsonable(obj):
+    return json.loads(json.dumps(obj, default=_plain))
+
+
+def _plain(v):
+    """numpy scalars and arrays as plain numbers; anything else as text."""
+    if hasattr(v, "tolist"):
+        return v.tolist()
+    return str(v)
 
 
 @router.post("/reset")

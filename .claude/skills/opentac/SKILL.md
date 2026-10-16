@@ -45,10 +45,11 @@ fixed-outline retry loop and the post-route smoothing; calling
    grid orientation.
 3. **Define the taxels.** They may say a density, a count, a size, or nothing.
    Converse — see "Taxel sizing".
-4. **Choose board_mode, then preflight, then generate.** board_mode is the
-   only decision here; the router is always "hug", which is what
+4. **Choose board_mode and copper layers, then preflight, then generate.**
+   Grow mode unless the outline is a hard limit; 4 layers when packing or
+   coverage is the priority. The router is always "hug", which is what
    `helpers/generate.py` sends in both modes — see "Board mode and router"
-   below.
+   and "Readout board and copper layers" below.
 5. **Customize the tail** only if they want something beyond what the export
    already does. Every export already lands traces on the connector's pad
    drills automatically — see "Tail and connector" below.
@@ -103,9 +104,8 @@ cost milliseconds; the generate they guard costs 10-40 seconds.
 ## Board mode and router
 
 **The router is not a choice. Always use `"hug"`.** It works in both board
-modes — `helpers/generate.py::generate_board()` passes it by default, and the
-site always sends it. The raw `GenerateRequest.router` still defaults to
-`"legacy"`, so pass it explicitly if you ever call `main.generate()` directly.
+modes — `helpers/generate.py::generate_board()` passes it by default, the
+site always sends it, and `GenerateRequest.router` defaults to it too.
 
 `"legacy"` is the original row/column router, kept so the two can be compared.
 Designing with it is a mistake: on a concave C-shape under `fixed_keepout` it
@@ -115,38 +115,32 @@ to reproduce an old board or to answer "is hug actually helping here".
 
 Board mode remains a real decision:
 
+- **`board_mode="expand"` — grow mode, the default. Prefer it.** The board
+  grows just enough to fit the wiring, then `follow_padding` (on by default)
+  shrink-wraps it back toward the routed copper, so it follows the drawn shape
+  rather than inflating into a blob. Every taxel the shape holds is kept, a
+  row/column a concavity cuts apart stays one net with a link trace hugging
+  the notch (see "Split nets"), and it is the fast mode. The board may extend
+  a few mm past the drawn outline where wiring runs.
 - **`board_mode="fixed_keepout"`** — the drawn outline *is* the board, exactly.
-  Use this when the shape must physically fit something outside the board
-  itself: an enclosure, an existing shoe, a part it has to sit inside. Under
-  hug the wiring keep-out band is sized exactly from the routing plan, and a
-  re-entrant shape stays one net per row/column — see "Split nets" below.
-- **`board_mode="expand"`** (the site's own default) — grows
-  the outline to fit the wiring, same as plain expand mode, but joins any
-  row/column a concavity cuts apart into one net with a link trace hugging
-  the notch instead of splitting it — see "Split nets" below. `follow_padding`
-  is on by default (`smooth_follow_padding=True`) and shrink-wraps the grown
-  outline back down toward the actual routed copper afterward, so the result
-  is usually closer to the drawn shape than a raw expand run, not a generic
-  inflated blob — but it is not a guarantee of exact fit the way
-  `fixed_keepout` is. Compare the two on a given shape if the fit needs to be
-  tight and the shape is also concave.
+  A wiring keep-out band is reserved inside it, sized from the hug routing
+  plan. Use it only when the user strictly needs that: the board must fit an
+  enclosure, a slot or a part with no margin. It costs taxels (a concave
+  C-shape kept 26 against grow mode's 160) and time: it re-routes the board
+  once per keep-out attempt.
 
-**Which to pick**: default to `fixed_keepout` when "in the shape of X" was
-said because X has to fit somewhere real (an insole in a shoe, a sensor
-patch under an enclosure lid) — it is the only mode that guarantees the
-board never exceeds the drawn outline. Concavity is no longer a reason to
-leave it: hug joins split nets in fixed mode too, so the old "switch to
-expand if a concave fixed run crosses" advice is obsolete. What fixed mode
-does cost on a deeply concave shape is *taxels* — the keep-out band has to
-find room inside the drawn outline, and on the C-shape above that meant 26
-taxels against expand's 160. Reach for `expand` when the shape is a starting
-point rather than a hard constraint and you want that density back —
-follow-padding's shrink-wrap measurably closes most of the extra area grow
-mode would otherwise add into the concavity (harness measurements at
-finalization: `pocket_fill_mm2`, the "board area eaten out of the notch"
-metric, fell 30-70% across the 16 test shapes versus a plain expand run — a
-C-shape went 989 mm² -> 325 mm², roughly the reduction to expect on a
-concave heel/arch notch).
+**Which to pick**: grow, unless the user says the outline is a hard limit.
+"In the shape of X" alone is not one; if fit might matter, build grow, say
+how far the board extends past the outline, and offer fixed. Measured on a
+size 9 insole (~29 x 28 grid, 3.3 x 8.6 mm pitch, laptop):
+
+| mode, layers | taxels | board past the outline | time |
+|---|---|---|---|
+| grow, 2 | 574 | up to 8.3 mm | 5 s |
+| grow, 4 | 574 | up to 3.9 mm | 5 s |
+| fixed, 2 | 497 | none | 13 s |
+| fixed, 4 | 540 | none | 43 s |
+
 Report the actual board dimensions either way (see "Never compute the
 board's size" below) so the user knows which one happened.
 
@@ -174,10 +168,13 @@ grid limit. Count rows and columns per direction, not their sum:
 **Copper layers: `copper_layers=2` (default) or `4`.** On 2 layers every row
 wire runs around the outside of the sensor field to the connector, so the
 board needs a wiring band. On 4 layers rows run underneath on the inner layers
-(In1 feeds, In2 links across notches), so a fixed outline keeps far more of
-its area for taxels. Use 4 for complex or tightly bounded parts, such as a
-fingertip: on the D'Claw flat-top hexagon fingertip, 4 layers fit 497 taxels
-where 2 layers fit 410. 4-layer flex costs more to fabricate; say so.
+(In1 feeds, In2 links across notches), so the taxels reach closer to the edge.
+**When precise packing or full coverage is the priority, use 4 layers, in grow
+mode.** In grow mode 4 layers keep the board within ~2-4 mm of the drawn
+outline where 2 layers spill ~8 mm (insole table above); in a fixed outline
+they fit more taxels (insole 540 vs 497; D'Claw flat-top hexagon fingertip
+497 vs 410). Use 4 for complex or tightly bounded parts such as a fingertip.
+4-layer flex costs more to fabricate; say so.
 
 ## Taxel sizing
 

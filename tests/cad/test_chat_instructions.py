@@ -30,3 +30,21 @@ def test_instructions_build_and_carry_the_rules():
     assert "## Setup" not in text                         # dropped
     assert "The router is not a choice" in text           # hug-only rule
     assert len(text) > 8000
+
+
+def test_tools_and_skill_agree_on_grow_mode_and_copper_layers():
+    """The skill says grow mode unless the outline is a hard limit, and 4 layers
+    when packing matters; the tool must default to grow and accept the layers,
+    or the model is told about an option it cannot use (a "4-layer insole"
+    request used to be rejected as an unsupported parameter)."""
+    from opentac.cad.chat import context, tools
+
+    text = context.system_instructions()
+    assert "grow mode, the default" in text
+    assert "use 4 layers, in grow" in text
+    assert "hexagon" in text and "30-pin board" in text   # the other Arik rules
+
+    assert tools.DEFAULT_BOARD_MODE == "expand"
+    gen = next(s for s in tools.TOOL_SPECS if s["name"] == "generate_sensor_board")
+    assert "copper_layers" in gen["parameters"]["properties"]
+    assert "copper_layers" in tools.GEN_PARAMS

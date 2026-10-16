@@ -9,6 +9,7 @@ the board around any wire that fans in inside the tail rather than in the sensor
 from __future__ import annotations
 
 import numpy as np
+import shapely
 from shapely.geometry import LineString
 from shapely.ops import unary_union
 
@@ -75,7 +76,13 @@ def narrow_routed_tail(layout, routes, params) -> bool:
     lines = [LineString(np.asarray(r.polyline_xy, dtype=float)) for r in routes if len(r.polyline_xy) >= 2]
     outside = unary_union(lines).difference(outline_poly).intersection(old) if lines else None
     if outside is not None and not outside.is_empty:
-        cover = outside.buffer(route_containment_mm(params)).intersection(old)
+        # Buffer each piece and union the results, never the MultiLineString in one
+        # call: hundreds of parallel wire pieces in one GEOS buffer is ~300 MB and
+        # seconds (a 29 x 28 grown insole: +266 MB on Linux, +345 MB on macOS),
+        # enough to get the 512 MB hosted server OOM-killed mid-request. Per piece
+        # it is a few MB and a few ms, and the same region.
+        pieces = shapely.get_parts(outside)
+        cover = shapely.union_all(shapely.buffer(pieces, route_containment_mm(params))).intersection(old)
         piece = unary_union([piece, cover]).buffer(0)
     r = max(0.0, float(getattr(params, "connector_shoulder_fillet_mm", 0.0) or 0.0))
     if r > 0:

@@ -96,3 +96,41 @@ def test_extension_takes_the_landing_with_it():
     off["layout"]["tail_extension"] = dict(te, enabled=False)
     w2, _ = _width_at(off, routes, landing)
     assert w2 == pytest.approx(w0, abs=0.05)
+
+
+_MEMORY_PROBE = r'''
+import resource, sys
+import opentac.cad.main as main
+peak = lambda: resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+grew = []
+narrow = main.narrow_routed_tail
+def watched(*a, **k):
+    before = peak()
+    out = narrow(*a, **k)
+    grew.append(peak() - before)
+    return out
+main.narrow_routed_tail = watched
+r = main.generate(main.GenerateRequest(
+    outline=[[-30, 0], [30, 0], [30, 60], [-30, 60]], board_mode="expand", router="hug",
+    pixel_w_mm=2.0, pixel_h_mm=2.0, pitch_x_mm=2.2, pitch_y_mm=2.2))
+unit = 1 if sys.platform == "darwin" else 1024      # ru_maxrss: bytes vs KiB
+print(r.stats["total_pixels"], max(grew) * unit / 2**20)
+'''
+
+
+def test_narrowing_a_dense_grown_tail_does_not_spike_memory():
+    """A grown 26 x 26 board runs hundreds of wire pieces through the old tail.
+    Buffering them as one MultiLineString cost ~300 MB in GEOS (macOS 302 MB,
+    Linux 266 MB on a dense insole), enough to OOM-kill the 512 MB hosted server
+    mid-request ("Failed to fetch" on the page). Per piece it is a few MB.
+    Measured in a fresh process: ru_maxrss is a high-water mark, so a peak an
+    earlier test already reached would hide the spike."""
+    import subprocess
+    import sys
+
+    out = subprocess.run([sys.executable, "-c", _MEMORY_PROBE], capture_output=True,
+                         text=True, timeout=600)
+    assert out.returncode == 0, out.stderr[-2000:]
+    taxels, grew_mb = out.stdout.split()[-2:]
+    assert int(taxels) > 600
+    assert float(grew_mb) < 100, f"narrow_routed_tail raised peak memory by {float(grew_mb):.0f} MB"

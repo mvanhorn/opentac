@@ -18,6 +18,7 @@ because only build_sensor_outline can mint one.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -135,8 +136,9 @@ TOOL_SPECS = [
                                               "pixel_h_mm."},
                 "board_mode": {
                     "type": "string",
-                    "enum": ["fixed_keepout", "expand"],
-                    "description": "The mode you intend to generate with.",
+                    "enum": ["expand", "fixed_keepout"],
+                    "description": "The mode you intend to generate with "
+                                   "(default expand, grow mode).",
                 },
             },
             "required": ["outline_id", "pixel_w_mm", "pixel_h_mm",
@@ -147,7 +149,9 @@ TOOL_SPECS = [
         "name": "generate_sensor_board",
         "description": (
             "Run the real OpenTac-CAD pipeline: taxels, routing, "
-            "connector, DRC. Takes 10-40 seconds. Report the taxel count, "
+            "connector, DRC. Grow mode takes seconds; a fixed outline re-routes "
+            "once per keep-out attempt and can take minutes on this server, "
+            "longest on 4 layers. Report the taxel count, "
             "board size and DRC result it returns - not the numbers that were "
             "asked for. The board is then shown in the user's editor "
             "automatically, so do not tell them to download anything."),
@@ -180,13 +184,25 @@ TOOL_SPECS = [
                                     "description": "Tail length, default 12."},
                 "board_mode": {
                     "type": "string",
-                    "enum": ["fixed_keepout", "expand"],
+                    "enum": ["expand", "fixed_keepout"],
                     "description": (
-                        "fixed_keepout: the drawn outline IS the board - use "
-                        "it whenever the shape has to fit something physical. "
-                        "expand: grow the board to fit the wiring, for when "
-                        "the shape is a starting point rather than a "
-                        "constraint."),
+                        "expand (the default, grow mode): the board grows "
+                        "just enough to fit the wiring and is shrink-wrapped "
+                        "back toward the copper. Use it unless the user "
+                        "strictly needs the drawn outline. fixed_keepout: the "
+                        "drawn outline IS the board, exactly - only when the "
+                        "board must fit something physical with no margin "
+                        "(an enclosure, a shoe), and it costs taxels."),
+                },
+                "copper_layers": {
+                    "type": "integer",
+                    "description": (
+                        "2 (default) or 4. On 4 layers the rows run on the "
+                        "inner layers instead of round the sensor field, so "
+                        "taxels pack closer to the edge and cover more of the "
+                        "shape. Use 4 when the user asked for it, or when "
+                        "packing / full coverage matters more than fab cost "
+                        "(4-layer flex costs more - say so)."),
                 },
                 "readout_board": {
                     "type": "string",
@@ -214,8 +230,33 @@ TOOL_SPECS = [
 GEN_PARAMS = {
     "pixel_w_mm", "pixel_h_mm", "pitch_x_mm", "pitch_y_mm", "gap_mm",
     "trace_w_mm", "clearance_mm", "cable_length_mm", "readout_board",
-    "target_cols", "target_rows",
+    "target_cols", "target_rows", "copper_layers",
 }
+
+# Grow mode, as SKILL.md recommends: the board fits the wiring, and it is also the
+# fast mode (a 574-taxel insole in ~5 s on a laptop, 2 or 4 layers).
+DEFAULT_BOARD_MODE = "expand"
+
+
+def _hosted() -> bool:
+    """On the shared hosted demo (Render sets RENDER=true), where one free
+    0.1-CPU, 512 MB instance serves everyone. OTC_HOSTED=1 forces it."""
+    return bool(os.environ.get("OTC_HOSTED") or os.environ.get("RENDER"))
+
+
+# Work cap for fixed-outline runs, which re-route the whole board once per
+# keep-out attempt (nine 4-layer routes on a dense insole). Measured on a
+# laptop, size-9 insole: fixed 2 layers 6.8 s at ~240 predicted taxels and 13 s
+# at ~630; fixed 4 layers 9 s at ~240 but 43 s at ~630, which is past ten
+# minutes on the free tier (roughly 15x slower). Grow mode stays at 3-5 s for
+# all four and is not capped. Units: preflight's predicted taxels, x3 on four
+# layers. 0 disables the cap, which is the default off the hosted demo.
+FIXED_WORK_LIMIT = int(os.environ.get("OTC_CHAT_FIXED_WORK_LIMIT",
+                                      "1200" if _hosted() else "0"))
+
+
+def _fixed_work(approx_taxels: int, copper_layers: int) -> int:
+    return int(approx_taxels) * (3 if copper_layers == 4 else 1)
 
 # Diagnostic detail the model does not need is dropped, and
 # stats["print_pdf"]["b64"] is a multi-megabyte blob that must never reach a
@@ -224,7 +265,7 @@ STAT_KEYS = (
     "total_pixels", "active_pixels", "max_pack_pixels", "dropped_by_keepout",
     "col_routes", "row_routes", "connector_pos", "board_mode", "router",
     "hug_fallback", "fixed_keepout_max_mm", "tail_length_mm",
-    "connector_export_warning",
+    "connector_export_warning", "copper_layers",
 )
 
 
@@ -342,8 +383,24 @@ class Session:
         from opentac.cad import main   # late: avoids a circular import at module load
 
         outline = self._outline(outline_id)
-        board_mode = a.pop("board_mode", "fixed_keepout")
+        board_mode = a.pop("board_mode", None) or DEFAULT_BOARD_MODE
+        if board_mode not in ("expand", "fixed_keepout"):
+            raise ValueError(f"board_mode must be 'expand' or 'fixed_keepout', "
+                             f"got {board_mode!r}.")
         params = {k: v for k, v in a.items() if k in GEN_PARAMS}
+        # Explicit, never left to a default: the page loads these params into
+        # its editor and regenerates, and an absent key there keeps whatever the
+        # form showed before (a 2-layer design re-run on 4 layers, or the reverse).
+        layers = params.get("copper_layers") or 2
+        try:
+            layers = int(layers)
+        except (TypeError, ValueError):
+            pass
+        if layers not in (2, 4):
+            raise ValueError(f"copper_layers must be 2 or 4, got {layers!r}.")
+        params["copper_layers"] = layers
+        params.setdefault("readout_board", "auto")
+        self._check_work(outline, board_mode, params)
         resp = main.generate(main.GenerateRequest(
             outline=outline, board_mode=board_mode, router="hug", **params))
 
@@ -353,6 +410,10 @@ class Session:
         for d in drc.get("details", []):
             kinds[d["type"]] = kinds.get(d["type"], 0) + 1
 
+        # Only the newest board is ever sent to the page; older SVGs are dead
+        # weight in a server with 512 MB and no session expiry.
+        for older in self.designs:
+            older["svg"] = None
         self.designs.append({
             "name": design_name,
             "outline": outline,
@@ -379,6 +440,29 @@ class Session:
         }
 
     # -- plumbing ---------------------------------------------------------
+    def _check_work(self, outline: list, board_mode: str, params: dict) -> None:
+        """Refuse, up front and in words, a fixed-outline run that would hold
+        the hosted server for many minutes. Grow mode is never refused."""
+        if board_mode != "fixed_keepout" or FIXED_WORK_LIMIT <= 0:
+            return
+        from opentac.cad import main
+        size = [float(params.get(k, main.GenerateRequest.model_fields[k].default))
+                for k in ("pixel_w_mm", "pixel_h_mm", "pitch_x_mm", "pitch_y_mm")]
+        pf = P.preflight(np.asarray(outline, float), *size, router="hug")
+        n = int(pf["predicted"]["approx_taxels"])
+        layers = params["copper_layers"]
+        if _fixed_work(n, layers) <= FIXED_WORK_LIMIT:
+            return
+        raise ValueError(
+            f"Not built: a fixed outline on {layers} copper layers with about {n} "
+            "taxels re-routes the whole board once per keep-out attempt and would "
+            "take many minutes on this free hosted server. Build it in "
+            "grow mode instead (board_mode='expand', seconds, on 2 or 4 layers), or "
+            "use a coarser pitch for fewer taxels"
+            + (", or 2 copper layers" if layers == 4 else "")
+            + ". A fixed board this size can still be built with OpenTac-CAD "
+            "running on your own computer.")
+
     def _outline(self, outline_id: str) -> list:
         if outline_id not in self.outlines:
             raise ValueError(
@@ -395,7 +479,26 @@ class Session:
         try:
             return getattr(self, name)(**args)
         except Exception as exc:
-            return {"error": f"{type(exc).__name__}: {exc}"}
+            return {"error": _error_text(exc)}
+
+
+def _error_text(exc: BaseException) -> str:
+    """A tool failure in words the model can relay. main.generate() wraps every
+    failure in an HTTPException, so look through it for the real cause."""
+    chain, e = [], exc
+    while e is not None and len(chain) < 5:
+        chain.append(e)
+        e = e.__cause__ or e.__context__
+    if any(isinstance(e, MemoryError) for e in chain):
+        return ("The server ran out of memory building this board (the hosted "
+                "demo has 512 MB). Try grow mode, a coarser pitch or fewer "
+                "taxels.")
+    detail = getattr(exc, "detail", None)      # HTTPException from main.generate
+    if detail:
+        return str(detail)
+    if isinstance(exc, ValueError):
+        return str(exc)
+    return f"{type(exc).__name__}: {exc}"
 
 
 def _summarize(stats: dict, drc: dict, kinds: dict) -> str:
@@ -405,7 +508,9 @@ def _summarize(stats: dict, drc: dict, kinds: dict) -> str:
         f"{stats.get('total_pixels', 0)} taxels, "
         f"{stats.get('col_routes', 0)} columns x {stats.get('row_routes', 0)} "
         f"rows, {stats.get('connector_pos', 0)}-position connector, "
-        f"{stats.get('router', 'hug')} router.",
+        f"{stats.get('copper_layers', 2)} copper layers, "
+        f"{'grow' if stats.get('board_mode') == 'expand' else 'fixed-outline'} "
+        f"mode, {stats.get('router', 'hug')} router.",
     ]
     dropped = stats.get("max_pack_pixels", 0) - stats.get("total_pixels", 0)
     if dropped > 0:
@@ -433,6 +538,7 @@ def log_call(name: str, args: dict, result: dict) -> None:
     shown = {k: v for k, v in args.items() if k != "points"}
     if "points" in args:
         shown["points"] = f"<{len(args['points'])} pts>"
-    say(f"  -> TOOL {name}({json.dumps(shown)})")
-    text = json.dumps({k: v for k, v in result.items() if k != "svg"})
+    say(f"  -> TOOL {name}({json.dumps(shown, default=str)})")
+    # default=str: a debug log line must never be what fails a finished turn.
+    text = json.dumps({k: v for k, v in result.items() if k != "svg"}, default=str)
     say(f"  <- {text[:400]}{' ...' if len(text) > 400 else ''}")

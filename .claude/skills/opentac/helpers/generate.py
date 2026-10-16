@@ -27,14 +27,15 @@ def _load_backend():
 
 
 def generate_board(outline, out_dir: str | os.PathLike, *,
-                   board_mode: str = "fixed_keepout", router: str | None = None,
+                   board_mode: str = "expand", router: str | None = None,
                    **params):
     """Generate a board and write its artefacts to out_dir.
 
-    Defaults to fixed_keepout: "a sensor in the shape of X" means the board
-    must *be* X. Grow mode inflates the outline to suit the wiring, which is
-    right when the shape is a starting point and wrong when it has to fit
-    something physical.
+    Defaults to grow mode ("expand"), as SKILL.md recommends: the board grows
+    just enough to fit the wiring and is shrink-wrapped back toward the
+    copper, keeps every taxel the shape holds, and is the fast mode. Pass
+    board_mode="fixed_keepout" only when the drawn outline is a hard limit
+    (the board must fit an enclosure or a part with no margin).
 
     router defaults to "hug" in both board modes, which is what the site
     itself sends (the frontend's checkbox ships checked and is never gated on

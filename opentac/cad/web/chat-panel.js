@@ -112,30 +112,85 @@ if (form) {
     return () => { stopped = true; };
   }
 
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+  // What the server says about this conversation: {busy, known} or null when
+  // it does not answer at all.
+  async function serverState() {
+    try {
+      const r = await fetch(
+        `${CHAT_API}/progress?session_id=${encodeURIComponent(SESSION)}`);
+      return await r.json();
+    } catch {
+      return null;
+    }
+  }
+
+  const OOM_HINT =
+    "On the free hosting tier (512 MB, one slow CPU) that almost always means " +
+    "the server ran out of memory and restarted. Grow mode, a coarser pitch or " +
+    "fewer taxels need less.";
+
+  // The POST died without an answer ("Failed to fetch" says only that no
+  // readable response arrived). Ask the server what actually happened, and if
+  // it is still working on this turn, wait for it and pick the reply up.
+  async function recover(requestId, err) {
+    const raw = ` (browser: ${err})`;
+    const deadline = Date.now() + 15 * 60 * 1000;
+    while (Date.now() < deadline) {
+      const st = await serverState();
+      if (st === null) {
+        return { error: "The design server stopped answering in the middle " +
+          `of this design. ${OOM_HINT} It takes a minute or two to come back; ` +
+          `then try again.${raw}` };
+      }
+      if (st.known === false) {
+        return { error: "The design server restarted while it was building " +
+          `this board, so this conversation was lost. ${OOM_HINT} Describe the ` +
+          `board again.${raw}` };
+      }
+      if (!st.busy) {
+        try {
+          const r = await fetch(
+            `${CHAT_API}/last?session_id=${encodeURIComponent(SESSION)}`);
+          const d = await r.json();
+          if (d.request_id === requestId) return d;
+        } catch { /* fall through */ }
+        return { error: "The connection to the design server dropped and the " +
+          `reply was lost. Try again.${raw}` };
+      }
+      status.textContent = "connection dropped — the server is still working, waiting for it…";
+      await sleep(3000);
+    }
+    return { error: `No reply from the design server after 15 minutes.${raw}` };
+  }
+
   async function send(text) {
     bubble("you", text, "chat-msg--user");
     input.value = "";
     sendBtn.disabled = true;
-    status.textContent = "designing… a board takes 10-40s";
+    status.textContent = "designing… a board takes from seconds to a few minutes";
     const pending = bubble("assistant", "Thinking…");
     const stopProgress = trackProgress(pending);
+    const requestId = "r" + Math.random().toString(36).slice(2, 10);
 
     let data;
     try {
       const r = await fetch(CHAT_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: SESSION, message: text }),
+        body: JSON.stringify({ session_id: SESSION, message: text,
+                               request_id: requestId }),
       });
-      data = await r.json();
+      try {
+        data = await r.json();
+      } catch {
+        // A proxy's HTML error page (e.g. a 502 while the server restarts).
+        data = { error: `The design server answered HTTP ${r.status} ` +
+          `without a reply. ${r.status >= 500 ? OOM_HINT : ""}` };
+      }
     } catch (err) {
-      stopProgress();
-      pending.remove();
-      bubble("error", `Could not reach the design assistant. ${err}`,
-             "chat-msg--error");
-      sendBtn.disabled = false;
-      status.textContent = "";
-      return;
+      data = await recover(requestId, err);
     }
 
     stopProgress();
