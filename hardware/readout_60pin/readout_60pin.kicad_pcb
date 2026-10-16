@@ -2868,9 +2868,9 @@
 			(uuid "e8af95a4-7d01-4b87-acee-348a30a1772d")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/../libs/3dmodels/C160390.wrl"
+		(model "${KICAD10_3DMODEL_DIR}/Connector_JST.3dshapes/JST_SH_BM04B-SRSS-TB_1x04-1MP_P1.00mm_Vertical.step"
 			(offset
-				(xyz 0 0 0)
+				(xyz 0 0.065 0)
 			)
 			(scale
 				(xyz 1 1 1)
@@ -15861,9 +15861,9 @@
 			(uuid "0c2bd1a3-0647-4c09-9bbb-aaebd822c004")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/../libs/3dmodels/C160390.wrl"
+		(model "${KICAD10_3DMODEL_DIR}/Connector_JST.3dshapes/JST_SH_BM04B-SRSS-TB_1x04-1MP_P1.00mm_Vertical.step"
 			(offset
-				(xyz 0 0 0)
+				(xyz 0 0.065 0)
 			)
 			(scale
 				(xyz 1 1 1)
