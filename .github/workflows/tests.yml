@@ -10,5 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --locked --extra demo
+      # demo: the design-chat tests import google-genai. sim: MuJoCo for the
+      # full-solver tests in tests/sim (physics only, no rendering, so headless is fine).
+      - run: uv sync --locked --extra demo --extra sim
       - run: uv run pytest -q

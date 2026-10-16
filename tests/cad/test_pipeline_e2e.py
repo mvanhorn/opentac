@@ -87,7 +87,6 @@ def test_default_square():
     print(f"   Drill: {len(drill)} chars")
 
     print("\n=== TEST PASSED ===")
-    return True
 
 
 def _assert_contiguous_grid(P):
@@ -202,7 +201,6 @@ def test_fixed_keepout_square(half=35.0):
     assert not violations
 
     print("\n=== TEST PASSED ===")
-    return True
 
 
 if __name__ == "__main__":

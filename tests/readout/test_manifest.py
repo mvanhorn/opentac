@@ -1,6 +1,7 @@
 """opentac.manifest: loading, validation (versions 3-6), and recovery from the QR code."""
 import copy
 import json
+import os
 import zipfile
 from pathlib import Path
 
@@ -13,10 +14,12 @@ from opentac.device import device_config
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = sorted((ROOT / "examples" / "manifests").glob("*.json"))
-# The manifests the readout firmware was developed and tested against. Only on
-# the lab's machines; skipped elsewhere.
-STM_TEST = Path.home() / "Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Arduino/stm_test"
-STM_MANIFESTS = sorted(STM_TEST.glob("manifest_*.json"))
+# The manifests the readout firmware was developed and tested against. Four
+# are in tests/readout/fixtures/stm_test; the full folder (30 files) is only on
+# the lab's machines. Point OPENTAC_STM_TEST at it to load all of them.
+STM_FIXTURES = sorted((Path(__file__).parent / "fixtures" / "stm_test").glob("manifest_*.json"))
+STM_TEST = os.environ.get("OPENTAC_STM_TEST")
+STM_MANIFESTS = sorted(Path(STM_TEST).glob("manifest_*.json")) if STM_TEST else []
 
 
 def raw(name):
@@ -53,7 +56,16 @@ def test_versions_outside_3_to_6():
     assert m.version == 3 and any("version" in w for w in m.warnings)
 
 
-@pytest.mark.skipif(not STM_MANIFESTS, reason="stm_test manifests are only on the lab machines")
+def test_stm_test_fixtures_load():
+    versions = set()
+    for path in STM_FIXTURES:
+        m = manifest.load(path, scan=True)
+        assert m.n > 0 and m.source_bytes == path.read_bytes(), path.name
+        versions.add(m.version)
+    assert len(STM_FIXTURES) == 4 and versions == {3, 5}
+
+
+@pytest.mark.skipif(not STM_MANIFESTS, reason="set OPENTAC_STM_TEST to the lab's stm_test folder")
 def test_every_stm_test_manifest_loads():
     for path in STM_MANIFESTS:
         m = manifest.load(path, scan=True)

@@ -2,6 +2,7 @@
 import importlib.util
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -16,24 +17,41 @@ from opentac.manifest import ManifestError
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "examples" / "manifests"
-GOLDEN = json.loads((Path(__file__).parent / "fixtures" / "configs_from_opentac_device.json").read_text())
-STM_TEST = Path.home() / "Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Arduino/stm_test"
+FIXTURES = Path(__file__).parent / "fixtures"
+GOLDEN = json.loads((FIXTURES / "configs_from_opentac_device.json").read_text())
+# Four of the manifests the readout firmware was developed against, with the
+# bytes the original tool built from them.
+STM_FIXTURES = FIXTURES / "stm_test"
+STM_GOLDEN = json.loads((FIXTURES / "stm_test_configs_from_opentac_device.json").read_text())
+# The full stm_test folder and the original tool live only on the lab's
+# machines. Point OPENTAC_STM_TEST at that folder to compare all of it;
+# otherwise that check is skipped, on every machine alike.
+STM_TEST = Path(os.environ.get("OPENTAC_STM_TEST", "/nonexistent"))
 ORIGINAL = STM_TEST / "tactile_imu_fast_cfg" / "opentac_device.py"
+
+
+def _check_golden(path, golden):
+    for board_name, want in golden.items():
+        if want is None:
+            with pytest.raises(ManifestError):
+                device_config(path, board_name)
+        else:
+            blob, _ = device_config(path, board_name)
+            assert blob.hex() == want, board_name
 
 
 @pytest.mark.parametrize("name", [n for n in GOLDEN if not n.startswith("_")])
 def test_config_bytes_match_the_original_tool(name):
     """Same manifest, same board -> the same bytes opentac_device.py built."""
-    for board_name, want in GOLDEN[name].items():
-        if want is None:
-            with pytest.raises(ManifestError):
-                device_config(EXAMPLES / name, board_name)
-        else:
-            blob, _ = device_config(EXAMPLES / name, board_name)
-            assert blob.hex() == want, board_name
+    _check_golden(EXAMPLES / name, GOLDEN[name])
 
 
-@pytest.mark.skipif(not ORIGINAL.exists(), reason="the original tool is only on the lab machines")
+@pytest.mark.parametrize("name", [n for n in STM_GOLDEN if not n.startswith("_")])
+def test_stm_test_config_bytes_match_the_original_tool(name):
+    _check_golden(STM_FIXTURES / name, STM_GOLDEN[name])
+
+
+@pytest.mark.skipif(not ORIGINAL.exists(), reason="set OPENTAC_STM_TEST to the lab's stm_test folder")
 def test_every_stm_test_manifest_matches_the_original_tool():
     spec = importlib.util.spec_from_file_location("opentac_device_original", ORIGINAL)
     orig = importlib.util.module_from_spec(spec)
