@@ -58,7 +58,8 @@ def connector_pose(layout, outline_xy, params):
         )
 
     tail = tail_geometry(layout.outline_poly, outline_xy[0], outline_xy[1], layout.connector_pos, params,
-                         fit_width=(layout.tail or {}).get("fit_width_mm"))
+                         fit_width=(layout.tail or {}).get("fit_width_mm"),
+                         fit_offset=(layout.tail or {}).get("fit_offset_mm"))
     return tail["t_hat"], tail["n_out"], np.array(tail["pad1_world"], dtype=float)
 
 

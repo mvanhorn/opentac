@@ -8,7 +8,7 @@ from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
 
 from .geometry import (
-    extension_tail_poly, remove_collinear, remove_collinear_closed,
+    extension_tail_poly, offset_path, remove_collinear, remove_collinear_closed, tail_offset_mm,
 )
 
 
@@ -36,27 +36,9 @@ def _segment_normals(path):
     return dirs, normals
 
 
-def _offset_path(path, offset):
-    dirs, normals = _segment_normals(path)
-    if dirs is None:
-        return None
-    out = []
-    for i, p in enumerate(path):
-        if i == 0:
-            out.append(p + offset * normals[0])
-        elif i == len(path) - 1:
-            out.append(p + offset * normals[-1])
-        else:
-            p1 = p + offset * normals[i - 1]
-            p2 = p + offset * normals[i]
-            mat = np.column_stack((dirs[i - 1], -dirs[i]))
-            det = float(np.linalg.det(mat))
-            if abs(det) < 1e-9:
-                out.append(p1)
-            else:
-                t = np.linalg.solve(mat, p2 - p1)[0]
-                out.append(p1 + t * dirs[i - 1])
-    return np.array(out, dtype=float)
+# A pad's lane: the path moved sideways by the pad's offset from the split point
+# (shared with the corridor around the lanes, geometry.extension_tail_poly).
+_offset_path = offset_path
 
 
 def _largest_polygon(poly):
@@ -251,14 +233,20 @@ def apply_tail_extension(layout, routes, params, connector_dir=""):
 
     # The custom tail corridor stops at the connector base; physical connector
     # outline/pads are stitched in during export when a supported footprint is present.
-    corridor = extension_tail_poly(path, width, clearance, layout.tail.get("connector_min_width_mm"))
+    # It runs over the lanes the way the tail strip it continues runs over the
+    # pads: centred where that strip is (geometry.fit_tail_strip), which is off
+    # the split point the lanes are laid out from when the used pads are.
+    split_pad = _active_split_pad(layout)
+    centre_pad = (int(layout.connector_pos) + 1) / 2.0
+    corridor_offset = tail_offset_mm(layout.tail) + (centre_pad - split_pad) * params.pad_pitch_mm
+    corridor = extension_tail_poly(path, width, clearance, layout.tail.get("connector_min_width_mm"),
+                                   corridor_offset)
     expanded = unary_union([layout.board_poly, corridor])
     layout.board_poly = expanded
     final_poly = _largest_polygon(expanded)
     if not final_poly.is_empty:
         layout.final_outline_xy = remove_collinear_closed(np.array(final_poly.exterior.coords[:-1], dtype=float))
 
-    split_pad = _active_split_pad(layout)
     pad1_world = end + (1.0 - split_pad) * params.pad_pitch_mm * end_t
     layout.pad_y_mm = float(end[1])
     layout.tail["tail_extension_resolved"] = {
@@ -266,6 +254,7 @@ def apply_tail_extension(layout, routes, params, connector_dir=""):
         "path": path.tolist(),
         "width_mm": width,
         "clearance_mm": clearance,
+        "offset_mm": float(corridor_offset),
         "t_hat": end_t.tolist(),
         "n_out": end_n.tolist(),
         "pad1_world": pad1_world.tolist(),

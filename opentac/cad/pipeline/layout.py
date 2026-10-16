@@ -148,7 +148,12 @@ def _make_tail_shoulder_poly(outline_xy, tail, params, bottom_padding: float):
     }
 
 
-def cable_shoulder_fill(outline_poly, mid, t_hat, n_out, tail_width: float) -> list:
+def shoulder_fill_depth(tail_width: float) -> float:
+    """How far into the board side cable_shoulder_fill looks for wedges."""
+    return max(2.0, float(tail_width) / 2)
+
+
+def cable_shoulder_fill(outline_poly, mid, t_hat, n_out, tail_width: float, depth: float | None = None) -> list:
     """Board the outline leaves out beside a tail wider than its cable edge.
 
     The tail is connector-width, usually wider than the cable edge, so it
@@ -160,15 +165,17 @@ def cable_shoulder_fill(outline_poly, mid, t_hat, n_out, tail_width: float) -> l
     pixels). Close it: take a strip of the tail's width extending from the
     attachment line INTO the board side, subtract the outline, and keep the
     pieces touching the attachment line — exactly the wedges. Depth
-    tail_width/2 comfortably covers any slope a sane cable edge produces; the
-    touch filter keeps drawn concavities elsewhere in the strip untouched.
+    tail_width/2 comfortably covers any slope a sane cable edge produces (a
+    narrowed tail passes the depth of the connector-width fill its wires were
+    routed in); the touch filter keeps drawn concavities elsewhere in the strip
+    untouched.
 
     Part of every un-grown board (layout_with_connector), and rebuilt from
     edit_data by every later request (main._layout_from_edit_data): the
     fixed-outline routes run through it."""
     mid, t_hat, n_out = (np.asarray(v, dtype=float) for v in (mid, t_hat, n_out))
     half_w = float(tail_width) / 2
-    depth = max(2.0, half_w)
+    depth = shoulder_fill_depth(tail_width) if depth is None else float(depth)
     strip = Polygon([
         mid - half_w * t_hat, mid + half_w * t_hat,
         mid + half_w * t_hat - depth * n_out, mid - half_w * t_hat - depth * n_out,

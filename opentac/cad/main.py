@@ -24,7 +24,7 @@ from shapely.ops import nearest_points, unary_union
 from opentac.cad.pipeline.types import Params, drop_removed_params
 from opentac.cad.pipeline.types import Layout, Route
 from opentac.cad.pipeline.geometry import (
-    rotate_for_cable, remove_collinear_closed, tail_geometry,
+    rotate_for_cable, remove_collinear_closed, tail_geometry, tail_offset_mm,
     connector_dimensions, CONNECTOR_BODY_BELOW_MM,
     round_convex_corners, concave_fillet_infill,
 )
@@ -968,9 +968,12 @@ def _layout_from_edit_data(edit_data: dict) -> tuple[Layout, np.ndarray, Params,
         # than the cable edge. Left out, every edited export of a fixed board
         # with a wide connector put the fan wires there outside the board.
         if cable_poly and tail_data.get("width_mm") and tail_data.get("t_hat") and tail_data.get("n_out"):
+            strip_mid = (0.5 * (outline_xy[0] + outline_xy[1])
+                         + tail_offset_mm(tail_data) * np.asarray(tail_data["t_hat"], dtype=float))
             board_poly = unary_union([board_poly, *cable_shoulder_fill(
-                outline_poly, 0.5 * (outline_xy[0] + outline_xy[1]),
-                tail_data["t_hat"], tail_data["n_out"], float(tail_data["width_mm"]))])
+                outline_poly, strip_mid,
+                tail_data["t_hat"], tail_data["n_out"], float(tail_data["width_mm"]),
+                depth=tail_data.get("shoulder_depth_mm"))])
 
     layout = Layout(
         placements_xy=np.array(layout_data["placements_xy"], dtype=float),
@@ -1128,7 +1131,8 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
         else:
             p1, p2 = outline_xy[0], outline_xy[1]
             tail = tail_geometry(layout.outline_poly, p1, p2, layout.connector_pos, params,
-                                 fit_width=(layout.tail or {}).get("fit_width_mm"))
+                                 fit_width=(layout.tail or {}).get("fit_width_mm"),
+                                 fit_offset=(layout.tail or {}).get("fit_offset_mm"))
             center, t_hat, n_out = tail["mid"], tail["t_hat"], tail["n_out"]
             y_start = max(0.0, tail["cable_length"] - overlap)
             y_end = tail["total_length"]

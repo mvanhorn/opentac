@@ -6,7 +6,8 @@ from shapely.ops import unary_union
 
 from .geometry import (
     CONNECTOR_BODY_ABOVE_MM, CONNECTOR_BODY_BELOW_MM, extension_tail_poly, fillet_inside_corners,
-    remove_collinear_closed, tail_without_landing,
+    make_cable_rect, make_tail_poly, remove_collinear_closed, tail_flare_edges, tail_offset_mm,
+    tail_without_landing,
 )
 from .route_4layer import INNER_LAYERS, copper_layers_of
 
@@ -76,7 +77,8 @@ def _tail_extension_corridor(layout):
     clearance = float(ext.get("clearance_mm") or 0.0)
     if width <= 0:
         return None
-    return extension_tail_poly(path, width, clearance, layout.tail.get("connector_min_width_mm"))
+    return extension_tail_poly(path, width, clearance, layout.tail.get("connector_min_width_mm"),
+                               float(ext.get("offset_mm") or 0.0))
 
 
 def _poly_to_coords(poly):
@@ -165,6 +167,42 @@ def _cable_piece(layout, outline_xy, ext_active):
     return cable_without_landing(layout.cable_poly, outline_xy, layout.tail)
 
 
+def _strip_aware(tail) -> bool:
+    """The tail was narrowed by the strip-over-the-pads code (it records
+    fit_offset_mm, geometry.fit_tail_strip). Designs saved before that keep the
+    padding pass they were previewed with."""
+    return (tail or {}).get("mode") == "fit" and "fit_offset_mm" in (tail or {})
+
+
+def _tail_strip(layout, outline_xy, ext_active, cable_piece):
+    """The part of a narrowed tail whose wires the padding pass leaves alone.
+
+    Its own wires are held by the strip itself (narrow_tail.wire_edge_mm from
+    its edge). Wire outside it -- the fan running in below the cable edge,
+    or up a sloping outline beside the strip -- is padded like any other wire:
+    the tail piece holds that wire only route_containment_mm out and cut off
+    at the old tail's side, which against the padding just past it left a
+    step, and a flare running into the step a horn."""
+    t = layout.tail or {}
+    if not _strip_aware(t) or t.get("t_hat") is None or t.get("n_out") is None:
+        return cable_piece
+    mid = 0.5 * (np.asarray(outline_xy[0], dtype=float) + np.asarray(outline_xy[1], dtype=float))
+    t_hat = np.asarray(t["t_hat"], dtype=float)
+    n_out = np.asarray(t["n_out"], dtype=float)
+    width = float(t.get("width_mm") or 0.0)
+    wide = float(t.get("connector_min_width_mm") or 0.0)
+    cable = float(t.get("length_mm") or 0.0)
+    total = cable + CONNECTOR_BODY_ABOVE_MM + CONNECTOR_BODY_BELOW_MM
+    offset = tail_offset_mm(t)
+    if width <= 0:
+        return cable_piece
+    if ext_active:
+        # the strip runs on to the extension (cable_without_landing)
+        strip_mid = mid + offset * t_hat
+        return make_cable_rect(strip_mid, strip_mid, t_hat, n_out, width, total)
+    return make_tail_poly(mid, t_hat, n_out, width, wide, cable, total, offset)
+
+
 def cable_without_landing(cable_poly, outline_xy, tail):
     t = tail or {}
     if t.get("t_hat") is None or t.get("n_out") is None:
@@ -173,27 +211,46 @@ def cable_without_landing(cable_poly, outline_xy, tail):
     cable = float(t.get("length_mm") or 0.0)
     return tail_without_landing(cable_poly, mid, t["t_hat"], t["n_out"], float(t.get("width_mm") or 0.0),
                                 float(t.get("connector_min_width_mm") or 0.0), cable,
-                                cable + CONNECTOR_BODY_ABOVE_MM + CONNECTOR_BODY_BELOW_MM)
+                                cable + CONNECTOR_BODY_ABOVE_MM + CONNECTOR_BODY_BELOW_MM, tail_offset_mm(t))
 
 
-def fillet_tail_junction(board, outline_xy, tail, params):
+def fillet_tail_junction(board, outline_xy, tail, params, piece=None):
     """Round the two inside corners where a narrow tail leaves the board.
 
     Computed from the board itself on every pass rather than stored with the
     tail pieces, so it always fits the current board edge. Only whole fillet
     pieces touching the cable's sides are kept: other inside corners of the
-    board keep the shape they have."""
+    board keep the shape they have. The sides are the strip's straight edges,
+    the flare (geometry.tail_flare_edges) where the board reaches down past
+    where it starts, and the edge of the tail `piece` itself between the cable
+    edge and the landing, which is where the board meets the tail when the tail
+    holds a wire beside the strip (a 4-layer inner feed running down the tail
+    before it turns to its pad)."""
     r = max(0.0, float(getattr(params, "connector_shoulder_fillet_mm", 0.0) or 0.0))
     if r <= 0 or tail.get("t_hat") is None or tail.get("n_out") is None:
         return board
     t_hat = np.asarray(tail["t_hat"], dtype=float)
     n_out = np.asarray(tail["n_out"], dtype=float)
     mid = 0.5 * (np.asarray(outline_xy[0], dtype=float) + np.asarray(outline_xy[1], dtype=float))
-    half = float(tail.get("width_mm") or 0.0) / 2.0
+    # the strip is centred off the connector's centre line when it carries an
+    # off-centre block of pads (geometry.fit_tail_strip)
+    offset = tail_offset_mm(tail)
+    width = float(tail.get("width_mm") or 0.0)
+    wide = float(tail.get("connector_min_width_mm") or 0.0)
     length = float(tail.get("length_mm") or 0.0)
-    sides = MultiLineString([[mid + k * half * t_hat, mid + k * half * t_hat + length * n_out]
-                             for k in (-1.0, 1.0)])
-    return fillet_inside_corners(board, r, near=sides)
+    lo, hi = offset - width / 2.0, offset + width / 2.0
+    lines = [[mid + s * t_hat, mid + s * t_hat + length * n_out] for s in (lo, hi)]
+    near = [MultiLineString(lines)]
+    if _strip_aware(tail) and 0.0 < width < wide - 1e-6:
+        prof = tail_flare_edges(width, wide, max(0.5, length - 1.0), offset)
+        near.append(MultiLineString([[mid + e[k] * t_hat + (length - e[0]) * n_out for e in prof]
+                                     for k in (1, 2)]))
+        if piece is not None and not piece.is_empty:
+            big = 1e4
+            band = Polygon([mid - big * t_hat, mid + big * t_hat,
+                            mid + big * t_hat + length * n_out, mid - big * t_hat + length * n_out])
+            near.append(piece.boundary.intersection(band))
+    return fillet_inside_corners(board, r, near=unary_union(near))
 
 
 def route_containment_mm(params) -> float:
@@ -304,7 +361,8 @@ def apply_main_follow_padding(layout, routes, params):
     # closing radius below instead of the tail's own fillet.
     narrow = _narrow_tail(layout.tail)
     cable_piece = _cable_piece(layout, outline_xy, ext_active)
-    tail_strip = cable_piece if narrow and cable_piece is not None else None
+    tail_strip = (_tail_strip(layout, outline_xy, ext_active, cable_piece)
+                  if narrow and cable_piece is not None else None)
     for route in routes:
         P = np.asarray(route.polyline_xy, dtype=float)
         if len(P) < 2:
@@ -359,7 +417,7 @@ def apply_main_follow_padding(layout, routes, params):
     tail_pieces = _locked_tail_pieces(layout, ext_active)
     if not tail_pieces:
         # A narrow tail is already sized to keep its wires clear of the edge
-        # (geometry.fit_tail_width); the padded guard would widen it again.
+        # (geometry.fit_tail_strip); the padded guard would widen it again.
         guard = None if narrow else _tail_shoulder_guard(outline_xy, layout.tail, padding)
         if not ext_active and guard is not None and not guard.is_empty:
             tail_pieces.append(guard)
@@ -372,7 +430,7 @@ def apply_main_follow_padding(layout, routes, params):
 
     final = unary_union([main_shell, *tail_pieces]).buffer(0)
     if narrow:
-        final = fillet_tail_junction(final, outline_xy, layout.tail, params)
+        final = fillet_tail_junction(final, outline_xy, layout.tail, params, cable_piece)
     final_shell = _solid_exterior(final)
     if final_shell.is_empty:
         return False

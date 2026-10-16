@@ -2,11 +2,20 @@
 
 Narrowing must never change the sensor: the board is routed with the
 connector-width tail either way, so the taxels and every wire are identical.
-The narrow tail flares back to the connector's tab, so the board's Edge.Cuts
+The narrow tail is a strip over the connector pads in use, which sit off the
+connector's centre whenever rows and columns differ in number; it flares back
+to the connector's tab, each side by its own amount, so the board's Edge.Cuts
 still meet the connector footprint's own outline, and a drawn tail extension
 takes the landing with it to the moved connector.
 """
+import base64
 import copy
+import io
+import json
+import shutil
+import subprocess
+import zipfile
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -15,6 +24,11 @@ from shapely.geometry import LineString, Polygon
 
 from opentac.cad.main import CONNECTOR_DIR, _layout_from_edit_data, app
 from opentac.cad.export.connector_geometry import connector_edge_geometries, stitched_outline_segments
+from opentac.cad.pipeline.case import _tail_neck
+from opentac.cad.pipeline.geometry import (
+    TAIL_FLARE_MAX_SLOPE, fit_tail_strip, make_tail_poly, tail_flare_length, tail_offset_mm,
+)
+from opentac.cad.pipeline.narrow_tail import MIN_STRAIGHT_MM, strip_within_cable
 
 client = TestClient(app)
 PAD = [[0, 0], [17.6, 0], [17.6, 34.6], [0, 34.6]]   # an 8x4 gripper pad at 4.2 mm pitch
@@ -134,3 +148,216 @@ def test_narrowing_a_dense_grown_tail_does_not_spike_memory():
     taxels, grew_mb = out.stdout.split()[-2:]
     assert int(taxels) > 600
     assert float(grew_mb) < 100, f"narrow_routed_tail raised peak memory by {float(grew_mb):.0f} MB"
+
+
+# ---------------------------------------------------------------------------
+# The strip sits over the pads in use, which are off the connector's centre
+# whenever rows and columns differ in number (rows on one connector half,
+# columns on the other, each packed against the centre).
+# ---------------------------------------------------------------------------
+PITCH = SimpleNamespace(pad_pitch_mm=0.5)
+
+
+def _block(lo, hi):
+    return {p: f"NET_{p}" for p in range(lo, hi + 1)}
+
+
+@pytest.mark.parametrize("conn,pads,edge,width,offset", [
+    (60, (23, 57), 1.0, 19.0, 4.75),    # 8 rows on 23-30, 27 columns on 31-57
+    (60, (2, 36), 1.0, 19.0, -5.75),    # 29 rows on 2-30, 6 columns on 31-36
+    (30, (10, 27), 1.0, 10.5, 1.5),     # 6 on 10-15, 12 on 16-27
+    (60, (23, 57), 2.1, 21.1, 4.7),     # the high side stops at the tab (15.25)
+    (30, (1, 26), 2.1, 15.1, -0.2),     # the low side stops at the tab (-7.75)
+])
+def test_strip_is_centred_on_the_pad_block(conn, pads, edge, width, offset):
+    w, off = fit_tail_strip(_block(*pads), conn, PITCH, edge)
+    assert w == pytest.approx(width, abs=1e-6) and off == pytest.approx(offset, abs=1e-6)
+    half_tab = (conn + 1) * 0.5 / 2
+    centre = (conn + 1) / 2
+    assert off - w / 2 >= -half_tab - 1e-9 and off + w / 2 <= half_tab + 1e-9
+    # every used pad is inside the strip, at least `edge` from its cut edge
+    # unless the strip stops at the tab
+    for p in range(pads[0], pads[1] + 1):
+        x = (p - centre) * 0.5
+        assert off - w / 2 <= x <= off + w / 2
+        assert x - (off - w / 2) >= edge - 1e-9 or abs(off - w / 2 + half_tab) < 1e-9
+        assert (off + w / 2) - x >= edge - 1e-9 or abs(off + w / 2 - half_tab) < 1e-9
+
+
+def _cut(poly, depth, mid=np.zeros(2), t_hat=np.array([1.0, 0.0]), n_out=np.array([0.0, -1.0])):
+    p = mid + depth * n_out
+    g = poly.intersection(LineString([p - 100 * t_hat, p + 100 * t_hat]))
+    xs = [float((np.asarray(q) - mid) @ t_hat) for part in getattr(g, "geoms", [g]) for q in part.coords]
+    return min(xs), max(xs)
+
+
+def test_flare_widens_each_side_by_its_own_amount():
+    w, W, off, cable = 12.0, 30.5, 5.0, 24.0
+    total = cable + 6.0
+    poly = make_tail_poly(np.zeros(2), [1.0, 0.0], [0.0, -1.0], w, W, cable, total, off)
+    assert poly.is_valid
+    flare = tail_flare_length(w, W, cable - 1.0, off)
+    assert flare == pytest.approx(np.pi / 2 * (off - w / 2 + W / 2) / TAIL_FLARE_MAX_SLOPE)
+    lo, hi = _cut(poly, 1.0)
+    assert (lo, hi) == (pytest.approx(off - w / 2), pytest.approx(off + w / 2))
+    lo, hi = _cut(poly, cable + 1.0)
+    assert (lo, hi) == (pytest.approx(-W / 2), pytest.approx(W / 2))
+    # both sides leave the strip at the same depth and are never steeper than 45 degrees
+    depths = np.linspace(cable - flare, cable, 200)
+    edges = np.array([_cut(poly, d) for d in depths])
+    for k in (0, 1):
+        slope = np.abs(np.diff(edges[:, k]) / np.diff(depths))
+        assert slope.max() <= TAIL_FLARE_MAX_SLOPE * 1.02
+    assert edges[0, 0] == pytest.approx(off - w / 2, abs=1e-6) and edges[0, 1] == pytest.approx(off + w / 2, abs=1e-6)
+
+
+def test_short_cable_narrows_as_far_as_its_flare_fits():
+    w, off, W = 21.1, 4.7, 30.5
+    # a long cable takes the strip as it is
+    assert strip_within_cable(w, off, W, 30.0) == (w, off)
+    # a 12 mm cable has room for an 8 mm flare: each side moves in at most 8 / (pi/2)
+    w2, off2 = strip_within_cable(w, off, W, 12.0)
+    lo, hi = off2 - w2 / 2, off2 + w2 / 2
+    assert lo <= off - w / 2 + 1e-9 and hi >= off + w / 2 - 1e-9          # still carries every wire
+    assert tail_flare_length(w2, W, float("inf"), off2) + MIN_STRAIGHT_MM <= 12.0 + 1e-3
+    assert w2 < W - 1.0                                                    # and is narrower than the tab
+    # never wider than the connector-centred strip with the same reach
+    sym = 2 * max(abs(off - w / 2), abs(off + w / 2))
+    assert w2 <= sym + 1e-9 or sym >= W
+    # no room for any flare: the connector's width
+    assert strip_within_cable(w, off, W, MIN_STRAIGHT_MM) is None
+
+
+def test_designs_saved_before_the_offset_have_none():
+    assert tail_offset_mm({"mode": "fit", "fit_width_mm": 20.0, "width_mm": 20.0}) == 0.0
+    assert tail_offset_mm({"mode": "manual", "fit_offset_mm": 3.0}) == 0.0
+    assert tail_offset_mm({"mode": "fit", "fit_offset_mm": -2.5}) == -2.5
+
+
+# A short wide pad (17 columns x 4 rows) needs the 60-pin board, a 12 x 3 one the
+# 30-pin board; both use pads well off the connector's centre.
+OFF_CENTRE = {
+    "60pin": dict(outline=[[0, 0], [34, 0], [34, 8], [0, 8]], cable_length_mm=24.0),
+    "30pin": dict(outline=[[0, 0], [24, 0], [24, 6], [0, 6]], cable_length_mm=12.0),
+}
+SMALL = dict(pitch_x_mm=2.0, pitch_y_mm=2.0, pixel_w_mm=1.8, pixel_h_mm=1.8, router="hug")
+_CACHE = {}
+
+
+def _gen_off(name, board_mode="expand", narrow=True):
+    key = (name, board_mode, narrow)
+    if key not in _CACHE:
+        r = client.post("/generate", json=dict(board_mode=board_mode, narrow_tail=narrow, **SMALL, **OFF_CENTRE[name]))
+        assert r.status_code == 200, r.text[:300]
+        _CACHE[key] = r.json()
+    return _CACHE[key]
+
+
+def _strip_of(edit_data):
+    t = edit_data["layout"]["tail"]
+    return t["fit_offset_mm"] - t["width_mm"] / 2, t["fit_offset_mm"] + t["width_mm"] / 2
+
+
+@pytest.mark.parametrize("name", sorted(OFF_CENTRE))
+@pytest.mark.parametrize("board_mode", ["expand", "fixed_keepout"])
+def test_off_centre_block_keeps_every_taxel(name, board_mode):
+    narrow, wide = _gen_off(name, board_mode, True), _gen_off(name, board_mode, False)
+    assert narrow["stats"]["active_pixels"] == wide["stats"]["active_pixels"]
+    assert narrow["edit_data"]["routes"] == wide["edit_data"]["routes"]
+    assert narrow["drc"]["violations"] == 0
+    closed, shortest = _outline_is_closed(narrow["edit_data"])
+    assert closed and shortest > 0.001
+
+
+@pytest.mark.parametrize("name,conn", [("60pin", 60), ("30pin", 30)])
+def test_off_centre_strip_is_as_narrow_as_its_wires(name, conn):
+    g = _gen_off(name)
+    ed = g["edit_data"]
+    assert g["stats"]["connector_pos"] == conn
+    t = ed["layout"]["tail"]
+    pads = sorted(int(p) for p in ed["layout"]["pad_to_net"])
+    centre, pitch = (conn + 1) / 2, ed["params"]["pad_pitch_mm"]
+    block = ((pads[0] - centre) * pitch, (pads[-1] - centre) * pitch)
+    assert abs(block[0] + block[1]) > 2.0, "the test design must use an off-centre block"
+    edge = ed["params"]["trace_w_mm"] / 2 + ed["params"]["follow_main_padding_mm"]
+    half_tab = (conn + 1) * pitch / 2
+    lo, hi = max(-half_tab, block[0] - edge), min(half_tab, block[1] + edge)
+    assert t["mode"] == "fit"
+    assert t["width_mm"] == pytest.approx(hi - lo, abs=1e-3)
+    assert t["fit_offset_mm"] == pytest.approx((lo + hi) / 2, abs=1e-3)
+    # the board itself: the narrowest cut through the straight cable is the strip
+    o = np.asarray(ed["outline"], dtype=float)
+    mid = 0.5 * (o[0] + o[1])
+    poly = Polygon(ed["final_outline"]).buffer(0)
+    flare = tail_flare_length(t["width_mm"], t["connector_min_width_mm"], float("inf"), t["fit_offset_mm"])
+    cuts = [_cut(poly, d, mid, np.asarray(t["t_hat"]), np.asarray(t["n_out"]))
+            for d in np.arange(1.0, t["length_mm"] - flare, 0.25)]
+    narrowest = min(cuts, key=lambda c: c[1] - c[0])
+    assert narrowest[1] - narrowest[0] == pytest.approx(hi - lo, abs=0.05)
+    assert narrowest[0] == pytest.approx(lo, abs=0.05) and narrowest[1] == pytest.approx(hi, abs=0.05)
+
+
+def test_off_centre_tail_survives_redo_and_reopen():
+    g = _gen_off("60pin")
+    ed, routes = g["edit_data"], g["edit_data"]["routes"]
+    r = client.post("/redo-padding", json={"edit_data": ed, "routes": routes})
+    assert r.status_code == 200
+    redo = r.json()
+    assert redo["drc"]["violations"] == 0
+    assert redo["edit_data"]["layout"]["tail"]["fit_offset_mm"] == ed["layout"]["tail"]["fit_offset_mm"]
+    assert Polygon(redo["edit_data"]["final_outline"]).area == pytest.approx(Polygon(ed["final_outline"]).area, abs=1e-6)
+    r = client.post("/export-edited", json={"edit_data": redo["edit_data"], "routes": routes})
+    assert r.status_code == 200 and r.json()["drc"]["violations"] == 0
+    assert r.json()["stats"]["active_pixels"] == g["stats"]["active_pixels"]
+
+
+def test_extension_corridor_stays_over_the_off_centre_lanes():
+    g = _gen_off("60pin")
+    ed, routes = copy.deepcopy(g["edit_data"]), g["edit_data"]["routes"]
+    t = ed["layout"]["tail"]
+    te = dict(ed["layout"]["tail_extension"])
+    s = np.asarray(te["path"][0], dtype=float)
+    n = np.asarray(t["n_out"], dtype=float)
+    te.update(enabled=True, path=[s.tolist(), (s + 30 * n).tolist()])
+    ed["layout"]["tail_extension"] = te
+    r = client.post("/redo-padding", json={"edit_data": ed, "routes": routes})
+    assert r.status_code == 200 and r.json()["drc"]["violations"] == 0
+    out = r.json()["edit_data"]
+    o = np.asarray(out["outline"], dtype=float)
+    mid = 0.5 * (o[0] + o[1])
+    depth = float((s - mid) @ n) + 4.0                      # down the extension, above its flare
+    lo, hi = _cut(Polygon(out["final_outline"]).buffer(0), depth, mid, np.asarray(t["t_hat"]), n)
+    assert (lo + hi) / 2 == pytest.approx(t["fit_offset_mm"], abs=0.05)
+    r = client.post("/export-edited", json={"edit_data": out, "routes": routes})
+    assert r.status_code == 200 and r.json()["drc"]["violations"] == 0
+    assert r.json()["stats"]["active_pixels"] == g["stats"]["active_pixels"]
+
+
+def test_case_slot_follows_an_off_centre_tail():
+    ed = _gen_off("60pin")["edit_data"]
+    cable_y = float(np.asarray(ed["outline"], dtype=float)[:2, 1].min())
+    neck = _tail_neck(ed["final_outline"], cable_y)
+    assert neck is not None
+    lo, hi = _strip_of(ed)
+    assert neck[1] == pytest.approx(lo, abs=0.3) and neck[2] == pytest.approx(hi, abs=0.3)
+    r = client.post("/case", json={"edit_data": ed})
+    assert r.status_code == 200 and r.json()["stats"]["cable_edge"] == "slot"
+
+
+@pytest.mark.skipif(not shutil.which("kicad-cli"), reason="kicad-cli not installed")
+@pytest.mark.parametrize("name", sorted(OFF_CENTRE))
+def test_off_centre_outline_is_valid_in_kicad(name, tmp_path):
+    """KiCad reads the stitched outline as one closed board, and no copper is
+    closer to it than its default rule except the connector's own pads at its
+    own tab (as on every export)."""
+    z = zipfile.ZipFile(io.BytesIO(base64.b64decode(_gen_off(name)["zip_b64"])))
+    pcb = tmp_path / "board.kicad_pcb"
+    pcb.write_bytes(z.read(next(n for n in z.namelist() if n.endswith(".kicad_pcb"))))
+    rep = tmp_path / "drc.json"
+    subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "--severity-all", "-o", str(rep), str(pcb)],
+                   check=True, capture_output=True, timeout=300)
+    violations = json.loads(rep.read_text())["violations"]
+    assert not [v for v in violations if v["type"] == "invalid_outline"]
+    edge = [v for v in violations if v["type"] == "copper_edge_clearance"
+            and not any("J1" in i["description"] for i in v["items"])]
+    assert not edge, edge[:3]
