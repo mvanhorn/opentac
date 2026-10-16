@@ -9,7 +9,7 @@ url: "https://opentac.github.io/"
 license: MIT
 preferred-citation:
   type: article
-  title: "OpenTac: Making Tactile Sensor Design Configurable for Robot Learning"
+  title: "OpenTac: An Open Ecosystem for Customizable, Scalable, and Transferable 3D Tactile Sensing"
   authors:
     - name: "The OpenTac authors"
   year: 2026
