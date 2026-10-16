@@ -153,17 +153,21 @@ def fig_modes():
     for mode, layers, label in runs:
         svg, man, stats, drc = generate(ARCH, board_mode=mode, copper_layers=layers, **GRID_3MM)
         w, h, style, body = svg_parts(svg)
-        pad_y = float(re.search(r'<line x1="0" y1="([\d.]+)"[^>]*class="pad-line"', svg).group(1))
-        panels.append(dict(w=w, h=h, style=style, body=body, pad_y=pad_y, n=stats["total_pixels"],
+        # the top of the drawn shape: the sensor-outline in grow mode; in fixed mode the
+        # board edge is the drawn shape
+        top = (polygon(svg, "sensor-outline") if 'class="sensor-outline"' in svg
+               else polygon(svg, "outline"))[:, 1].min()
+        panels.append(dict(w=w, h=h, style=style, body=body, top=top, n=stats["total_pixels"],
                            label=label, drc=drc["violations"]))
-        log(f"  arch {label}: {stats['total_pixels']} taxels, DRC {drc['violations']}")
-    # One scale (mm) for all three, with the connector ends on one line.
+        log(f"  arch {label}: {stats['total_pixels']} taxels, DRC {drc['violations']}, tail "
+            f"{stats.get('tail_length_mm')} mm ({stats.get('tail_length_reason')})")
+    # One scale (mm) for all three, with the tops of the drawn shapes on one line.
     gap, head = 6.0, 15.0
-    base = max(p["pad_y"] for p in panels)
-    H = head + max(base - p["pad_y"] + p["h"] for p in panels)
+    base = max(p["top"] for p in panels)
+    H = head + max(base - p["top"] + p["h"] for p in panels)
     x, parts = 0.0, []
     for p in panels:
-        dy = head + base - p["pad_y"]
+        dy = head + base - p["top"]
         parts.append(f'<svg x="{x:.2f}" y="{dy:.2f}" width="{p["w"]:.2f}" height="{p["h"]:.2f}" '
                      f'viewBox="0 0 {p["w"]:.2f} {p["h"]:.2f}" overflow="visible">{p["body"]}</svg>')
         parts.append(f'<text x="{x + p["w"] / 2:.2f}" y="5.6" class="lab">{p["label"]}</text>'
@@ -185,7 +189,8 @@ def fig_settings():
     """The Yubi finger pad example, with the cable edge, tail, connector and one taxel named."""
     svg, man, stats, drc = generate(YUBI, **GRID_3MM)
     log(f"  yubi: {stats['total_pixels']} taxels, {man['r']} rows x {man['c']} cols, "
-        f"{stats['connector_pos']}-position connector, DRC {drc['violations']}")
+        f"{stats['connector_pos']}-position connector, DRC {drc['violations']}, tail "
+        f"{stats.get('tail_length_mm')} mm ({stats.get('tail_length_reason')})")
     w, h, style, body = svg_parts(svg)
     so = polygon(svg, "sensor-outline")
     a, b = so[0], so[1]                                  # the cable edge
@@ -227,10 +232,12 @@ def fig_settings():
     label(ry + (a[1] - ry) * 0.40, "Rows", "bottom copper (blue, dashed)", row_pt[0], row_pt[1])
     label(ry + (a[1] - ry) * 0.62, "Columns", "top copper (red)", col_pt[0], col_pt[1])
     label(a[1] - 3.5, "Cable edge", "where the tail leaves the outline", max(a[0], b[0]) - 0.5, a[1])
-    label(tail_mid + 1.5, "Tail", "cut down to the traces it carries", tail_x + 3.0, tail_mid)
+    tail_len = stats.get("tail_length_mm")
+    auto = " (automatic)" if stats.get("tail_length_auto") else ""
+    label(tail_mid + 1.5, "Tail", f"{tail_len:g} mm{auto}, cut down to its traces", tail_x + 3.0, tail_mid)
     label(pad_y + 6.5, "Connector end", f"{stats['connector_pos']} positions, 0.5 mm pitch",
           tail_x + 4.0, pad_y + 1.2)
-    W = R + 46
+    W = R + 52
     style = style.replace(
         "</style>",
         f"  .cable-edge {{ stroke: {AMBER}; stroke-width: 1.1; stroke-linecap: round; }}\n"
@@ -367,6 +374,35 @@ def fig_sim_bumps():
     plt.close(fig)
     log(f"  bumps: max shear added by 1 deg {np.abs(after).max():.2f} N; "
         f"before the turn {np.abs(before).max():.2f} N")
+
+
+def fig_profiles():
+    """The two readout profiles: counts per taxel against force, at 2 and 4 mm pitch."""
+    plt = mpl()
+    from opentac.sim.readout import Readout
+    fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.9), dpi=200, sharey=True)
+    for ax, pitch_mm, fmax in zip(axes, (2.0, 4.0), (3.0, 6.0)):
+        pitch = pitch_mm / 1000.0
+        for name, colour in (("v2", ROW), ("v3", AMBER_DARK)):
+            r = Readout.from_profile(name)
+            f = np.linspace(0, fmax, 600)
+            c = r.counts(f, pitch)
+            inside = ~r.extrapolating(f, pitch)
+            ax.plot(f[inside], c[inside], color=colour, lw=1.6, label=f'"{name}": {r.material}')
+            ax.plot(f[~inside], c[~inside], color=colour, lw=1.2, ls=(0, (3, 2)))
+            log(f"  {name} at {pitch_mm:g} mm: ADC maximum at {r.saturation_force_n(pitch):.3f} N per taxel")
+        ax.axhline(r.adc_max, color="#8a949e", lw=0.7, ls=":")
+        ax.set_title(f"{pitch_mm:g} mm pitch", pad=4)
+        ax.set_xlabel("force on one taxel (N)")
+        ax.grid(color="#e3e6ea", lw=0.5)
+        ax.set_axisbelow(True)
+    axes[0].set_ylabel("counts above baseline")
+    axes[0].text(fmax * 0.98 / 2, r.adc_max - 90, f"ADC maximum, {r.adc_max:.0f}", fontsize=7, color=MUTED,
+                 va="top", ha="right")
+    axes[1].legend(frameon=False, fontsize=7.5, loc="lower right")
+    fig.tight_layout()
+    save_raster(fig, OUT / "sim_readout_profiles.png")
+    plt.close(fig)
 
 
 def fig_take():
@@ -1127,12 +1163,17 @@ def fig_flash():
 
 
 FIGURES = {
-    "modes": fig_modes, "settings": fig_settings, "view": fig_view, "sim": fig_sim,
-    "bumps": fig_sim_bumps, "transfer": fig_transfer, "manifest": fig_manifest,
-    "steps": fig_transfer_steps, "qr_recovered": fig_qr_recovered, "frame_image": fig_frame_image,
-    "qr_forms": fig_qr_forms,
-    "qr_back": fig_qr_back, "boot0": fig_boot0, "bus": fig_bus_connectors, "boot0_30": fig_boot0_30,
-    "take": fig_take, "insole": fig_insole, "stiffener": fig_stiffener, "ffc": fig_ffc, "daisy": fig_daisy, "flash": fig_flash,
+    # design pages
+    "modes": fig_modes, "settings": fig_settings, "insole": fig_insole,
+    "manifest": fig_manifest, "qr_back": fig_qr_back,
+    # build pages
+    "stiffener": fig_stiffener, "ffc": fig_ffc, "boot0": fig_boot0,
+    # use pages
+    "view": fig_view, "frame_image": fig_frame_image, "take": fig_take, "flash": fig_flash,
+    "daisy": fig_daisy, "bus": fig_bus_connectors, "boot0_30": fig_boot0_30,
+    "qr_forms": fig_qr_forms, "qr_recovered": fig_qr_recovered,
+    "sim": fig_sim, "bumps": fig_sim_bumps, "profiles": fig_profiles,
+    "transfer": fig_transfer, "steps": fig_transfer_steps,
 }
 
 
