@@ -86,9 +86,13 @@ def summarize(resp, elapsed: float | None = None) -> str:
     # _build_outputs), so "copper outside the edge" and "traces crossing" are
     # both inside this one number. stats' fixed_keepout_worst_escape_mm is a
     # mid-retry-loop measurement and routinely non-zero on a clean board.
+    # Rows and columns from the manifest: stats' col_routes/row_routes count
+    # routed segments, which overcounts a line split around a notch.
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(resp.zip_b64))) as zf:
+        man = json.loads(zf.read("manifest.json"))
     lines = [
-        f"{s['total_pixels']} taxels, {s['col_routes']} columns x "
-        f"{s['row_routes']} rows, {s['connector_pos']}-position connector, "
+        f"{s['total_pixels']} taxels, {man['c']} columns x "
+        f"{man['r']} rows, {s['connector_pos']}-position connector, "
         f"{s.get('router', 'legacy')} router.",
     ]
     dropped = s.get("max_pack_pixels", 0) - s["total_pixels"]

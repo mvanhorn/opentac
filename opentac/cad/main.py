@@ -3440,7 +3440,11 @@ try:
     app.include_router(chat_router)
     print("[chat] design assistant routes registered")
 except Exception as _chat_exc:      # noqa: BLE001 - never break the site
-    print(f"[chat] disabled: {type(_chat_exc).__name__}: {_chat_exc}")
+    # Without a key the chat is off by design (a local run, a script); say
+    # something only when a key was given but the chat still could not load.
+    if os.environ.get("GEMINI_API_KEY"):
+        print(f"[chat] disabled: {type(_chat_exc).__name__}: {_chat_exc} "
+              "(install the chat's packages: uv run --extra demo opentac cad)")
 
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "web")

@@ -7,10 +7,13 @@
 // sends every request from a locally served page to the DEPLOYED backend — the
 // local backend's new features then appear to "not work" while old production
 // code answers. (This actually happened with the hug router.)
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-export const API_BASE = LOCAL_HOSTS.has(location.hostname)
-  ? ""                                      // local FastAPI serves this page itself
-  : "https://opentac-cad.onrender.com";     // opentac.github.io/cad/ -> Render (render.yaml)
+// Only the GitHub Pages copy has no backend of its own. Any other host is an
+// `opentac cad` server serving this page, whether reached as localhost or by a
+// LAN address (`--host 0.0.0.0`), and must get the designs itself.
+const ON_PAGES = location.hostname.endsWith("github.io");
+export const API_BASE = ON_PAGES
+  ? "https://opentac-cad.onrender.com"     // opentac.github.io/cad/ -> Render (render.yaml)
+  : "";                                     // the opentac cad server serves this page itself
 
 // The OpenTac website, for links out of the tool (header, download panel, help).
 // On opentac.github.io, and in scripts/preview_site.py, this page is served at
