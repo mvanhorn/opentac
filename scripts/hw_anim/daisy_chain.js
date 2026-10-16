@@ -1,13 +1,13 @@
 // Daisy chain: three 30-pin pairs (the real KiCad boards, stacked as in make_board_media.py) are
-// set down, chained with 4-wire JST-SH cables (5 V, SDA, SCL, GND), board to board and to a Teensy
-// 4.0, which is the only USB connection to the computer. Each board's LED takes its node's colour,
-// as `opentac view` sets it, and the controller reads the nodes in turn: a pulse runs from each
-// board along the bus and up the USB cable to that node's panel. The contacts are made up.
-// The Teensy is a plain box with the board's dimensions.
+// chained with 4-wire JST-SH cables (5 V, SDA, SCL, GND), board to board and to a Teensy 4.0, which
+// is the only USB connection to the computer. Close up, the plugs go into the boards' sockets; then
+// the view pulls back to the whole chain. Each board's LED takes its node's colour, as `opentac view`
+// sets it, and the controller reads the nodes in turn: a pulse runs from each board along the bus and
+// up the USB cable to that node's panel. The presses in the panels are simulated. The Teensy is a
+// plain box with the board's dimensions.
 import * as THREE from "three";
-import { C, W, H, DPR, overlay, text, roundRect, start, inferno, seg, ease, clamp, lerp, loadBoard } from "./common.js";
+import { C, W, H, DPR, overlay, text, roundRect, start, inferno, seg, ease, clamp, lerp, pairMaker } from "./common.js";
 
-const T_END = 12;
 const NODE = [[255, 64, 64], [64, 255, 64], [64, 128, 255]];        // opentac/view.py PALETTE
 const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const X_BOARDS = [-18, 30, 78], X_TEENSY = -84;
@@ -45,34 +45,11 @@ function box(w, h, d, m, x = 0, y = 0, z = 0) {
   return b;
 }
 
-// ---- the 30-pin pair: bottom board, top board on its sockets
-const bot = await loadBoard(THREE, "readout_30pin_bottom");
-const top = await loadBoard(THREE, "readout_30pin_top");
-const gap = (await (await fetch("/data/stack.json")).json()).gap;
-const mid = (P, a, b) => [(P[a][0] + P[b][0]) / 2, (P[a][1] + P[b][1]) / 2];
-const [bx, by] = mid(bot.meta.parts, "J2", "J3"), [tx, ty] = mid(top.meta.parts, "J1", "J3");
-const [ox0, oy0, ox1, oy1] = bot.meta.outline;
-const cx = (ox0 + ox1) / 2, cy = (oy0 + oy1) / 2;
-const TOP_Y = 1.6 + gap;                            // top board's underside above the bottom board's
-
-// one pair, in its own frame: KiCad y along +x (CN1 toward the Teensy), board up = +y
-function makePair() {
-  const pair = new THREE.Group(), inner = new THREE.Group();
-  inner.rotation.y = Math.PI / 2;                   // KiCad y (three z) -> +x
-  const b = bot.group.clone(), tp = top.group.clone();
-  b.position.set(-cx, 0, -cy);
-  tp.position.set(bx - tx - cx, TOP_Y, by - ty - cy);
-  inner.add(b, tp);
-  pair.add(inner);
-  const toPair = (P, y) => { const v = new THREE.Vector3(P[0] + bx - tx - cx, TOP_Y + y, P[1] + by - ty - cy); return v.applyEuler(inner.rotation); };
-  return { pair, toPair };
-}
-const P = top.meta.parts;
-let LIFT = 0;                                       // the pair stands on its lowest part
+// ---- the 30-pin pairs
+const { makePair, parts: P } = await pairMaker(THREE);
 const pairs = X_BOARDS.map((x, k) => {
   const { pair, toPair } = makePair();
-  if (!LIFT) LIFT = -new THREE.Box3().setFromObject(pair).min.y;
-  pair.position.set(x, FLOOR_Y + LIFT, 0);
+  pair.position.set(x, FLOOR_Y, 0);
   scene.add(pair);
   const led = toPair(P.LED1, 1.7);
   // LED: a small lit dome and a soft halo, off until the board is set up
@@ -110,8 +87,11 @@ usbPlug.add(box(6.0, 2.2, 7.0, mat("#b8bcc2", { metalness: 0.8, roughness: 0.3 }
 usbPlug.add(box(9.0, 6.0, 10.5, mat("#2a2d31", { roughness: 0.7 }), -10.5, 0, 0));
 scene.add(usbPlug);
 
-// ---- JST-SH cables: four wires (5 V, SDA, SCL, GND), plug housings at the board ends
+// ---- JST-SH cables: four wires (5 V, SDA, SCL, GND), plug housings at the board ends. A plug is
+// held HOVER mm above its socket until it is pushed in; the wires follow it.
 const WIRE_COL = ["#d83a34", "#2f6fd0", "#e9c02a", "#202124"];
+const HOVER = 10;
+const wireMats = WIRE_COL.map(c => mat(c, { roughness: 0.45 }));
 function cablePath(a, b, h) {
   const m = a.clone().add(b).multiplyScalar(0.5);
   const d = Math.sign(b.x - a.x);
@@ -119,22 +99,31 @@ function cablePath(a, b, h) {
     m.clone().setY(Math.max(a.y, b.y) + h), b.clone().add(new THREE.Vector3(-d * 7, h - 3, 0)), b.clone().add(new THREE.Vector3(0, 6, 0)), b]);
 }
 function makeCable(a, b, h, plugA) {
-  const curve = cablePath(a, b, h), grp = new THREE.Group(), tubes = [];
-  for (let w = 0; w < 4; w++) {
-    const off = (w - 1.5) * 1.0;
-    const pts = curve.getPoints(160).map(p => p.clone().add(new THREE.Vector3(0, 0, off)));
-    const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.45, 8, false);
-    const t = new THREE.Mesh(geo, mat(WIRE_COL[w], { roughness: 0.45 }));
-    grp.add(t); tubes.push(t);
-  }
+  const grp = new THREE.Group(), tubes = WIRE_COL.map((_, w) => { const m = new THREE.Mesh(new THREE.BufferGeometry(), wireMats[w]); grp.add(m); return m; });
   const plugs = [];
-  for (const [p, on] of [[a, plugA], [b, true]]) {
-    if (!on) continue;
-    const pl = box(3.4, 4.0, 5.8, mat("#ece4cc", { roughness: 0.55 }), p.x, p.y + 1.4, p.z);
-    grp.add(pl); plugs.push(pl);
+  for (const on of [plugA, true]) {
+    if (!on) { plugs.push(null); continue; }
+    const pl = box(3.4, 4.0, 5.8, mat("#ece4cc", { roughness: 0.55 })); grp.add(pl); plugs.push(pl);
   }
   scene.add(grp);
-  return { grp, tubes, plugs, curve };
+  const c = { grp, tubes, plugs, a, b, h, key: "", curve: null };
+  setCable(c, 0, 0);
+  return c;
+}
+// lift of each end (0 = seated); rebuild the wires only when an end moved
+function setCable(c, la, lb) {
+  const key = la.toFixed(3) + "/" + lb.toFixed(3);
+  if (key === c.key) return;
+  c.key = key;
+  const a = c.a.clone().add(new THREE.Vector3(0, la, 0)), b = c.b.clone().add(new THREE.Vector3(0, lb, 0));
+  c.curve = cablePath(a, b, c.h);
+  c.tubes.forEach((m, w) => {
+    const off = (w - 1.5) * 1.0;
+    const pts = c.curve.getPoints(160).map(p => p.clone().add(new THREE.Vector3(0, 0, off)));
+    m.geometry.dispose();
+    m.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.45, 8, false);
+  });
+  [a, b].forEach((p, i) => { if (c.plugs[i]) c.plugs[i].position.set(p.x, p.y + 1.4, p.z); });
 }
 const cables = [
   makeCable(TEENSY_WIRES, pairs[0].cn1, 18, false),
@@ -145,21 +134,51 @@ const cables = [
 for (let w = 0; w < 4; w++) teensy.add(box(1.4, 0.8, 0.9, mat("#c0c4c8", { metalness: 0.7, roughness: 0.3 }), 16.0, 3.6, (w - 1.5) * 1.0));
 
 // ------------------------------------------------------------------ timeline
-const TB = k => 0.2 + 0.4 * k;                     // board k slides in from the right (0.8 s)
-const TC = k => 2.0 + 0.75 * k;                     // cable k drawn
-const T_USB = 4.35, T_ON = 5.15, T_STREAM = 5.8;
-const T_OFF = 10.45, T_UNPLUG = 10.7, T_EXIT = 11.15;   // stop; unplug; boards slide out, so the last frame is the first
-const SLIDE = 200;                                  // mm: off the right edge of the frame
-const eOut = f => 1 - Math.pow(1 - clamp(f), 3), eIn = f => Math.pow(clamp(f), 3);
+// close on board 0: the first cable goes in; pan: the second cable's two plugs; pull back to the
+// chain (the third cable goes in); USB in; the computer's window comes in; read; then everything
+// is undone in reverse, back to the first frame.
+const PLUG = [[null, 0.45], [2.25, 2.75], [4.15, 4.35]];   // [end a, end b] push-in start, per cable (null: soldered at the Teensy)
+const PUSH = 0.7;                                   // s for a plug to go in
+const T_PAN = [1.35, 2.15], T_BACK = [3.55, 5.35];
+const T_USB = 5.45, T_WIN = [6.05, 6.85], T_ON = 6.95, T_STREAM = 7.5;
+const T_OFF = 12.2, T_WIN_OUT = [12.45, 13.0], T_LIFT = 12.85, T_IN = [13.15, 14.0];
+const T_END = 14;
 const ROUND = 0.45;                                 // s per node read (slowed down)
+
+// camera: one viewing direction, three framings
+const DIR = new THREE.Vector3(0, 300, 330).normalize();
+const VIEWS = [
+  { target: pairs[0].cn1.clone().add(new THREE.Vector3(6, 3, 0)), dist: 98 },
+  { target: pairs[0].cn2.clone().lerp(pairs[1].cn1, 0.5).add(new THREE.Vector3(0, 3, 0)), dist: 104 },
+  { target: new THREE.Vector3(-12, 4, 0), dist: 446 },
+];
+function setCamera(t) {
+  let from = 0, to = 0, f = 0;
+  if (t < T_PAN[0]) [from, to, f] = [0, 0, 0];
+  else if (t < T_PAN[1]) [from, to, f] = [0, 1, ease((t - T_PAN[0]) / (T_PAN[1] - T_PAN[0]))];
+  else if (t < T_BACK[0]) [from, to, f] = [1, 1, 0];
+  else if (t < T_BACK[1]) [from, to, f] = [1, 2, ease((t - T_BACK[0]) / (T_BACK[1] - T_BACK[0]))];
+  else if (t < T_IN[0]) [from, to, f] = [2, 2, 0];
+  else [from, to, f] = [2, 0, ease((t - T_IN[0]) / (T_IN[1] - T_IN[0]))];
+  const A = VIEWS[from], B = VIEWS[to];
+  const target = A.target.clone().lerp(B.target, f), dist = Math.exp(lerp(Math.log(A.dist), Math.log(B.dist), f));
+  camera.position.copy(target).addScaledVector(DIR, dist);
+  camera.lookAt(target);
+  // the window pushes the chain into the lower part of the frame while it is on screen
+  const win = seg(t, T_WIN[0], T_WIN[1]) * (1 - seg(t, T_WIN_OUT[0], T_WIN_OUT[1]));
+  camera.setViewOffset(W, H, 0, -262 * win, W, H);
+  camera.updateMatrixWorld();
+  const wide = from === 2 && to === 2 ? 1 : from === 2 || to === 2 ? (from === 2 ? 1 - f : f) : 0;
+  return { win, wide };
+}
+const pushed = (t, t0) => t0 === null ? 1 : ease((t - t0) / PUSH) * (1 - ease((t - T_LIFT) / 0.4));
 
 // ------------------------------------------------------------------ 2D overlay
 const ctx = overlay(2);
 const WIN = { x: 40, y: 22, w: 1200, h: 420 };
-const PAN = k => ({ x: WIN.x + 24 + k * 392, y: WIN.y + 62, w: 368, h: 340 });
-const G = 12;                                       // taxels per side of the made-up sensors
+const G = 12;                                       // taxels per side of the simulated sensors
 
-function contact(k, i, j, t) {                      // made-up presses, a different one per node
+function contact(k, i, j, t) {                      // simulated presses, a different one per node
   const g = (x, y, s) => Math.exp(-(x * x + y * y) / (2 * s * s));
   if (k === 0) {
     const p = 0.55 + 0.45 * Math.sin(2 * Math.PI * t / 3);
@@ -173,32 +192,27 @@ function contact(k, i, j, t) {                      // made-up presses, a differ
   return 0.9 * g((i - 2 - 0.65 * j) * 0.9, (j - y) * 0.6, 1.3) * (0.7 + 0.3 * Math.cos(t));
 }
 
-let screenPaths = null;                             // per node: polyline in frame pixels to the window
 function project(v) {
   const p = v.clone().project(camera);
   return [(p.x + 1) / 2 * W, (1 - p.y) / 2 * H];
 }
-function buildPaths() {
-  const usb2d = usbPath();
-  screenPaths = pairs.map((pr, k) => {
-    const pts3 = [];
-    for (let c = k; c >= 0; c--) {                  // from board k back along each cable to the Teensy
-      if (c < k) pts3.push(pairs[c].cn2.clone(), pairs[c].cn1.clone());
-      const pts = cables[c].curve.getPoints(80).reverse();
-      pts3.push(...pts);
-    }
-    pts3.push(TEENSY_WIRES.clone(), TEENSY_USB.clone());
-    return pts3.map(project).concat(usb2d.slice(1));
-  });
-}
-function usbPath() {                                // from the Teensy's USB plug, out and up into the window
-  const a = project(new THREE.Vector3(X_TEENSY - 34, 4.8, 0)), e = [150, WIN.y + WIN.h];
-  const c1 = [a[0] - 70, a[1] + 10], c2 = [e[0], e[1] + 150], out = [];
+function usbPath(winY) {                            // from the Teensy's USB plug, out and up to the window
+  const a = project(new THREE.Vector3(X_TEENSY - 34, 4.8, 0)), e = [150, winY + WIN.h];
+  const c1 = [a[0] - 70, a[1] + 10], c2 = [e[0], Math.max(e[1], 0) + 150], out = [];
   for (let i = 0; i <= 40; i++) {
     const f = i / 40, g = 1 - f;
     out.push([0, 1].map(d => g * g * g * a[d] + 3 * g * g * f * c1[d] + 3 * g * f * f * c2[d] + f * f * f * e[d]));
   }
   return [project(TEENSY_USB)].concat(out);
+}
+function busPath(k, winY) {                         // node k: back along each cable to the Teensy, then USB
+  const pts3 = [];
+  for (let c = k; c >= 0; c--) {
+    if (c < k) pts3.push(pairs[c].cn2.clone(), pairs[c].cn1.clone());
+    pts3.push(...cables[c].curve.getPoints(80).reverse());
+  }
+  pts3.push(TEENSY_WIRES.clone(), TEENSY_USB.clone());
+  return pts3.map(project).concat(usbPath(winY).slice(1));
 }
 function polyAt(pts, f) {
   const L = [0];
@@ -216,46 +230,36 @@ function drawPoly(pts, f, color, width) {
 function label(s, x, y, a, opts = {}) { text(ctx, s, x, y, Object.assign({ size: 32, color: C.ink, align: "center", alpha: a }, opts)); }
 
 function renderAt(t) {
-  const out = 1 - seg(t, T_OFF, T_OFF + 0.3);       // panels, LEDs and labels go off at the end
-  // boards: slide in from the right, one after another; out again at the end, rightmost first
+  const { win, wide } = setCamera(t);
+  const out = 1 - seg(t, T_OFF, T_OFF + 0.3);       // LEDs, panels and node labels go off at the end
+  const on = k => seg(t, T_ON + 0.18 * k, T_ON + 0.18 * k + 0.3) * out;
   pairs.forEach(pr => {
-    const a = eOut((t - TB(pr.k)) / 0.8), b = eIn((t - (T_EXIT + 0.1 * (2 - pr.k))) / 0.6);
-    pr.pair.position.x = X_BOARDS[pr.k] + SLIDE * (1 - a) + SLIDE * b;
-    pr.pair.visible = a > 0 && b < 1;
-    const on = seg(t, T_ON + 0.18 * pr.k, T_ON + 0.18 * pr.k + 0.3) * out;
-    pr.dome.material.color.setRGB(...(on > 0.5 ? NODE[pr.k].map(v => v / 255) : [0.13, 0.13, 0.13]));
-    pr.halo.material.opacity = on * 0.9;
+    const a = on(pr.k);
+    pr.dome.material.color.setRGB(...(a > 0.5 ? NODE[pr.k].map(v => v / 255) : [0.13, 0.13, 0.13]));
+    pr.halo.material.opacity = a * 0.9;
   });
-  // cables: grow from the Teensy end outward, the plug going in as each arrives; drawn back in at the end
-  cables.forEach((c, k) => {
-    const u = T_UNPLUG + 0.08 * (2 - k);
-    const a = seg(t, TC(k), TC(k) + 0.65) * (1 - seg(t, u, u + 0.35));
-    c.grp.visible = a > 0;
-    c.tubes.forEach(tb => tb.geometry.setDrawRange(0, Math.round(tb.geometry.index.count * a / 48) * 48));
-    c.plugs.forEach((pl, i) => { pl.visible = i === c.plugs.length - 1 ? a > 0.9 : a > 0; });
-  });
-  const usbIn = seg(t, T_USB, T_USB + 0.4), usbOut = seg(t, T_UNPLUG + 0.25, T_UNPLUG + 0.55);
-  usbPlug.position.copy(TEENSY_USB).add(new THREE.Vector3(-14 * (1 - usbIn) - 14 * usbOut, 0, 0));
-  usbPlug.visible = t > T_USB && usbOut < 1;
+  cables.forEach((c, k) => setCable(c, HOVER * (1 - pushed(t, PLUG[k][0])), HOVER * (1 - pushed(t, PLUG[k][1]))));
+  const usbIn = seg(t, T_USB, T_USB + 0.4) * (1 - seg(t, T_WIN_OUT[0], T_WIN_OUT[0] + 0.3));
+  usbPlug.position.copy(TEENSY_USB).add(new THREE.Vector3(-14 * (1 - usbIn), 0, 0));
+  usbPlug.visible = usbIn > 0;
   renderer.render(scene, camera);
-  if (!screenPaths) buildPaths();
 
   ctx.clearRect(0, 0, W, H);
-  // USB cable, in the frame's plane, up into the computer window
-  const usbGrow = seg(t, T_USB + 0.25, T_USB + 0.85) * (1 - seg(t, T_UNPLUG - 0.1, T_UNPLUG + 0.3));
-  if (usbGrow > 0) {
-    ctx.save();
-    drawPoly(usbPath().slice(1), usbGrow, "#2a2d31", 11);
-    ctx.restore();
-  }
+  const winY = lerp(-WIN.h - 40, 22, win);
+  // USB cable, in the frame's plane, from the plug up to the computer's window (above the frame until it comes in)
+  const usbGrow = seg(t, T_USB + 0.25, T_USB + 0.7) * (1 - seg(t, T_WIN_OUT[0], T_WIN_OUT[0] + 0.3));
+  if (usbGrow > 0) drawPoly(usbPath(winY).slice(1), usbGrow, "#2a2d31", 11);
   // computer window: `opentac view`, one panel per node
-  ctx.save();
-  roundRect(ctx, WIN.x, WIN.y, WIN.w, WIN.h, 14); ctx.fillStyle = "#161c23"; ctx.fill();
-  ctx.restore();
-  text(ctx, "computer: opentac view", WIN.x + 26, WIN.y + 42, { size: 30, color: "#aab3bd", weight: 500 });
+  if (win > 0) {
+    ctx.save();
+    roundRect(ctx, WIN.x, winY, WIN.w, WIN.h, 14); ctx.fillStyle = "#161c23"; ctx.fill();
+    ctx.restore();
+    text(ctx, "computer: opentac view", WIN.x + 26, winY + 42, { size: 30, color: "#aab3bd", weight: 500 });
+  }
+  const PAN = k => ({ x: WIN.x + 24 + k * 392, y: winY + 62, w: 368, h: 340 });
   pairs.forEach((pr, k) => {
     const a = seg(t, T_ON + 0.18 * k, T_ON + 0.18 * k + 0.4) * out, R = PAN(k);
-    if (a <= 0) return;
+    if (a <= 0 || win <= 0) return;
     const cs = (R.h - 50) / G, gx = R.x + (R.w - cs * G) / 2, gy = R.y + 46;
     text(ctx, `node ${k}`, gx - 4, R.y + 32, { size: 32, weight: 700, color: rgb(NODE[k]), alpha: a });
     ctx.save(); ctx.globalAlpha = a;
@@ -268,12 +272,12 @@ function renderAt(t) {
   });
   // bus traffic: the controller reads node 0, 1, 2, 0, ... each pulse runs to the window
   if (t > T_STREAM && t < T_OFF) {
-    const r = (t - T_STREAM) / ROUND, k = Math.floor(r) % 3, f = r - Math.floor(r);
-    const [px, py] = polyAt(screenPaths[k], f);
+    const r = (t - T_STREAM) / ROUND, k = Math.floor(r) % 3, f = r - Math.floor(r), path = busPath(k, winY);
+    const [px, py] = polyAt(path, f);
     ctx.save();
     ctx.lineCap = "round";
     for (let i = 1; i <= 8; i++) {                  // a short trail behind the pulse
-      const [ax, ay] = polyAt(screenPaths[k], Math.max(0, f - 0.012 * i)), [bx2, by2] = polyAt(screenPaths[k], Math.max(0, f - 0.012 * (i - 1)));
+      const [ax, ay] = polyAt(path, Math.max(0, f - 0.012 * i)), [bx2, by2] = polyAt(path, Math.max(0, f - 0.012 * (i - 1)));
       ctx.strokeStyle = rgb(NODE[k], 0.75 * (1 - i / 9)); ctx.lineWidth = 9 * (1 - i / 12);
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx2, by2); ctx.stroke();
     }
@@ -293,21 +297,25 @@ function renderAt(t) {
       roundRect(ctx, R.x - 12, R.y - 6, R.w + 24, R.h + 12, 10); ctx.stroke(); ctx.restore();
     }
   }
-  // labels
+  // labels: the cable close up; the parts in the wide view
+  const cl = 1 - seg(wide, 0, 0.3);
+  if (cl > 0) {
+    ctx.save(); ctx.globalAlpha = cl * 0.9; roundRect(ctx, W / 2 - 320, 868, 640, 60, 12); ctx.fillStyle = C.bg; ctx.fill(); ctx.restore();
+    label("JST-SH cable: 5 V, SDA, SCL, GND", W / 2, 910, cl, { size: 36, color: C.ink });
+  }
   const tl = project(new THREE.Vector3(X_TEENSY, 0, 16));
-  label("Teensy 4.0", tl[0], tl[1] + 40, 1);
+  label("Teensy 4.0", tl[0], tl[1] + 40, seg(wide, 0.7, 1));
   pairs.forEach((pr, k) => {
-    const p = project(new THREE.Vector3(X_BOARDS[k], 0, 16)), a = seg(t, T_ON + 0.18 * k, T_ON + 0.18 * k + 0.4) * out;
+    const p = project(new THREE.Vector3(X_BOARDS[k], 0, 16)), a = on(k) * seg(wide, 0.7, 1);
     if (a <= 0) return;
     ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgb(NODE[k]);
     ctx.beginPath(); ctx.arc(p[0] - 62, p[1] + 29, 10, 0, 2 * Math.PI); ctx.fill(); ctx.restore();
     label(`node ${k}`, p[0] + 12, p[1] + 40, a);
   });
-  const c1 = project(cables[1].curve.getPoint(0.5).add(new THREE.Vector3(0, 6, 0)));
-  label("JST-SH: 5 V, SDA, SCL, GND", c1[0], c1[1] - 34, seg(t, TC(1), TC(1) + 0.4) * out, { size: 30, color: C.muted });
-  const u = usbPath()[20];
-  label("USB", u[0] + 22, u[1] + 10, seg(t, T_USB + 0.5, T_USB + 0.9) * (1 - seg(t, T_UNPLUG - 0.2, T_UNPLUG)), { size: 32, align: "left" });
-  label("… up to 18 boards", WIN.x + WIN.w, c1[1] - 34, seg(t, TC(2) + 0.7, TC(2) + 1.1) * out, { size: 30, color: C.muted, align: "right" });
+  const e = project(new THREE.Vector3(X_BOARDS[2] + 14, 34, 0));
+  label("… up to 18 boards", Math.min(e[0] + 40, W - 40), e[1], seg(wide, 0.7, 1) * seg(t, T_BACK[1] - 0.3, T_BACK[1] + 0.2) * (1 - seg(t, T_WIN_OUT[0], T_WIN_OUT[1])), { size: 30, color: C.muted, align: "right" });
+  const u = usbPath(winY)[20];
+  label("USB", u[0] + 22, u[1] + 10, seg(t, T_USB + 0.5, T_USB + 0.9) * (1 - seg(t, T_WIN_OUT[0], T_WIN_OUT[0] + 0.2)), { size: 32, align: "left" });
 }
 
 start(renderAt, T_END);

@@ -94,3 +94,32 @@ export async function loadBoard(THREE, name) {
 
 // KiCad (x, y) in mm -> the board group's local coordinates.
 export const kpos = (THREE, x, y, up = 0) => new THREE.Vector3(x, up, y);
+
+// The 30-pin pair: the top board on the bottom board's sockets (header rows J1/J3 on socket rows J2/J3,
+// 'gap' mm between the boards, as in make_board_media.py). makePair() returns a group in its own frame:
+// KiCad y along +x (the top board's CN1 toward -x), board up = +y, standing on its lowest part at y = 0;
+// toPair([x, y], up) maps a top-board KiCad point to that frame.
+export async function pairMaker(THREE) {
+  const bot = await loadBoard(THREE, "readout_30pin_bottom");
+  const top = await loadBoard(THREE, "readout_30pin_top");
+  const gap = (await (await fetch("/data/stack.json")).json()).gap;
+  const mid = (P, a, b) => [(P[a][0] + P[b][0]) / 2, (P[a][1] + P[b][1]) / 2];
+  const [bx, by] = mid(bot.meta.parts, "J2", "J3"), [tx, ty] = mid(top.meta.parts, "J1", "J3");
+  const [ox0, oy0, ox1, oy1] = bot.meta.outline;
+  const cx = (ox0 + ox1) / 2, cy = (oy0 + oy1) / 2;
+  const TOP_Y = 1.6 + gap;                          // top board's underside above the bottom board's
+  let lift = null;
+  function makePair() {
+    const pair = new THREE.Group(), lifted = new THREE.Group(), inner = new THREE.Group();
+    inner.rotation.y = Math.PI / 2;                 // KiCad y (three z) -> +x
+    const b = bot.group.clone(), tp = top.group.clone();
+    b.position.set(-cx, 0, -cy);
+    tp.position.set(bx - tx - cx, TOP_Y, by - ty - cy);
+    inner.add(b, tp); lifted.add(inner); pair.add(lifted);
+    if (lift === null) lift = -new THREE.Box3().setFromObject(pair).min.y;
+    lifted.position.y = lift;
+    const toPair = (P, up) => new THREE.Vector3(P[0] + bx - tx - cx, TOP_Y + up, P[1] + by - ty - cy).applyEuler(inner.rotation).add(lifted.position);
+    return { pair, toPair };
+  }
+  return { makePair, parts: top.meta.parts, topOutline: top.meta.outline };
+}

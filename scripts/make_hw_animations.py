@@ -12,7 +12,9 @@ Writes into docs/assets/boards/:
                                                     is solved for every step)
     imu.mp4, imu_poster.jpg                         a recorded take: the board turned by its
                                                     quaternion, the accelerometer, the tactile frame
-    daisy_chain.mp4, daisy_chain_poster.jpg         three 30-pin pairs chained to a Teensy 4.0
+    daisy_chain.mp4, daisy_chain_poster.jpg         three 30-pin pairs chained to a Teensy 4.0: close
+                                                    up the JST-SH plugs go in, then the whole chain
+    usb.jpg                                         a still: both boards with a micro-USB cable in
 
 The scenes are in scripts/hw_anim/ and use the three.js in opentac/cad/web/vendor/three/. Each
 clip is drawn frame by frame in headless Chrome (window.renderAt(t)) and encoded with ffmpeg.
@@ -59,14 +61,17 @@ RECORDING = (Path.home() / "Library/CloudStorage/OneDrive-MassachusettsInstitute
 IMU_WINDOW = (10.5, 22.5)      # s on the recording's clock (sum of the board's dt_us)
 IMU_HISTORY = 4.0              # s of trace already on screen at the first frame
 IMU_XFADE = 0.3                # s: the clip's last frames dissolve into the frames just before its start
+VIB_HIGHPASS_HZ = 8.0          # vibration = acceleration minus gravity and slow motion
 
 W, H, FPS = 1280, 960, 30
 CLIPS = {
-    # name: (seconds, poster time, crf)
+    # name: (seconds (None: the scene's own length), poster time, crf); a None crf is a still (JPEG, W x 640)
     "zero_potential": (None, 8.4, 20),
-    "imu": (IMU_WINDOW[1] - IMU_WINDOW[0], 7.9, 21),
-    "daisy_chain": (None, 7.0, 20),
+    "imu": (IMU_WINDOW[1] - IMU_WINDOW[0], 7.85, 23),
+    "daisy_chain": (None, 9.0, 20),
+    "usb": (None, None, None),
 }
+STILL_H = 640
 
 # Parts the scenes need to know the positions of (KiCad mm), per board.
 REFS = {"readout_60pin": ["IC5", "LED1", "J4", "USB2"],
@@ -174,6 +179,12 @@ def export_imu(recording, work):
     quat = z["quat"][sel]                     # w, x, y, z: the sensor's own fusion, sensor axes
     quat *= np.sign(quat[:, :1] + 1e-12)      # one hemisphere, so interpolation takes the short way
     accel = z["accel"][sel] / 1000.0          # mg -> g, axes as recorded
+    # Vibration: each axis high-passed (2nd-order Butterworth, run forward and back so nothing shifts
+    # in time), over the whole take so the window has no edge effects; then its magnitude.
+    from scipy.signal import butter, filtfilt
+    fs = 1 / np.median(np.diff(t))
+    b, a = butter(2, VIB_HIGHPASS_HZ, "highpass", fs=fs)
+    vib = np.linalg.norm(filtfilt(b, a, z["accel"] / 1000.0, axis=0), axis=1)[sel]
     tac = np.clip(z["raw"][sel].astype(float) - z["baseline"][None], 0, None)
     # One tactile frame per video frame: the median of the scans that finished in that 1/30 s.
     f0 = -int(round(IMU_XFADE * FPS))
@@ -186,6 +197,7 @@ def export_imu(recording, work):
     frames = np.round(np.array(frames)).astype(int)
     out = {
         "t": np.round(ts, 5).tolist(), "quat": np.round(quat, 5).tolist(), "accel": np.round(accel, 4).tolist(),
+        "vib": np.round(vib, 4).tolist(), "vib_highpass_hz": VIB_HIGHPASS_HZ,
         "xy": np.round(z["xy"], 3).tolist(), "rc": z["grid_rc"].tolist(),
         "frames": frames.tolist(), "frame0": f0, "fps": FPS, "duration": t1 - t0, "history": IMU_HISTORY,
     }
@@ -217,8 +229,8 @@ def serve(work, port=0):
     return srv, srv.server_address[1]
 
 
-def capture(name, port, frames_dir, puppeteer, seconds=None, start=0.0):
-    url = f"http://127.0.0.1:{port}/scene/index.html?clip={name}&capture=1&w={W}&h={H}&dpr=2"
+def capture(name, port, frames_dir, puppeteer, seconds=None, start=0.0, h=H):
+    url = f"http://127.0.0.1:{port}/scene/index.html?clip={name}&capture=1&w={W}&h={h}&dpr=2"
     env = dict(os.environ, PUPPETEER_CORE=str(puppeteer), CHROME=CHROME)
     args = ["node", SCENES / "capture.js", url, frames_dir, FPS]
     if seconds:
@@ -290,7 +302,7 @@ def main():
     with tempfile.TemporaryDirectory() as td:
         work = args.work or Path(td)
         work.mkdir(parents=True, exist_ok=True)
-        if {"imu", "daisy_chain"} & set(args.clips):
+        if {"imu", "daisy_chain", "usb"} & set(args.clips):
             export_boards(args.models, work)
         if "imu" in args.clips:
             export_imu(args.recording, work)
@@ -307,6 +319,13 @@ def main():
             frames = work / f"frames_{name}"
             shutil.rmtree(frames, ignore_errors=True)
             frames.mkdir()
+            if crf is None:                                   # a still
+                capture(name, port, frames, args.puppeteer, 1 / FPS, 0.0, STILL_H)
+                jpg = OUT / f"{name}.jpg"
+                Image.open(frames / "f0000.png").convert("RGB").resize((W, STILL_H), Image.LANCZOS).save(
+                    jpg, quality=86, optimize=True, progressive=True)
+                print(f"  {jpg.relative_to(ROOT)}: {W}x{STILL_H}, {jpg.stat().st_size / 1e3:.0f} kB")
+                continue
             pre = round(IMU_XFADE * FPS) if name == "imu" else 0
             capture(name, port, frames, args.puppeteer, seconds and seconds + pre / FPS, -pre / FPS)
             mp4 = OUT / f"{name}.mp4"
