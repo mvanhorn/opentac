@@ -9,6 +9,8 @@ ffmpeg on PATH. Writes into docs/assets/boards/:
 
     readout60.png, readout60_spin.mp4                    60-pin board
     readout30.png, readout30_exploded.png, readout30_spin.mp4   30-pin pair, stacked
+    readout60_poster.jpg, readout30_poster.jpg           first frame of each loop, its
+                                                         poster on the website
 
 The 30-pin pair is shown stacked. The top board is exported to STEP, recoloured to
 match KiCad's own board colours, and placed on the bottom board's socket J2 in a
@@ -216,6 +218,8 @@ def spin(pcb, mp4, tilt, start, step, zoom, tmp, pivot_cm=0.0):
         bg = Image.new("RGBA", im.size, VIDEO_BG + (255,))
         bg.alpha_composite(im)
         bg.crop(box).convert("RGB").resize((w, h), Image.LANCZOS).save(frames / f"c{i:03d}.png")
+    poster = mp4.with_name(mp4.stem.replace("_spin", "_poster") + ".jpg")
+    Image.open(frames / "c000.png").save(poster, quality=84, optimize=True, progressive=True)
     run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", FPS, "-i", frames / "c%03d.png",
          "-c:v", "libx264", "-preset", "slow", "-crf", "22", "-pix_fmt", "yuv420p",
          "-movflags", "+faststart", "-an", mp4])
