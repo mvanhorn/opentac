@@ -199,8 +199,10 @@ synthetic 1mm tail extension automatically at export time if the user never
 drew one, so a plain export is already a complete, connectable board (0.000mm
 track-to-drill gap). Drawing a custom tail is optional polish (a longer reach,
 a bent path around an obstacle) — do it only if they ask for something the
-automatic 1mm does not cover, and use the held `edit_data` with
-`redo_padding()` so it does not re-route the board.
+automatic 1mm does not cover. To change a finished board without re-routing it
+(a typed `cable_length_mm`, other padding settings), use the tool's Redo
+padding with the held `edit_data`:
+`opentac.cad.main.redo_padding(RedoPaddingRequest(edit_data=ed, routes=ed["routes"], params={...}))`.
 
 The tail is narrow by default (`narrow_tail=True`): after routing it is cut down
 to the traces it carries and steps out to the connector's width just before
