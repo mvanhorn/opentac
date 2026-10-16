@@ -605,8 +605,12 @@ def kicad_project_files(params) -> dict[str, str]:
         return round(float(x), 4)
 
     annular = (float(params.via_dia_mm) - float(params.via_drill_mm)) / 2
+    # Closest approach of a taxel's two electrodes: the fingers are the
+    # electrode gap apart, and each finger tip (and the row via) stops
+    # center_clear short of the other electrode (kicad_footprint.pixel_geometry).
+    electrode_gap = min(params.gap_mm, params.center_clear_mm)
     rules = {
-        "min_clearance": mm(min(params.gap_mm, params.clearance_mm)),
+        "min_clearance": mm(min(electrode_gap, params.clearance_mm)),
         "min_track_width": mm(params.trace_w_mm),
         "min_via_diameter": mm(params.via_dia_mm),
         # KiCad measures a round pad on its polygon approximation (max_error
@@ -637,12 +641,14 @@ def kicad_project_files(params) -> dict[str, str]:
         "  (constraint annular_width (min 0mm))\n"
         "  (severity ignore))\n"
         # Inside a taxel the row and column electrodes are the design's
-        # electrode gap apart, which can be tighter than the routing clearance
-        # (the calibration set goes down to 0.1 mm). Everything else keeps the
-        # net class's routing clearance.
-        "# A taxel's two electrodes are the electrode gap apart.\n"
+        # electrode gap apart (finger to finger) and center_clear apart (finger
+        # tip to the other spine or the row via); either can be tighter than the
+        # routing clearance (the calibration set goes down to 0.1 mm). Everything
+        # else keeps the net class's routing clearance.
+        "# A taxel's two electrodes: the electrode gap between fingers, the\n"
+        "# centre clearance at the finger tips.\n"
         "(rule \"Taxel electrode gap\"\n"
         "  (condition \"A.Parent == 'PX*' && B.Parent == A.Parent\")\n"
-        f"  (constraint clearance (min {mm(params.gap_mm)}mm)))\n"
+        f"  (constraint clearance (min {mm(electrode_gap)}mm)))\n"
     )
     return {"board.kicad_pro": json.dumps(pro, indent=2) + "\n", "board.kicad_dru": dru}

@@ -24,6 +24,11 @@ CASES = {
     "square": {"outline": [[-20, -20], [20, -20], [20, 20], [-20, 20]]},
     "tight_gap_4layer": {"outline": [[-15, -15], [15, -15], [15, 15], [-15, 15]],
                          "gap_mm": 0.1, "copper_layers": 4},
+    # Electrode gap wider than the 0.2 mm centre clearance, as in the
+    # calibration set's gap 0.3-0.5 designs: the finger tips set the minimum.
+    "wide_gap_2mm": {"outline": [[-10, 0], [10, 0], [10, 20], [-10, 20]],
+                     "pixel_w_mm": 2.0, "pixel_h_mm": 2.0, "pitch_x_mm": 2.0, "pitch_y_mm": 2.0,
+                     "gap_mm": 0.4},
     "fixed": {"outline": [[0, 0], [50, 0], [50, 20], [25, 20], [25, 40], [0, 40]],
               "board_mode": "fixed_keepout"},
 }
