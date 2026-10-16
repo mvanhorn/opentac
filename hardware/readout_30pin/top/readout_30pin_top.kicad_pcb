@@ -1718,7 +1718,7 @@
 				(pins "1" "5" "3" "4" "2" "6")
 			)
 		)
-		(attr exclude_from_bom)
+		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
 			(start -1.905 1.27)
