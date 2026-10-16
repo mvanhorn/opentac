@@ -80,6 +80,7 @@ def params_to_dict(params: Params) -> dict:
         "via_dia_mm": params.via_dia_mm,
         "pad_pitch_mm": params.pad_pitch_mm,
         "cable_length_mm": params.cable_length_mm,
+        "cable_length_auto": bool(getattr(params, "cable_length_auto", False)),
         "tail_width_mm": params.tail_width_mm,
         "tail_side_padding_mm": params.tail_side_padding_mm,
         "board_edge_clear_mm": params.board_edge_clear_mm,

@@ -35,7 +35,7 @@ from opentac.cad.pipeline.layout import (
     solve_grid_pixel_size,
 )
 from opentac.cad.pipeline.bump_sheet import BumpParams, build_bump_sheet
-from opentac.cad.pipeline.case import CaseParams, build_case
+from opentac.cad.pipeline.case import NECK_STABLE_MM, CaseParams, build_case, case_cable_check
 from opentac.cad.pipeline import keepout as keepout_mod
 from opentac.cad.pipeline.keepout import _TOO_SMALL_MSG as _KEEPOUT_TOO_SMALL_MSG
 _UNROUTED_MSG = (
@@ -49,6 +49,10 @@ from opentac.cad.pipeline.route_rows import make_row_entries_horizontal, route_r
 from opentac.cad.pipeline.tail_extension import apply_tail_extension, tail_extension_from_layout
 from opentac.cad.pipeline.follow_padding import apply_main_follow_padding, cable_without_landing, route_containment_mm
 from opentac.cad.pipeline.narrow_tail import narrow_routed_tail
+from opentac.cad.pipeline.tail_length import (
+    AUTO_TAIL_MIN_MM, REASON_CASE, REASON_FIT, REASON_MIN, REASON_TYPED, fit_tail_length, round_up_length,
+    stretch_routed_tail,
+)
 from opentac.cad.pipeline.validate import validate_routes
 from opentac.cad.pipeline.smooth import chamfer_layer, los_simplify_layer, taxel_copper_keepout_mm
 from opentac.cad.pipeline.drc import TaxelCopper, drc_check
@@ -167,7 +171,13 @@ class GenerateRequest(BaseModel):
     via_drill_mm: float = 0.15
     via_dia_mm: float = 0.35
     pad_pitch_mm: float = 0.5
-    cable_length_mm: float = 12.0
+    cable_length_mm: float | None = Field(
+        None, gt=0,
+        description="Tail length (mm) from the cable edge to the connector. Omit for "
+                    "automatic: the shortest tail of at least 12 mm, in 0.5 mm steps, that "
+                    "lets the narrow tail reach the width of its wires and lets the printed "
+                    "case clear the connector body (stats tail_length_mm / "
+                    "tail_length_reason). A number is used as given.")
     tail_width_mm: float | None = None
     tail_side_padding_mm: float = 0.0
     board_edge_clear_mm: float = 0.2
@@ -480,8 +490,12 @@ def _merge_param_overrides(edit_data: dict, overrides: dict | None) -> dict:
         return edit_data
     # copper_layers is a routing decision: changing it means re-routing, so
     # it is not something a re-export of existing routes can override
-    allowed = set(_params_to_dict(Params()).keys()) - {"copper_layers"}
+    allowed = set(_params_to_dict(Params()).keys()) - {"copper_layers", "cable_length_auto"}
     clean = {k: v for k, v in overrides.items() if k in allowed}
+    # A blank Tail length field is "automatic": the stored edit_data already
+    # carries the length chosen for this board, and its routes end at it.
+    if clean.get("cable_length_mm") is None:
+        clean.pop("cable_length_mm", None)
     if not clean:
         return edit_data
     merged = dict(edit_data)
@@ -1241,6 +1255,51 @@ def _capture_pre_follow_outline(layout: Layout) -> None:
         layout.tail["pre_follow_final_outline"] = np.asarray(layout.final_outline_xy, dtype=float).tolist()
 
 
+def _finish_board(layout: Layout, col_routes: list[Route], row_routes: list[Route], params: Params) -> None:
+    """The routed board's final shape: the tail cut to its wires, the safety net
+    round every wire, then the board shrink-wrapped to the copper."""
+    narrow_routed_tail(layout, [*col_routes, *row_routes], params)
+    _apply_post_route_containment(layout, col_routes, row_routes, params)
+    _capture_pre_follow_outline(layout)
+    apply_main_follow_padding(layout, [*col_routes, *row_routes], params)
+
+
+def _auto_tail_length(layout: Layout, outline_xy: np.ndarray, col_routes: list[Route],
+                      row_routes: list[Route], params: Params):
+    """Finish a board routed with the minimum tail at the tail length it needs.
+
+    See pipeline/tail_length.py. The narrow tail's own need is known from the
+    pads before anything is built; the printed case's is measured on the
+    finished outline with the case builder's own 2D check, and when it asks for
+    more the tail is stretched further from the routed board and finished again
+    (narrowing and padding only, a fraction of a routing pass). Returns the
+    finished layout, routes and params, cable_length_mm set to the chosen
+    length."""
+    base = AUTO_TAIL_MIN_MM
+    fit = fit_tail_length(layout, params)
+    length = max(base, round_up_length(fit))
+    reason = REASON_FIT if length > base else REASON_MIN
+    cable_y = float(np.min(np.asarray(outline_xy, dtype=float)[:2, 1]))
+    routed = (layout, col_routes, row_routes)
+    for attempt in range(4):
+        lay, cr, rr = copy.deepcopy(routed)
+        p = replace(params, cable_length_mm=length)
+        stretch_routed_tail(lay, [*cr, *rr], p, length - base)
+        _finish_board(lay, cr, rr, p)
+        check = case_cable_check(lay.final_outline_xy, cable_y, CaseParams())
+        # A tail that never holds one width for the case to grip gets one from a
+        # longer straight run; one as wide as the board cannot be helped.
+        more = check["short_mm"] or (NECK_STABLE_MM if check["no_tail"] == "unsteady" else 0.0)
+        if more <= 0 or attempt == 3:
+            break
+        length = round_up_length(length + more)
+        reason = REASON_CASE
+    lay.tail["length_auto"] = True
+    lay.tail["length_reason"] = reason
+    lay.tail["length_case_warnings"] = check["warnings"]
+    return lay, cr, rr, p
+
+
 def _routes_from_payload(routes_data: list[dict]) -> tuple[list[Route], list[Route]]:
     col_routes = []
     row_routes = []
@@ -1634,6 +1693,8 @@ def _build_outputs(
             else "Physical connector export supports only 20/30/32/40/50/60/70/80/90/100-pin footprints."
         ),
         "tail_length_mm": round(layout.tail.get("length_mm", params.cable_length_mm), 3),
+        "tail_length_auto": bool(layout.tail.get("length_auto", False)),
+        "tail_length_reason": layout.tail.get("length_reason", REASON_TYPED),
         "tail_width_mm": round(layout.tail.get("width_mm", 0.0), 3),
         "tail_side_padding_mm": round(layout.tail.get("side_padding_mm", params.tail_side_padding_mm), 3),
         "tail_clamp_reason": layout.tail.get("clamp_reason"),
@@ -1810,7 +1871,9 @@ def generate(req: GenerateRequest):
             via_drill_mm=req.via_drill_mm,
             via_dia_mm=req.via_dia_mm,
             pad_pitch_mm=req.pad_pitch_mm,
-            cable_length_mm=req.cable_length_mm,
+            # Automatic: routed with the minimum, lengthened after routing.
+            cable_length_mm=AUTO_TAIL_MIN_MM if req.cable_length_mm is None else req.cable_length_mm,
+            cable_length_auto=req.cable_length_mm is None,
             tail_width_mm=req.tail_width_mm,
             tail_side_padding_mm=req.tail_side_padding_mm,
             board_edge_clear_mm=req.board_edge_clear_mm,
@@ -2196,10 +2259,12 @@ def generate(req: GenerateRequest):
                 fractions=(1.0, 0.65, 0.4, 0.22, 0.12, 0.06, 0.025))
             row_routes = chamfer_layer(
                 row_routes, layout, removed, outline_xy, params, pixel_keepout_mm=row_sensor_gap)
-        narrow_routed_tail(layout, [*col_routes, *row_routes], params)
-        _apply_post_route_containment(layout, col_routes, row_routes, params)
-        _capture_pre_follow_outline(layout)
-        apply_main_follow_padding(layout, [*col_routes, *row_routes], params)
+        if params.cable_length_auto:
+            layout, col_routes, row_routes, params = _auto_tail_length(
+                layout, outline_xy, col_routes, row_routes, params)
+        else:
+            _finish_board(layout, col_routes, row_routes, params)
+            layout.tail["length_reason"] = REASON_TYPED
 
         # 6. Generate outputs
         # Record what the ROUTER could not do, alongside the geometric DRC.
@@ -2558,6 +2623,11 @@ def _recipe_params(params: dict, router: str, connector_pos: int | None) -> dict
     allowed = set(GenerateRequest.model_fields) - {"outline", "fill_region"}
     body = {k: v for k, v in (params or {}).items() if k in allowed}
     body["router"] = router if router in ("legacy", "hug") else "legacy"
+    # A tail length the pipeline chose is chosen again, for whatever this
+    # pipeline builds; a typed one (every design from before it was automatic)
+    # is kept.
+    if (params or {}).get("cable_length_auto"):
+        body["cable_length_mm"] = None
     # Replayed as an override so a connector the user upsized by hand comes
     # back at that size rather than dropping to the smallest that fits.
     if connector_pos:

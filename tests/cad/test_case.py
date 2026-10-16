@@ -235,9 +235,11 @@ def test_full_width_board_falls_back_and_explains_why():
 
 
 def test_slot_scales_with_the_connector():
-    """The tail is sized by the connector, so a bigger one needs a wider slot."""
-    small = _neck([[0, 0], [40, 0], [40, 40], [0, 40]])
-    big = _neck([[0, 0], [40, 0], [40, 40], [0, 40]], connector_pos_override=60)
+    """A connector-width tail is sized by the connector, so a bigger one needs a
+    wider slot. (A narrow tail is sized by its wires: with the automatic length
+    both connectors' tails narrow to the same strip.)"""
+    small = _neck([[0, 0], [40, 0], [40, 40], [0, 40]], narrow_tail=False)
+    big = _neck([[0, 0], [40, 0], [40, 40], [0, 40]], connector_pos_override=60, narrow_tail=False)
     assert big is not None and small is not None
     assert (big[2] - big[1]) > (small[2] - small[1]) + 5.0
 
@@ -340,8 +342,10 @@ def _case_stats(edit_data):
 
 
 def _short_board():
+    # A typed 12 mm, too short for the case on this board: the automatic length
+    # (the default) would already clear it.
     r = client.post("/generate", json={"outline": [[0, 0], [65, 0], [65, 65], [0, 65]],
-                                       "router": "hug"})
+                                       "router": "hug", "cable_length_mm": 12.0})
     assert r.status_code == 200, r.text[:300]
     return r.json()["edit_data"]
 
@@ -406,3 +410,23 @@ def test_hatch_cuts_the_whole_grid_on_the_gallery_square():
     hatched = build_case(*args, CaseParams(bumps=False, hatch=True))
     assert flat.top.volume - hatched.top.volume > 300
     assert hatched.top.is_watertight
+
+
+def test_bottom_is_closed_as_an_stl_where_the_wall_meets_the_tail_slot():
+    """The bottom is a stack (sheet, wall, rib). Stacked face to face, the
+    boolean left a pinch at the tail slot's corner on this board: closed in
+    memory, open once the STL's vertices were merged on load (16 of 310 boards
+    measured; the case ZIP then warned that the bottom may not slice). Each
+    layer now rises a little out of the one below."""
+    import io
+    import json
+    from pathlib import Path
+
+    import trimesh
+
+    fx = json.loads((Path(__file__).parent / "fixtures" / "case_umi_finger_27p5.json").read_text())
+    result = build_case(fx["final_outline"], fx["cable_y"], np.asarray(fx["placements_xy"]), fx["active"],
+                        fx["pitch_x_mm"], fx["pitch_y_mm"], CaseParams())
+    for mesh, name in ((result.bottom, "bottom"), (result.top, "top")):
+        m = trimesh.load(io.BytesIO(mesh.export(file_type="stl")), file_type="stl")
+        assert m.is_watertight and m.body_count == 1, f"{name} is not a closed single solid as an STL"

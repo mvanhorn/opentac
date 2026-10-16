@@ -74,6 +74,18 @@ MIN_WEB_MM = 1.0
 # -10.0, which the window did not have. Searching deeper is safe because the
 # rule takes the FIRST stable narrow run going down -- the tail is always found
 # before the connector's own narrower step further along.
+# The bottom piece is a stack -- sheet, wall on it, rib on the wall. Stacked face
+# to face, two solids are fused through a shared plane, which the boolean can
+# keep as a pinch where an edge of one meets the other's outline (the tail
+# slot's corner): closed in memory, open once the STL's float32 vertices are
+# merged on load (16 of 310 generated boards). Each layer rises this far out of
+# the one below instead, as the lid's bumps plug into its slab; the solid is the
+# same.
+FUSE_MM = 0.10
+# Rib pieces under this area (in units of the rib head squared) are slivers the
+# tail slot clips off a segment's end; extruded they are not a closed solid and
+# the union refuses the whole bottom.
+MIN_RIB_PIECE = 0.25
 NECK_MAX_FRAC = 0.85      # tail must be clearly narrower than the board
 NECK_STABLE_MM = 2.0      # ...and hold that width for this far
 NECK_FLAT_MM = 0.25       # ...to within this much
@@ -319,6 +331,13 @@ def _hatch_geometry(recess_poly, pts, pitch_x, pitch_y, width,
 
 def _no_tail_reason(final_outline_xy, cable_y: float) -> str:
     """Say WHY no tail was found, because the two causes need different fixes."""
+    return _no_tail(final_outline_xy, cable_y)[1]
+
+
+def _no_tail(final_outline_xy, cable_y: float) -> tuple[str, str]:
+    """(kind, message) for a board with no tail neck: "full_width" (no narrower
+    tail at all -- a longer cable cannot help) or "unsteady" (the tail never
+    holds a width for NECK_STABLE_MM -- a longer cable gives it one)."""
     poly = Polygon(np.asarray(final_outline_xy, dtype=float)).buffer(0)
     minx, miny, maxx, maxy = poly.bounds
 
@@ -332,13 +351,15 @@ def _no_tail_reason(final_outline_xy, cable_y: float) -> str:
     below = [width(y) for y in np.arange(cable_y, miny + 0.5, -0.5)]
     narrowest = min([w for w in below if w > 0.5], default=full)
     if full > 0 and narrowest > NECK_MAX_FRAC * full:
-        return ("The board is full width all the way down to the connector, so there is no "
-                "narrower tail to cut a slot around — the connector sits inside the outline "
-                "rather than on a protruding tail. The cable edge is left open, which is the only "
-                "thing this shape allows. Turning follow-padding on gives the board a real tail.")
-    return ("No cable tail was found: below the cable edge the outline never settles to a width "
-            f"that holds steady for {NECK_STABLE_MM:g}mm. The case leaves the whole cable edge "
-            "open rather than guessing where to cut a slot.")
+        return "full_width", (
+            "The board is full width all the way down to the connector, so there is no "
+            "narrower tail to cut a slot around — the connector sits inside the outline "
+            "rather than on a protruding tail. The cable edge is left open, which is the only "
+            "thing this shape allows. Turning follow-padding on gives the board a real tail.")
+    return "unsteady", (
+        "No cable tail was found: below the cable edge the outline never settles to a width "
+        f"that holds steady for {NECK_STABLE_MM:g}mm. The case leaves the whole cable edge "
+        "open rather than guessing where to cut a slot.")
 
 
 def _ring(centre: Polygon, width: float) -> Polygon:
@@ -397,24 +418,23 @@ def tail_extension_length(tail_extension: dict | None) -> float:
     return float(np.linalg.norm(np.diff(path, axis=0), axis=1).sum())
 
 
-def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
-               pitch_x, pitch_y, p: CaseParams | None = None,
-               tail_extension: dict | None = None) -> CaseResult:
-    p = p or CaseParams()
-    warnings = []
-
+def _case_plan(final_outline_xy, cable_y, p: CaseParams) -> dict:
+    """The case's footprint around the board, 2D only: where the wall opens for
+    the tail (the neck), the pocket (recess), the sheet under it, the cut that
+    opens the wall, and why the tail could not be found if it could not."""
     # Where the wall opens. Wrapping the cable edge and cutting only a tail slot
     # means clipping BELOW the fan-out shoulder, not at the cable line -- at the
     # cable line the board is still full width, so the wall would open across
     # the whole side to pass a tail a third that wide.
     neck = _tail_neck(final_outline_xy, cable_y) if p.wrap_cable_edge else None
+    no_tail = None
     if neck is not None:
         clip_y = neck[0] - p.tail_grip_mm     # bite a little tail: strain relief
         tail_x = (neck[1] - p.tail_clearance_mm, neck[2] + p.tail_clearance_mm)
     else:
         clip_y, tail_x = cable_y, None
         if p.wrap_cable_edge:
-            warnings.append(_no_tail_reason(final_outline_xy, cable_y))
+            no_tail = _no_tail(final_outline_xy, cable_y)
 
     body = sensor_body_polygon(final_outline_xy, clip_y)
     if tail_x is None:
@@ -426,6 +446,75 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
         recess = _largest_polygon(body.buffer(p.recess_tolerance_mm))
         sheet = _largest_polygon(recess.buffer(p.skirt_width_mm))
         edge_cut = box(tail_x[0], sheet.bounds[1] - 10.0, tail_x[1], clip_y + 0.01)
+    return {"neck": neck, "no_tail": no_tail, "clip_y": clip_y, "tail_x": tail_x,
+            "recess": recess, "sheet": sheet, "edge_cut": edge_cut}
+
+
+def _cable_clearance(final_outline_xy, sheet, p: CaseParams, tail_extension: dict | None) -> dict:
+    """How much tail actually escapes the case, and how much of that is the rigid
+    connector body. Measured from the shipped outline rather than from
+    cable_length_mm, because the neck (and so the clip) moves with the board."""
+    case_bottom = float(sheet.bounds[1])
+    board_bottom = float(Polygon(np.asarray(final_outline_xy, dtype=float)).buffer(0).bounds[1])
+    conn_body = CONNECTOR_BODY_ABOVE_MM + CONNECTOR_BODY_BELOW_MM
+    # A drawn extension adds its full arc length of flexible tail, wherever it
+    # runs -- it carries the connector away from the board, so every millimetre
+    # of it is cable between the case and the connector.
+    ext_mm = tail_extension_length(tail_extension)
+    tail_free = case_bottom - board_bottom + ext_mm
+    tail_flex = tail_free - conn_body
+    tail_short = max(0.0, p.min_tail_clear_mm - tail_flex)
+    warning = None
+    if tail_short > 0.05:
+        if tail_free <= 0:
+            warning = (
+                f"The case extends {-tail_free:.1f}mm PAST the end of the board — the connector "
+                f"would be sealed inside it. Lengthen the cable by at least {tail_short:.1f}mm, "
+                f"or draw a tail extension at least {tail_short:.1f}mm long.")
+        elif tail_flex <= 0:
+            warning = (
+                f"The case covers {min(conn_body, -tail_flex):.1f}mm of the {conn_body:.0f}mm "
+                f"connector body, so the connector cannot plug in. Lengthen the cable by at "
+                f"least {tail_short:.1f}mm, or draw a tail extension at least {tail_short:.1f}mm long.")
+        else:
+            warning = (
+                f"Only {tail_flex:.1f}mm of flexible cable clears the case before the "
+                f"{conn_body:.0f}mm connector body begins, so there is almost nothing to bend or "
+                f"grip. Lengthen the cable by at least {tail_short:.1f}mm, or draw a tail extension "
+                f"at least {tail_short:.1f}mm long.")
+    return {"tail_free_mm": tail_free, "tail_flex_mm": tail_flex,
+            "short_mm": tail_short if tail_short > 0.05 else 0.0, "warning": warning}
+
+
+def case_cable_check(final_outline_xy, cable_y, p: CaseParams | None = None,
+                     tail_extension: dict | None = None) -> dict:
+    """The printed case's cable checks without building the case (2D only, no
+    meshing): the same neck, sheet and free-flex measurement build_case makes.
+
+    Returns short_mm (how much longer the cable must be for the connector body to
+    clear the case with min_tail_clear_mm of flex, 0 when it does), no_tail
+    (None, or "full_width" / "unsteady" when no tail neck was found) and the
+    cable warnings build_case would raise."""
+    p = p or CaseParams()
+    plan = _case_plan(final_outline_xy, cable_y, p)
+    clear = _cable_clearance(final_outline_xy, plan["sheet"], p, tail_extension)
+    warnings = [m for m in ((plan["no_tail"] or (None, None))[1], clear["warning"]) if m]
+    return {"short_mm": clear["short_mm"], "tail_flex_mm": clear["tail_flex_mm"],
+            "no_tail": plan["no_tail"][0] if plan["no_tail"] else None,
+            "neck": plan["neck"], "warnings": warnings}
+
+
+def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
+               pitch_x, pitch_y, p: CaseParams | None = None,
+               tail_extension: dict | None = None) -> CaseResult:
+    p = p or CaseParams()
+    warnings = []
+
+    plan = _case_plan(final_outline_xy, cable_y, p)
+    neck, clip_y, tail_x = plan["neck"], plan["clip_y"], plan["tail_x"]
+    recess, sheet, edge_cut = plan["recess"], plan["sheet"], plan["edge_cut"]
+    if plan["no_tail"]:
+        warnings.append(plan["no_tail"][1])
     frame = sheet.difference(recess).difference(edge_cut)
     centre = recess.buffer(p.skirt_width_mm / 2)
 
@@ -453,36 +542,9 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
             f"A {gap:.1f}mm gap leaves bridges that narrow in the lid; under about "
             f"{MIN_BRIDGE_MM:g}mm they tear where the slot ends. Widen the gap.")
 
-    # How much tail actually escapes the case, and how much of that is the rigid
-    # connector body. Measured from the shipped outline rather than from
-    # cable_length_mm, because the neck (and so the clip) moves with the board.
-    case_bottom = float(sheet.bounds[1])
-    board_bottom = float(Polygon(np.asarray(final_outline_xy, dtype=float)).buffer(0).bounds[1])
-    conn_body = CONNECTOR_BODY_ABOVE_MM + CONNECTOR_BODY_BELOW_MM
-    # A drawn extension adds its full arc length of flexible tail, wherever it
-    # runs -- it carries the connector away from the board, so every millimetre
-    # of it is cable between the case and the connector.
-    ext_mm = tail_extension_length(tail_extension)
-    tail_free = case_bottom - board_bottom + ext_mm
-    tail_flex = tail_free - conn_body
-    tail_short = max(0.0, p.min_tail_clear_mm - tail_flex)
-    if tail_short > 0.05:
-        if tail_free <= 0:
-            warnings.append(
-                f"The case extends {-tail_free:.1f}mm PAST the end of the board — the connector "
-                f"would be sealed inside it. Lengthen the cable by at least {tail_short:.1f}mm, "
-                f"or draw a tail extension at least {tail_short:.1f}mm long.")
-        elif tail_flex <= 0:
-            warnings.append(
-                f"The case covers {min(conn_body, -tail_flex):.1f}mm of the {conn_body:.0f}mm "
-                f"connector body, so the connector cannot plug in. Lengthen the cable by at "
-                f"least {tail_short:.1f}mm, or draw a tail extension at least {tail_short:.1f}mm long.")
-        else:
-            warnings.append(
-                f"Only {tail_flex:.1f}mm of flexible cable clears the case before the "
-                f"{conn_body:.0f}mm connector body begins, so there is almost nothing to bend or "
-                f"grip. Lengthen the cable by at least {tail_short:.1f}mm, or draw a tail extension "
-                f"at least {tail_short:.1f}mm long.")
+    clear = _cable_clearance(final_outline_xy, sheet, p, tail_extension)
+    if clear["warning"]:
+        warnings.append(clear["warning"])
 
     open_edge = edge_cut
     rib_cut, n_gaps = _gap_cutters(samples, total, period, gap, p.rib_head_mm)
@@ -509,14 +571,14 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
     parts = [trimesh.creation.extrude_polygon(_clean(sheet), height=z_floor)]
     if not frame.is_empty:
         wall = trimesh.creation.extrude_polygon(
-            _clean(_largest_polygon(frame)), height=p.recess_depth_mm)
-        wall.apply_translation((0, 0, z_floor))
+            _clean(_largest_polygon(frame)), height=p.recess_depth_mm + FUSE_MM)
+        wall.apply_translation((0, 0, z_floor - FUSE_MM))
         parts.append(wall)
     for piece in (rib.geoms if isinstance(rib, MultiPolygon) else [rib]):
-        if piece.area <= 1e-9:
+        if piece.area <= MIN_RIB_PIECE * p.rib_head_mm ** 2:
             continue
-        seg = trimesh.creation.extrude_polygon(_clean(piece), height=rib_h)
-        seg.apply_translation((0, 0, z_seat))
+        seg = trimesh.creation.extrude_polygon(_clean(piece), height=rib_h + FUSE_MM)
+        seg.apply_translation((0, 0, z_seat - FUSE_MM))
         parts.append(seg)
     bottom = trimesh.boolean.union(parts) if len(parts) > 1 else parts[0]
 
@@ -691,10 +753,10 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
         "slit_to_slot_mm": round(web, 2) if web is not None else None,
         "undercut_mm": round((p.rib_head_mm - p.rib_wall_mm) / 2, 2),
         "cable_edge": "slot" if tail_x is not None else "open side",
-        "tail_free_mm": round(tail_free, 1),
-        "tail_extension_mm": round(ext_mm, 1),
-        "tail_flex_mm": round(tail_flex, 1),
-        "tail_short_by_mm": round(tail_short, 1) if tail_short > 0.05 else None,
+        "tail_free_mm": round(clear["tail_free_mm"], 1),
+        "tail_extension_mm": round(tail_extension_length(tail_extension), 1),
+        "tail_flex_mm": round(clear["tail_flex_mm"], 1),
+        "tail_short_by_mm": round(clear["short_mm"], 1) if clear["short_mm"] else None,
         "tail_slot_mm": round(tail_x[1] - tail_x[0], 1) if tail_x else None,
     }
     return CaseResult(bottom=bottom, top=top, stats=stats, warnings=warnings)

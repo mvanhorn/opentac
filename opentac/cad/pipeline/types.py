@@ -21,6 +21,11 @@ class Params:
     via_dia_mm: float = 0.35
     pad_pitch_mm: float = 0.5
     cable_length_mm: float = 12.0
+    # The tail length was chosen by the pipeline (pipeline/tail_length.py), not
+    # typed: /generate routes with the 12 mm minimum, then sets cable_length_mm
+    # to what the narrow tail and the printed case need. Saved with the design so
+    # a recipe replay chooses again rather than pinning that number.
+    cable_length_auto: bool = False
     tail_width_mm: float | None = None
     tail_side_padding_mm: float = 0.0
     board_edge_clear_mm: float = 0.2

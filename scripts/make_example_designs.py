@@ -72,31 +72,26 @@ def build(spec: dict) -> dict:
     """Generate one design and add its printed case, as OpenTac-CAD's Download ZIP does.
 
     The designs were fabricated before the printed case existed, with a 12 mm cable
-    tail. Where the case would cover the connector or leave too little cable to bend,
-    the tail is lengthened by what the case builder asks for (plus 1 mm) and the board
-    is generated again, so every ZIP holds a case the sensor actually plugs through.
+    tail. They are generated with the automatic tail length (no cable_length_mm),
+    which is long enough for the narrow tail and for the printed case to leave the
+    connector clear; a design whose case still warns about the cable, or has a part
+    that is not a closed solid, is reported instead of written.
     """
     from opentac.cad.main import _case_inputs
     from opentac.cad.export.case_zip import build_case_files, zip_with_case
 
-    params = dict(spec["params"])
-    for _ in range(5):
-        try:
-            resp, used, scale = generate_fitting(spec, params)
-        except RuntimeError as exc:
-            return {"slug": spec["slug"], "error": str(exc)}
-        board, cp = _case_inputs(resp.edit_data, None, None)
-        case = build_case_files(*board["args"], cp, primary="bumps", stem=spec["slug"],
-                                tail_extension=board["tail_extension"])
-        need = [float(m) for w in case.warnings for m in CASE_BLOCKS.findall(w)]
-        # No steady-width tail below the cable edge: the case cannot cut a slot round
-        # it and leaves the edge open; 2 mm more straight tail gives it one.
-        need += [1.0 for w in case.warnings if w.startswith("No cable tail was found")]
-        if not need:
-            break
-        params["cable_length_mm"] = round(params.get("cable_length_mm", 12.0) + max(need) + 1.0, 1)
-    else:
-        return {"slug": spec["slug"], "error": f"printed case still blocks the connector: {case.warnings}"}
+    params = {k: v for k, v in spec["params"].items() if k != "cable_length_mm"}
+    try:
+        resp, used, scale = generate_fitting(spec, params)
+    except RuntimeError as exc:
+        return {"slug": spec["slug"], "error": str(exc)}
+    board, cp = _case_inputs(resp.edit_data, None, None)
+    case = build_case_files(*board["args"], cp, primary="bumps", stem=spec["slug"],
+                            tail_extension=board["tail_extension"])
+    cable = [w for w in case.warnings
+             if CASE_BLOCKS.search(w) or w.startswith("No cable tail was found")]
+    if cable:
+        return {"slug": spec["slug"], "error": f"printed case still blocks the connector: {cable}"}
     if case.left_out or any("not a closed solid" in w for w in case.warnings):
         return {"slug": spec["slug"], "error": f"printed case: {case.left_out or case.warnings}"}
 
@@ -113,7 +108,8 @@ def build(spec: dict) -> dict:
         "pitch_mm": [used["pitch_x_mm"], used["pitch_y_mm"]],
         "taxel_mm": [used["pixel_w_mm"], used["pixel_h_mm"]],
         "pitch_raised": scale > 1.0,
-        "cable_length_mm": params.get("cable_length_mm", 12.0),
+        "cable_length_mm": s["tail_length_mm"],
+        "cable_length_reason": s.get("tail_length_reason"),
         "drc_violations": int(resp.drc.get("violations", 0)),
         "zip_kb": round(len(zip_bytes) / 1024),
         "case_warnings": case.warnings,

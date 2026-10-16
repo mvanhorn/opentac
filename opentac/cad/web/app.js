@@ -1097,6 +1097,14 @@ function applyParamsToForm(params) {
     }
     // The hug router is the only one the page offers; a stored "legacy" is ignored.
     if (key === "router") continue;
+    // A length the pipeline chose shows as a blank (automatic) Tail length, so
+    // the next Generate chooses again for whatever the design has become.
+    if (key === "cable_length_auto") continue;
+    if (key === "cable_length_mm" && params.cable_length_auto) {
+      const el = document.getElementById(key);
+      if (el) el.value = "";
+      continue;
+    }
     const el = document.getElementById(key);
     if (el) {
       if (el.type === "checkbox") el.checked = !!value;
@@ -1508,8 +1516,9 @@ function readParams() {
   for (const id of ids) {
     const value = document.getElementById(id).value;
     const parsed = parseFloat(value);
-    if (id === "tail_width_mm") {
-      p[id] = Number.isFinite(parsed) ? parsed : null;
+    if (id === "tail_width_mm" || id === "cable_length_mm") {
+      // blank: automatic (the narrow tail's width; the tail's length)
+      p[id] = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     } else {
       p[id] = Number.isFinite(parsed) ? parsed : 0;
     }
@@ -1866,6 +1875,19 @@ function copperLayersText(stats) {
   return `4 — ${n} row${n === 1 ? "" : "s"} wired on the inner layers`;
 }
 
+// "18.5 mm (auto: the printed case clears the connector)"
+const TAIL_LENGTH_REASONS = {
+  "printed case clearance": "the printed case clears the connector",
+  "fit width": "long enough for the tail to narrow to its traces",
+  "minimum 12 mm": "the 12 mm minimum",
+};
+function tailLengthText(stats) {
+  const mm = `${stats.tail_length_mm} mm`;
+  if (!stats.tail_length_auto) return mm;
+  const why = TAIL_LENGTH_REASONS[stats.tail_length_reason] || stats.tail_length_reason || "";
+  return why ? `${mm} (auto: ${why})` : `${mm} (auto)`;
+}
+
 function renderStats(stats, drc) {
   const tailWidth = `${stats.tail_width_mm} mm`;
   // Headline first: the handful of numbers a first-time user actually needs
@@ -1878,6 +1900,7 @@ function renderStats(stats, drc) {
       ? "outline kept exactly as drawn"
       : "board grown to fit the wiring"],
     ["Copper layers", copperLayersText(stats)],
+    ["Tail length", tailLengthText(stats)],
     ["Design check (DRC)", drc.violations === 0
       ? "0 violations — ready to manufacture"
       : `${drc.violations} violations — see details below`],
@@ -1942,7 +1965,7 @@ function renderStats(stats, drc) {
     ["Row routes right", stats.row_routes_right || 0],
     ["Routing warning pixels", stats.routing_problem_pixels],
     ["Routing warning nets", stats.routing_warning_nets],
-    ["Tail length", `${stats.tail_length_mm} mm`],
+    ["Tail length", tailLengthText(stats)],
     ["Tail width", tailWidth],
     ["Tail side padding", `${stats.tail_side_padding_mm} mm`],
     ["Pad center span", `${stats.connector_pad_center_span_mm || 0} mm`],

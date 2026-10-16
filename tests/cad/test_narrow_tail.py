@@ -35,15 +35,19 @@ PAD = [[0, 0], [17.6, 0], [17.6, 34.6], [0, 34.6]]   # an 8x4 gripper pad at 4.2
 PARAMS = dict(pitch_x_mm=4.2, pitch_y_mm=4.2, pixel_w_mm=4.0, pixel_h_mm=4.0, router="hug")
 
 
-def _gen(board_mode, narrow):
-    r = client.post("/generate", json=dict(outline=PAD, board_mode=board_mode, narrow_tail=narrow, **PARAMS))
+def _gen(board_mode, narrow, **over):
+    r = client.post("/generate", json=dict(outline=PAD, board_mode=board_mode, narrow_tail=narrow,
+                                           **PARAMS, **over))
     assert r.status_code == 200, r.text[:300]
     return r.json()
 
 
 @pytest.mark.parametrize("board_mode", ["expand", "fixed_keepout"])
 def test_narrowing_changes_nothing_but_the_tail(board_mode):
-    narrow, wide = _gen(board_mode, True), _gen(board_mode, False)
+    # One typed length for both: an automatic one is chosen per tail (a narrow
+    # tail needs room to flare back to the connector), and the routes then
+    # differ by the straight run into each pad.
+    narrow, wide = _gen(board_mode, True, cable_length_mm=12.0), _gen(board_mode, False, cable_length_mm=12.0)
     tn, tw = narrow["edit_data"]["layout"]["tail"], wide["edit_data"]["layout"]["tail"]
     assert tn["mode"] == "fit" and tn["width_mm"] < tw["width_mm"]
     assert narrow["stats"]["active_pixels"] == wide["stats"]["active_pixels"]

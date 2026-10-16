@@ -95,6 +95,9 @@ def summarize(resp, elapsed: float | None = None) -> str:
         f"{man['r']} rows, {s['connector_pos']}-position connector, "
         f"{s.get('router', 'legacy')} router.",
     ]
+    if s.get("tail_length_mm") is not None:
+        lines.append(f"{s['tail_length_mm']:g} mm tail"
+                     + (f" (auto: {s['tail_length_reason']})." if s.get("tail_length_auto") else "."))
     dropped = s.get("max_pack_pixels", 0) - s["total_pixels"]
     if dropped > 0:
         lines.append(

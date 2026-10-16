@@ -23,7 +23,7 @@ const BASELINE_PARAMS = {
   edge_keepout_mm: 0.5, trace_w_mm: 0.2, gap_mm: 0.2, clearance_mm: 0.2,
   board_edge_clear_mm: 0.2, edge_clear_mm: 0.1, center_clear_mm: 0.2,
   via_drill_mm: 0.15, via_dia_mm: 0.35, routing_margin_mm: 3.0,
-  follow_main_padding_mm: 2.0, cable_length_mm: 12.0, tail_width_mm: null,
+  follow_main_padding_mm: 2.0, cable_length_mm: null, tail_width_mm: null,
   tail_side_padding_mm: 0.0, connector_shoulder_fillet_mm: 1.0,
   board_mode: "expand", router: "hug",
 };

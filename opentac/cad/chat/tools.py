@@ -181,7 +181,12 @@ TOOL_SPECS = [
                                  "description": "Copper clearance, default "
                                                 "0.2."},
                 "cable_length_mm": {"type": "number",
-                                    "description": "Tail length, default 12."},
+                                    "description": "Tail length in mm. Leave it out "
+                                                   "unless the user asks for a length: "
+                                                   "the default is automatic, long enough "
+                                                   "for the narrow tail and for the printed "
+                                                   "case to clear the connector (at least "
+                                                   "12)."},
                 "board_mode": {
                     "type": "string",
                     "enum": ["expand", "fixed_keepout"],
@@ -264,7 +269,7 @@ def _fixed_work(approx_taxels: int, copper_layers: int) -> int:
 STAT_KEYS = (
     "total_pixels", "active_pixels", "max_pack_pixels", "dropped_by_keepout",
     "col_routes", "row_routes", "connector_pos", "board_mode", "router",
-    "hug_fallback", "fixed_keepout_max_mm", "tail_length_mm",
+    "hug_fallback", "fixed_keepout_max_mm", "tail_length_mm", "tail_length_reason",
     "connector_export_warning", "copper_layers",
 )
 
@@ -400,6 +405,7 @@ class Session:
             raise ValueError(f"copper_layers must be 2 or 4, got {layers!r}.")
         params["copper_layers"] = layers
         params.setdefault("readout_board", "auto")
+        params.setdefault("cable_length_mm", None)      # automatic; explicit for the page's form
         self._check_work(outline, board_mode, params)
         resp = main.generate(main.GenerateRequest(
             outline=outline, board_mode=board_mode, router="hug", **params))

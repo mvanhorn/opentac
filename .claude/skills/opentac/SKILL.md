@@ -206,7 +206,10 @@ The tail is narrow by default (`narrow_tail=True`): after routing it is cut down
 to the traces it carries and flares back to the connector's width just before
 the connector. Taxels and traces are identical to a connector-width tail, so do
 not trade it off against taxel count. A `tail_width_mm` the user gives is used as
-is.
+is. The length is automatic too: leave `cable_length_mm` out and the tail is made
+as long as the narrow tail and the printed case need, at least 12 mm
+(`stats["tail_length_mm"]`, `stats["tail_length_reason"]`). Pass a length only if
+the user asks for one.
 
 The tail's contacts are on the **bottom** copper (the readout boards' Molex
 505110 is a bottom-contact connector for 0.3 mm FPC). The export opens solder
