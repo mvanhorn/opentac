@@ -25,7 +25,7 @@ STM32G491KEU6, TLV9362IDDFR, TS-1088-AR02016 (`.step`/`.stp`/`.wrl` as reference
 
 ## Design-rule and electrical-rule checks
 
-KiCad 10's own checks (`kicad-cli pcb drc`, `kicad-cli sch erc`) report errors on these boards. Each class is listed here with the reason it is accepted; the boards' rule settings are left as they were drawn rather than loosened to hide them. The 30-pin pair has been fabricated by JLCPCB and works; the 60-pin board was ordered with the files in this folder. Limits quoted are JLCPCB's for 4-layer boards ([PCB capabilities](https://jlcpcb.com/capabilities/pcb-capabilities), October 2026).
+KiCad 10's own checks (`kicad-cli pcb drc`, `kicad-cli sch erc`) report errors on these boards. Each class is listed here with the reason it is accepted; the boards' rule settings are left as they were drawn rather than loosened to hide them. The 30-pin pair has been fabricated by JLCPCB and works; the 60-pin board was ordered with the files in this folder. Limits quoted are JLCPCB's for 2- and 4-layer boards ([PCB capabilities](https://jlcpcb.com/capabilities/pcb-capabilities), October 2026).
 
 **DRC**
 
