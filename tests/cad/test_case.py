@@ -390,3 +390,19 @@ def test_disabled_extension_is_ignored():
     s, warn = _case_stats(off)
     assert s["tail_extension_mm"] == 0.0
     assert warn, "a disabled extension must not count"
+
+
+def test_hatch_cuts_the_whole_grid_on_the_gallery_square():
+    """The gallery's 40 x 40 square, as the page generates it: its hatch came back
+    from shapely as a GeometryCollection, which was cut as one piece, so the
+    hatched lid lost 6 mm^3 instead of the whole grid (~390 mm^3)."""
+    outline = [[-20, -20], [20, -20], [20, 20], [-20, 20]]
+    ed = client.post("/generate", json={"outline": outline}).json()["edit_data"]
+    P = np.asarray(ed["layout"]["placements_xy"], dtype=float)
+    cable_y = float(np.asarray(ed["outline"], dtype=float)[:2, 1].min())
+    pr = ed["params"]
+    args = (ed["final_outline"], cable_y, P, list(range(len(P))), pr["pitch_x_mm"], pr["pitch_y_mm"])
+    flat = build_case(*args, CaseParams(bumps=False))
+    hatched = build_case(*args, CaseParams(bumps=False, hatch=True))
+    assert flat.top.volume - hatched.top.volume > 300
+    assert hatched.top.is_watertight

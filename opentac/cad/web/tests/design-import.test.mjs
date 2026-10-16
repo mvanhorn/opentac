@@ -46,7 +46,7 @@ ok(entry !== null, "found a design record in the export ZIP");
 ok(entry?.name === "design.json", `preferred design.json (got ${entry?.name})`);
 
 const design = JSON.parse(entry.text);
-ok(design.app === "OpenTactileCAD", "design.json identifies the app");
+ok(design.app === "OpenTac-CAD", "design.json identifies the app");
 ok(design.kind === "design", "design.json is a save file");
 ok(typeof design.pipeline === "string" && design.pipeline.length > 0, "carries a pipeline stamp");
 ok(design.edit_data && design.edit_data.params && design.edit_data.layout,

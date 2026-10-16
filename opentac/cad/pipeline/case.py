@@ -228,6 +228,21 @@ def _tail_neck(final_outline_xy, cable_y: float):
     return None
 
 
+def _polygons(geom):
+    """The polygons in a shapely result, whatever type it came back as.
+
+    Unions and differences of cut shapes can return a GeometryCollection (a
+    polygon plus a stray sliver line or point) instead of a MultiPolygon. Treating
+    that as one piece skipped every cut in it: the hatched lid of a plain square
+    patch came out almost uncut.
+    """
+    if geom is None or geom.is_empty:
+        return []
+    if isinstance(geom, Polygon):
+        return [geom]
+    return [g for part in getattr(geom, "geoms", []) for g in _polygons(part)]
+
+
 def _hatch_geometry(recess_poly, pts, pitch_x, pitch_y, width,
                     tab_width: float = 0.0, tabs_per_edge: int = 1):
     """Groove lines midway between taxels, plus one round the tile field.
@@ -564,7 +579,7 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
     slab = trimesh.creation.extrude_polygon(_clean(sheet), height=p.lid_thickness_mm)
     cutters = []
     for geom in (g for g in (slot, slits) if g is not None and not g.is_empty):
-        for piece in (geom.geoms if isinstance(geom, MultiPolygon) else [geom]):
+        for piece in _polygons(geom):
             if piece.area <= 1e-9:
                 continue
             try:
@@ -582,7 +597,7 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
     if hatch is not None and not hatch.is_empty:
         through = p.hatch_through
         depth = p.lid_thickness_mm if through else p.hatch_depth_mm
-        for piece in (hatch.geoms if isinstance(hatch, MultiPolygon) else [hatch]):
+        for piece in _polygons(hatch):
             if piece.area <= 1e-9:
                 continue
             try:
