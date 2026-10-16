@@ -11,6 +11,8 @@ COPY opentac ./opentac
 # The chat reads the same skill Claude Code loads; the landing gallery serves the example STLs.
 COPY .claude/skills ./.claude/skills
 COPY examples/stl ./examples/stl
+# The package carries the prebuilt firmware (pyproject force-include), so the build needs it.
+COPY firmware/prebuilt ./firmware/prebuilt
 RUN uv sync --locked --no-dev --extra demo
 EXPOSE 10000
 CMD ["uv", "run", "--no-sync", "opentac", "cad", "--host", "0.0.0.0", "--port", "10000", "--no-browser"]
