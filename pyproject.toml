@@ -5,6 +5,23 @@ description = "OpenTac: design, build, read and simulate custom tactile sensors"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+keywords = [
+    "tactile sensing", "tactile sensor", "robotics", "flex PCB", "PCB design",
+    "KiCad", "piezoresistive", "velostat", "simulation", "MuJoCo",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Framework :: FastAPI",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+    "Topic :: System :: Hardware",
+]
 # Lower bounds are the versions the CAD pipeline was verified with; uv.lock pins exact ones.
 dependencies = [
     # CAD tool (opentac.cad)
@@ -28,6 +45,12 @@ dependencies = [
     # readout boards (opentac.device)
     "pyserial",
 ]
+
+[project.urls]
+Homepage = "https://opentac.github.io"
+Documentation = "https://opentac.github.io/get-started/"
+Source = "https://github.com/opentac/opentac.github.io"
+Issues = "https://github.com/opentac/opentac.github.io/issues"
 
 [project.optional-dependencies]
 # MuJoCo backend for skins with a bump sheet (opentac.sim)
