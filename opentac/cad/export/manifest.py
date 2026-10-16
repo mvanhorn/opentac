@@ -9,7 +9,10 @@ from opentac.cad.pipeline.types import Layout
 
 
 def _edge_cuts_points(layout, outline_xy, params, connector_dir):
-    """The board's real cut boundary, as one closed ring of points.
+    """The board's real cut boundary up to the connector, as one closed ring of
+    points: the grown board and the cable tail, closed straight across the
+    connector's open edge. The connector footprint draws the tab beyond that
+    edge (the Gerber Edge.Cuts has the whole cut line).
 
     Built from `stitched_outline_segments` — the exact same call the KiCad and
     Gerber exporters use — rather than re-deriving a polygon here, because the
@@ -31,8 +34,17 @@ def _edge_cuts_points(layout, outline_xy, params, connector_dir):
         segments = [(final_xy[e], final_xy[(e + 1) % len(final_xy)])
                     for e in range(len(final_xy))]
     # Segments come as (start, end) pairs walking the boundary; emit the start
-    # of each, which is that walk as a closed point ring.
-    return [[round(float(a[0]), 4), round(float(a[1]), 4)] for a, _ in segments]
+    # of each, plus the end of a segment the walk does not continue from: the
+    # walk is open at the connector (the opening segment is dropped), and
+    # emitting only starts lost that corner, so the ring cut diagonally across
+    # the tail to the far side of the opening.
+    ring = []
+    for i, (a, b) in enumerate(segments):
+        ring.append(a)
+        nxt = segments[(i + 1) % len(segments)][0]
+        if np.linalg.norm(np.asarray(b, dtype=float) - np.asarray(nxt, dtype=float)) > 1e-6:
+            ring.append(b)
+    return [[round(float(x), 4), round(float(y), 4)] for x, y in ring]
 
 
 def _shear_block(layout, active_pix, pixel_xy, params):
@@ -233,8 +245,9 @@ def export_manifest(
         " bottom), so 'outline', 'edge_cuts' and 'pixels' overlay directly."
         " The KiCad export negates Y.",
         "'edge_cuts' is the board that gets MANUFACTURED (grown board + cable"
-        " tail + connector envelope). 'outline' is only the shape the user"
-        " drew - smaller, and not the cut boundary.",
+        " tail), closed straight across the connector's open edge; the"
+        " connector tab beyond it is in the Gerber Edge.Cuts. 'outline' is"
+        " only the shape the user drew - smaller, and not the cut boundary.",
         "'pixels' is [x, y, row_index, col_index] per active taxel and is the"
         " authority on where taxels physically sit.",
         "'ox'/'oy'/'px'/'py'/'m'/'rp'/'cp' are for MCU scan order, NOT"

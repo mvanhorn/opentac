@@ -572,6 +572,7 @@ def fig_qr_recovered():
         raw = m.raw
         if raw.get("edge_cuts"):
             e = np.asarray(raw["edge_cuts"])
+            e = np.vstack([e, e[:1]])  # a closed ring: close it across the connector's open edge
             ax.plot(e[:, 0], e[:, 1], color="#9a7a4a", lw=0.8, zorder=1)
         if raw.get("outline"):
             o = np.vstack([raw["outline"], raw["outline"][:1]])
@@ -680,6 +681,7 @@ def fig_manifest():
     fig, axes = plt.subplots(1, 2, figsize=(7.6, 4.6), dpi=200)
     outline = np.asarray(raw["outline"])
     edge = np.asarray(raw["edge_cuts"])
+    edge = np.vstack([edge, edge[:1]])  # a closed ring: close it across the connector's open edge
     for ax in axes:
         ax.plot(edge[:, 0], edge[:, 1], color="#9a7a4a", lw=0.8, zorder=1)
         o = np.vstack([outline, outline[:1]])

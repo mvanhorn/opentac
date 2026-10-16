@@ -15,7 +15,7 @@ import base64, io, json, re, sys, os
 import numpy as np
 import pytest
 from scipy.spatial import cKDTree
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, MultiLineString, Point, Polygon
 
 from opentac.cad.main import generate, GenerateRequest
 from opentac.cad.export.kicad_footprint import build_pixel_footprint_text, make_footprint_name
@@ -31,11 +31,17 @@ def _board_edge_points(pcb_text):
     """Board-outline Edge.Cuts only (top-level gr_line). The connector
     footprint carries its own Edge.Cuts as fp_line, which is not part of the
     board ring."""
-    pts = []
+    pts, seen = [], set()
     for m in re.finditer(
             r'\(gr_line\s*\(start ([-\d.]+) ([-\d.]+)\)\s*\(end ([-\d.]+) ([-\d.]+)\)', pcb_text):
         if 'Edge.Cuts' in pcb_text[m.start():m.start() + 300]:
-            pts.append((float(m.group(1)), float(m.group(2))))
+            # every vertex, ends included: the ring is open at the connector,
+            # so one corner is only ever a segment's end
+            for x, y in ((m.group(1), m.group(2)), (m.group(3), m.group(4))):
+                key = (round(float(x), 3), round(float(y), 3))
+                if key not in seen:
+                    seen.add(key)
+                    pts.append((float(x), float(y)))
     return np.array(pts)
 
 
@@ -62,6 +68,20 @@ def test_manifest_carries_the_real_board():
         d2, _ = cKDTree(mine).query(kp)
         worst = max(d1.max(), d2.max())
         assert worst < 0.001, f"{tag}: edge_cuts differ from the export by {worst:.4f}mm"
+
+        # 1b. the ring closes straight across the connector's open edge, which
+        #     is horizontal in the manifest frame: the closing edge is the only
+        #     one that is not an exported segment, and it is not a diagonal
+        #     chord across the tail (a corner used to be dropped there)
+        segs = [LineString([(float(m.group(1)), -float(m.group(2))), (float(m.group(3)), -float(m.group(4)))])
+                for m in re.finditer(r'\(gr_line\s*\(start ([-\d.]+) ([-\d.]+)\)\s*\(end ([-\d.]+) ([-\d.]+)\)',
+                                     z.read("board.kicad_pcb").decode())]
+        board = MultiLineString(segs)
+        extra = [(ec[i], ec[(i + 1) % len(ec)]) for i in range(len(ec))
+                 if board.distance(Point(*((ec[i] + ec[(i + 1) % len(ec)]) / 2))) > 0.002]
+        assert len(extra) <= 1, f"{tag}: {len(extra)} manifest edges are not board edges"
+        for a, b in extra:
+            assert abs(a[1] - b[1]) < 0.002, f"{tag}: edge_cuts closes diagonally {a} -> {b}"
 
         # 2. the footprint block rebuilds the exported .kicad_mod exactly
         fp = man.get("footprint")
