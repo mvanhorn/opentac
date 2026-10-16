@@ -57,7 +57,7 @@ The skill's worked example builds a sensor without the browser:
 uv run python .claude/skills/opentac/examples/insole.py insole_out
 ```
 
-It draws a size 9 insole, checks the outline and generates the board: 200 taxels (11 columns x
+It draws a size 9 insole, checks the outline and generates the board: 200 taxels (10 columns x
 28 rows) for the 60-pin readout board, DRC clean, in about 5 s on a laptop. `insole_out/` gets
 the KiCad board, Gerbers, `manifest.json`, `design.json`, a preview SVG, a 1:1 printable PDF and
 the cut files for the piezoresistive layer.
@@ -81,9 +81,9 @@ full = main.zip_with_case_endpoint(main.ZipWithCaseRequest(zip_b64=resp.zip_b64,
 open("square.zip", "wb").write(base64.b64decode(full.zip_b64))
 ```
 
-After a `[chat]` status line from the import, this prints `88 taxels, 0 DRC violations`, in
-about 2 s. `GenerateRequest` in `opentac/cad/main.py` lists every parameter;
-[SKILL.md](.claude/skills/opentac/SKILL.md) explains how to choose them.
+This prints `88 taxels, 0 DRC violations`, in about 2 s. `GenerateRequest` in
+`opentac/cad/main.py` lists every parameter; [SKILL.md](.claude/skills/opentac/SKILL.md)
+explains how to choose them.
 
 ## Simulate without a board
 
