@@ -51,7 +51,7 @@ from opentac.cad.pipeline.follow_padding import apply_main_follow_padding, cable
 from opentac.cad.pipeline.narrow_tail import narrow_routed_tail
 from opentac.cad.pipeline.tail_length import (
     AUTO_TAIL_MIN_MM, REASON_CASE, REASON_FIT, REASON_MIN, REASON_TYPED, fit_tail_length, round_up_length,
-    stretch_routed_tail,
+    stretch_routed_tail, tail_trim_room, trim_routed_tail,
 )
 from opentac.cad.pipeline.validate import validate_routes
 from opentac.cad.pipeline.smooth import chamfer_layer, los_simplify_layer, taxel_copper_keepout_mm
@@ -235,10 +235,10 @@ class GenerateRequest(BaseModel):
     narrow_tail: bool = Field(
         True,
         description="After routing, cut the cable tail down to the traces it carries, "
-                    "flaring back to the connector's width just before the connector. The "
+                    "stepping out to the connector's width just before the connector. The "
                     "taxels and traces are the same either way. False: as wide as the "
                     "connector. A tail_width_mm or tail side padding wins over both, and a "
-                    "cable too short to flare back keeps the connector's width.")
+                    "cable shorter than about 5.5 mm keeps the connector's width.")
     readout_board: str = Field(
         "auto",
         description='Which OpenTac readout board the sensor plugs into. "auto" uses the '
@@ -1298,6 +1298,55 @@ def _auto_tail_length(layout: Layout, outline_xy: np.ndarray, col_routes: list[R
     lay.tail["length_reason"] = reason
     lay.tail["length_case_warnings"] = check["warnings"]
     return lay, cr, rr, p
+
+
+def _relength_routed_tail(layout: Layout, col_routes: list[Route], row_routes: list[Route],
+                          params: Params, old_length: float) -> None:
+    """Redo padding with a Tail length typed that is not the board's own: the
+    finished board made again at that length from its routes, without routing
+    them again, the way _auto_tail_length makes it.
+
+    Longer: the connector moves out and every pad wire gets a straight run into
+    its moved pad (stretch_routed_tail). Shorter: the reverse, as far as every
+    pad wire's own straight run into its pad allows (tail_trim_room); further
+    than that, and with a drawn tail extension (its path starts at the old pad
+    row), the board has to be routed again, and a ValueError says so."""
+    routes = [*col_routes, *row_routes]
+    new = float(params.cable_length_mm)
+    delta = new - float(old_length)
+    tail = layout.tail
+    if (tail.get("tail_extension") or {}).get("enabled"):
+        raise ValueError(
+            f"The tail length cannot change to {new:g} mm under a drawn tail extension. Remove the "
+            "extension first, or press Generate to make the board with the new length.")
+    if delta < 0:
+        room = tail_trim_room(layout, routes)
+        if -delta > room + 1e-9:
+            shortest = round_up_length(float(old_length) - room)
+            hint = (f"It can be shortened to {shortest:g} mm without that. "
+                    if shortest < float(old_length) - 1e-9 else "")
+            raise ValueError(
+                f"A {new:g} mm tail needs the wires into the connector routed again: their straight "
+                f"runs into the pads are too short to cut. {hint}Press Generate to make the board "
+                f"with a {new:g} mm tail.")
+    # The tail back as it was routed (connector width; _finish_board narrows
+    # it again), its old finished pieces dropped.
+    if tail.get("mode") == "fit":
+        tail.update({"mode": "auto", "width_mm": float(tail.get("routed_width_mm")
+                                                      or tail.get("connector_min_width_mm")),
+                     "fit_width_mm": None, "fit_offset_mm": None})
+        for key in ("routed_width_mm", "shoulder_depth_mm", "step_fillet_mm", "landing_cover"):
+            tail.pop(key, None)
+    for key in ("tail_geometry_lock", "pre_follow_final_outline", "pad_split_center"):
+        tail.pop(key, None)
+    apply_tail_extension(layout, routes, params, CONNECTOR_DIR)      # none: records that
+    if delta > 0:
+        stretch_routed_tail(layout, routes, params, delta)
+    else:
+        trim_routed_tail(layout, routes, params, -delta)
+    _finish_board(layout, col_routes, row_routes, params)
+    tail["length_auto"] = False
+    tail["length_reason"] = REASON_TYPED
 
 
 def _routes_from_payload(routes_data: list[dict]) -> tuple[list[Route], list[Route]]:
@@ -2574,10 +2623,17 @@ def redo_padding(req: RedoPaddingRequest):
         resized = False
         if req.connector_pos_override is not None:
             resized = _resize_connector_pads(layout, req.connector_pos_override, [*col_routes, *row_routes])
-        apply_tail_extension(layout, [*col_routes, *row_routes], params, CONNECTOR_DIR)
-        _apply_post_route_containment(layout, col_routes, row_routes, params)
-        _capture_pre_follow_outline(layout)
-        apply_main_follow_padding(layout, [*col_routes, *row_routes], params)
+        # A Tail length typed into the form: the board made again at it, or a
+        # plain error saying to press Generate (_relength_routed_tail).
+        old_length = float(layout.tail.get("length_mm") or req.edit_data["params"]["cable_length_mm"])
+        if abs(float(params.cable_length_mm) - old_length) > 1e-6:
+            params = replace(params, cable_length_auto=False)
+            _relength_routed_tail(layout, col_routes, row_routes, params, old_length)
+        else:
+            apply_tail_extension(layout, [*col_routes, *row_routes], params, CONNECTOR_DIR)
+            _apply_post_route_containment(layout, col_routes, row_routes, params)
+            _capture_pre_follow_outline(layout)
+            apply_main_follow_padding(layout, [*col_routes, *row_routes], params)
         # Fires whenever the board carries an enlarged connector, not only when
         # this particular request changed the size -- see
         # _apply_connector_shoulder_if_needed. Must run after every other

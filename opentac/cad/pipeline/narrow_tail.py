@@ -4,29 +4,29 @@ The board is laid out and routed with a tail as wide as the connector, exactly a
 without this option, so the taxels and the wires are the same either way. Only
 then is the tail narrowed: a strip just wide enough for its wires, over the
 connector pads in use (which sit off the connector's centre whenever rows and
-columns differ in number), widening back to the connector's tab right before the
+columns differ in number), stepping out to the connector's tab right before the
 connector (geometry.make_tail_poly), plus the board around any wire that fans in
 inside the tail rather than in the sensor.
 """
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import shapely
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
 
 from .follow_padding import fillet_tail_junction, route_containment_mm
 from .geometry import (
-    TAIL_FLARE_MAX_SLOPE, fillet_inside_corners, fit_tail_strip, make_tail_poly, remove_collinear_closed,
-    tail_flare_length, tail_geometry,
+    fillet_inside_corners, fit_tail_strip, make_tail_poly, remove_collinear_closed, tail_geometry,
+    tail_widening_length,
 )
-
-# Straight cable a narrowed tail keeps between the board and its flare: the
-# follow-padding margin it leaves the board through, plus room to grip it.
-MIN_STRAIGHT_MM = 4.0
 from .layout import _largest_polygon, cable_shoulder_fill, shoulder_fill_depth
+
+# Straight cable a narrowed tail keeps between the board and its step: the
+# follow-padding margin it leaves the board through, plus room to grip it. With
+# the step at most fillet + corner (1.5 mm) long, every tail of the 12 mm
+# minimum narrows fully; only a shorter typed length can be too short.
+MIN_STRAIGHT_MM = 4.0
 
 
 def _follow_padding_on(params) -> bool:
@@ -44,29 +44,24 @@ def wire_edge_mm(params) -> float:
     return route_containment_mm(params)
 
 
-def strip_within_cable(width: float, offset: float, wide: float, cable_length: float):
-    """The strip (width, offset) as narrow as the cable can flare back from.
+def step_fillet_mm(params) -> float:
+    """The inside radius of the narrow tail's step to the connector's tab: the
+    one its corners where it leaves the board get (fillet_tail_junction)."""
+    return max(0.0, float(getattr(params, "connector_shoulder_fillet_mm", 0.0) or 0.0))
 
-    The flare needs its length at 45 degrees (set by the side with further to
-    go), and the cable a straight run past where it leaves the board (a case
-    clips onto that run). A strip whose flare does not fit is widened, each side
-    only as far as it must, until it does, so a short cable still gets the
-    narrowest tail it can carry -- never one wider than the connector-centred
-    strip this replaced, which needed the same flare room. None when the cable
-    has no room for any flare: the tail keeps the connector's width."""
+
+def strip_within_cable(width: float, offset: float, wide: float, cable_length: float, fillet: float):
+    """The strip (width, offset) if the cable is long enough to narrow, else None.
+
+    The step back to the connector's tab (geometry.tail_side_edges) is at most
+    `fillet` + TAIL_STEP_CORNER_MM long whatever its width, and the cable keeps
+    MIN_STRAIGHT_MM of straight run past where it leaves the board (a case clips
+    onto that run). A cable shorter than both keeps the connector's width."""
     if width >= wide - 1e-6:
         return width, offset
-    if cable_length >= tail_flare_length(width, wide, float("inf"), offset) + MIN_STRAIGHT_MM:
+    if cable_length >= tail_widening_length(width, wide, float("inf"), offset, fillet) + MIN_STRAIGHT_MM:
         return width, offset
-    reach = (cable_length - MIN_STRAIGHT_MM) * TAIL_FLARE_MAX_SLOPE / (math.pi / 2.0)
-    if reach < 0.05:
-        return None
-    half = wide / 2.0
-    lo = min(offset - width / 2.0, -half + reach)
-    hi = max(offset + width / 2.0, half - reach)
-    if hi - lo >= wide - 1e-6:
-        return None
-    return round(hi - lo, 4), round((lo + hi) / 2.0, 4)
+    return None
 
 
 def narrow_routed_tail(layout, routes, params) -> bool:
@@ -83,10 +78,12 @@ def narrow_routed_tail(layout, routes, params) -> bool:
     strip = fit_tail_strip(layout.pad_to_net, layout.connector_pos, params, wire_edge_mm(params))
     if strip is None:
         return False
-    strip = strip_within_cable(*strip, wide, float(params.cable_length_mm))
+    r = step_fillet_mm(params)
+    strip = strip_within_cable(*strip, wide, float(params.cable_length_mm), r)
     if strip is None:
         return False
     fit, offset = strip
+    tail.pop("landing_cover", None)
     # fit == wide (wires across the whole connector) still drops the padded
     # guard follow padding would add around a connector-width tail.
 
@@ -95,7 +92,8 @@ def narrow_routed_tail(layout, routes, params) -> bool:
     geom = tail_geometry(outline_poly, outline_xy[0], outline_xy[1], layout.connector_pos, params,
                          fit_width=fit, fit_offset=offset)
     mid, t_hat, n_out = geom["mid"], geom["t_hat"], geom["n_out"]
-    piece = make_tail_poly(mid, t_hat, n_out, fit, wide, geom["cable_length"], geom["total_length"], offset)
+    piece = make_tail_poly(mid, t_hat, n_out, fit, wide, geom["cable_length"], geom["total_length"], offset,
+                           step_fillet=r)
 
     # Wire the router ran outside the drawn outline in the old tail (or in the
     # shoulder fill beside it) keeps the board around it, and so does wire inside
@@ -119,7 +117,21 @@ def narrow_routed_tail(layout, routes, params) -> bool:
         pieces = shapely.get_parts(outside)
         cover = shapely.union_all(shapely.buffer(pieces, contain)).intersection(old)
         piece = unary_union([piece, cover]).buffer(0)
-    r = max(0.0, float(getattr(params, "connector_shoulder_fillet_mm", 0.0) or 0.0))
+        # The part of it in the step and the landing, kept for when a drawn
+        # tail extension takes them to the moved connector: the strip running
+        # on in their place (geometry.tail_without_landing) still has to hold
+        # a wire that comes down beside it (a fixed outline's pad fan turns in
+        # within millimetres of the pads).
+        start = geom["cable_length"] - tail_widening_length(fit, wide, max(0.5, geom["cable_length"] - 1.0),
+                                                            offset, r) - contain
+        big = 1e4
+        beyond = Polygon([mid - big * t_hat + start * n_out, mid + big * t_hat + start * n_out,
+                          mid + big * t_hat + big * n_out, mid - big * t_hat + big * n_out])
+        landing_cover = [g for g in getattr(cover.intersection(beyond), "geoms", [cover.intersection(beyond)])
+                         if g.geom_type == "Polygon" and g.area > 1e-6]
+        if landing_cover:
+            tail["landing_cover"] = [np.round(np.asarray(g.exterior.coords[:-1], dtype=float), 4).tolist()
+                                     for g in landing_cover]
     if r > 0:
         piece = fillet_inside_corners(piece, r)
     piece = _largest_polygon(piece)
@@ -129,7 +141,7 @@ def narrow_routed_tail(layout, routes, params) -> bool:
     # the router ran up a sloping outline above it.
     shoulder_depth = shoulder_fill_depth(wide)
     tail.update({"mode": "fit", "width_mm": fit, "fit_width_mm": fit, "fit_offset_mm": offset,
-                 "routed_width_mm": wide, "shoulder_depth_mm": shoulder_depth})
+                 "routed_width_mm": wide, "shoulder_depth_mm": shoulder_depth, "step_fillet_mm": r})
     layout.cable_poly = piece
 
     if not params.auto_expand_board:

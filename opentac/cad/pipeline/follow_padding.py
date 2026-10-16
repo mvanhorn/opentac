@@ -6,8 +6,8 @@ from shapely.ops import unary_union
 
 from .geometry import (
     CONNECTOR_BODY_ABOVE_MM, CONNECTOR_BODY_BELOW_MM, extension_tail_poly, fillet_inside_corners,
-    make_cable_rect, make_tail_poly, remove_collinear_closed, tail_flare_edges, tail_offset_mm,
-    tail_without_landing,
+    make_cable_rect, make_tail_poly, remove_collinear_closed, tail_offset_mm, tail_side_edges,
+    tail_step_fillet, tail_without_landing,
 )
 from .route_4layer import INNER_LAYERS, copper_layers_of
 
@@ -78,7 +78,8 @@ def _tail_extension_corridor(layout):
     if width <= 0:
         return None
     return extension_tail_poly(path, width, clearance, layout.tail.get("connector_min_width_mm"),
-                               float(ext.get("offset_mm") or 0.0))
+                               float(ext.get("offset_mm") or 0.0), tail_step_fillet(layout.tail),
+                               lead_dir=layout.tail.get("n_out"))
 
 
 def _poly_to_coords(poly):
@@ -197,10 +198,13 @@ def _tail_strip(layout, outline_xy, ext_active, cable_piece):
     if width <= 0:
         return cable_piece
     if ext_active:
-        # the strip runs on to the extension (cable_without_landing)
+        # the strip runs on to the extension (cable_without_landing), whose
+        # corridor holds the wire lanes turning with it
         strip_mid = mid + offset * t_hat
-        return make_cable_rect(strip_mid, strip_mid, t_hat, n_out, width, total)
-    return make_tail_poly(mid, t_hat, n_out, width, wide, cable, total, offset)
+        strip = make_cable_rect(strip_mid, strip_mid, t_hat, n_out, width, total)
+        corridor = _tail_extension_corridor(layout)
+        return strip if corridor is None or corridor.is_empty else unary_union([strip, corridor])
+    return make_tail_poly(mid, t_hat, n_out, width, wide, cable, total, offset, tail_step_fillet(t))
 
 
 def cable_without_landing(cable_poly, outline_xy, tail):
@@ -211,7 +215,8 @@ def cable_without_landing(cable_poly, outline_xy, tail):
     cable = float(t.get("length_mm") or 0.0)
     return tail_without_landing(cable_poly, mid, t["t_hat"], t["n_out"], float(t.get("width_mm") or 0.0),
                                 float(t.get("connector_min_width_mm") or 0.0), cable,
-                                cable + CONNECTOR_BODY_ABOVE_MM + CONNECTOR_BODY_BELOW_MM, tail_offset_mm(t))
+                                cable + CONNECTOR_BODY_ABOVE_MM + CONNECTOR_BODY_BELOW_MM, tail_offset_mm(t),
+                                tail_step_fillet(t), t.get("landing_cover") or ())
 
 
 def fillet_tail_junction(board, outline_xy, tail, params, piece=None):
@@ -221,11 +226,11 @@ def fillet_tail_junction(board, outline_xy, tail, params, piece=None):
     tail pieces, so it always fits the current board edge. Only whole fillet
     pieces touching the cable's sides are kept: other inside corners of the
     board keep the shape they have. The sides are the strip's straight edges,
-    the flare (geometry.tail_flare_edges) where the board reaches down past
-    where it starts, and the edge of the tail `piece` itself between the cable
-    edge and the landing, which is where the board meets the tail when the tail
-    holds a wire beside the strip (a 4-layer inner feed running down the tail
-    before it turns to its pad)."""
+    its step out to the tab (geometry.tail_side_edges) where the board reaches
+    down past where it starts, and the edge of the tail `piece` itself between
+    the cable edge and the landing, which is where the board meets the tail
+    when the tail holds a wire beside the strip (a 4-layer inner feed running
+    down the tail before it turns to its pad)."""
     r = max(0.0, float(getattr(params, "connector_shoulder_fillet_mm", 0.0) or 0.0))
     if r <= 0 or tail.get("t_hat") is None or tail.get("n_out") is None:
         return board
@@ -242,9 +247,9 @@ def fillet_tail_junction(board, outline_xy, tail, params, piece=None):
     lines = [[mid + s * t_hat, mid + s * t_hat + length * n_out] for s in (lo, hi)]
     near = [MultiLineString(lines)]
     if _strip_aware(tail) and 0.0 < width < wide - 1e-6:
-        prof = tail_flare_edges(width, wide, max(0.5, length - 1.0), offset)
-        near.append(MultiLineString([[mid + e[k] * t_hat + (length - e[0]) * n_out for e in prof]
-                                     for k in (1, 2)]))
+        sides = tail_side_edges(width, wide, max(0.5, length - 1.0), offset, tail_step_fillet(tail))
+        near.append(MultiLineString([[mid + s * t_hat + (length - u) * n_out for u, s in side]
+                                     for side in sides if len(side) >= 2]))
         if piece is not None and not piece.is_empty:
             big = 1e4
             band = Polygon([mid - big * t_hat, mid + big * t_hat,

@@ -3,10 +3,10 @@
 Narrowing must never change the sensor: the board is routed with the
 connector-width tail either way, so the taxels and every wire are identical.
 The narrow tail is a strip over the connector pads in use, which sit off the
-connector's centre whenever rows and columns differ in number; it flares back
-to the connector's tab, each side by its own amount, so the board's Edge.Cuts
-still meet the connector footprint's own outline, and a drawn tail extension
-takes the landing with it to the moved connector.
+connector's centre whenever rows and columns differ in number; it steps out to
+the connector's tab right before the connector, each side by its own amount, so
+the board's Edge.Cuts still meet the connector footprint's own outline, and a
+drawn tail extension takes the landing with it to the moved connector.
 """
 import base64
 import copy
@@ -26,7 +26,8 @@ from opentac.cad.main import CONNECTOR_DIR, _layout_from_edit_data, app
 from opentac.cad.export.connector_geometry import connector_edge_geometries, stitched_outline_segments
 from opentac.cad.pipeline.case import _tail_neck
 from opentac.cad.pipeline.geometry import (
-    TAIL_FLARE_MAX_SLOPE, fit_tail_strip, make_tail_poly, tail_flare_length, tail_offset_mm,
+    TAIL_FLARE_MAX_SLOPE, TAIL_STEP_CORNER_MM, concave_fillet_infill, fit_tail_strip, make_tail_poly,
+    tail_offset_mm, tail_side_edges, tail_step_fillet, tail_widening_length,
 )
 from opentac.cad.pipeline.narrow_tail import MIN_STRAIGHT_MM, strip_within_cable
 
@@ -44,8 +45,8 @@ def _gen(board_mode, narrow, **over):
 
 @pytest.mark.parametrize("board_mode", ["expand", "fixed_keepout"])
 def test_narrowing_changes_nothing_but_the_tail(board_mode):
-    # One typed length for both: an automatic one is chosen per tail (a narrow
-    # tail needs room to flare back to the connector), and the routes then
+    # One typed length for both: an automatic one is chosen per tail (the
+    # printed case needs a different length round each), and the routes then
     # differ by the straight run into each pad.
     narrow, wide = _gen(board_mode, True, cable_length_mm=12.0), _gen(board_mode, False, cable_length_mm=12.0)
     tn, tw = narrow["edit_data"]["layout"]["tail"], wide["edit_data"]["layout"]["tail"]
@@ -195,41 +196,76 @@ def _cut(poly, depth, mid=np.zeros(2), t_hat=np.array([1.0, 0.0]), n_out=np.arra
     return min(xs), max(xs)
 
 
-def test_flare_widens_each_side_by_its_own_amount():
-    w, W, off, cable = 12.0, 30.5, 5.0, 24.0
+def test_step_widens_each_side_by_its_own_amount():
+    w, W, off, cable, r = 12.0, 30.5, 5.0, 24.0, 1.0
     total = cable + 6.0
-    poly = make_tail_poly(np.zeros(2), [1.0, 0.0], [0.0, -1.0], w, W, cable, total, off)
+    poly = make_tail_poly(np.zeros(2), [1.0, 0.0], [0.0, -1.0], w, W, cable, total, off, step_fillet=r)
     assert poly.is_valid
-    flare = tail_flare_length(w, W, cable - 1.0, off)
-    assert flare == pytest.approx(np.pi / 2 * (off - w / 2 + W / 2) / TAIL_FLARE_MAX_SLOPE)
-    lo, hi = _cut(poly, 1.0)
-    assert (lo, hi) == (pytest.approx(off - w / 2), pytest.approx(off + w / 2))
+    step = r + TAIL_STEP_CORNER_MM
+    assert tail_widening_length(w, W, cable - 1.0, off, r) == pytest.approx(step)
+    # the plain strip right up to the step, the full tab from the landing on
+    for d in (1.0, cable - step - 1e-3):
+        lo, hi = _cut(poly, d)
+        assert (lo, hi) == (pytest.approx(off - w / 2), pytest.approx(off + w / 2))
     lo, hi = _cut(poly, cable + 1.0)
     assert (lo, hi) == (pytest.approx(-W / 2), pytest.approx(W / 2))
-    # both sides leave the strip at the same depth and are never steeper than 45 degrees
-    depths = np.linspace(cable - flare, cable, 200)
-    edges = np.array([_cut(poly, d) for d in depths])
-    for k in (0, 1):
-        slope = np.abs(np.diff(edges[:, k]) / np.diff(depths))
-        assert slope.max() <= TAIL_FLARE_MAX_SLOPE * 1.02
-    assert edges[0, 0] == pytest.approx(off - w / 2, abs=1e-6) and edges[0, 1] == pytest.approx(off + w / 2, abs=1e-6)
+    # square to the tail: past the straight edge (the corner's radius before the
+    # landing) the board is the tab, but for the corner's own rounding
+    lo, hi = _cut(poly, cable - TAIL_STEP_CORNER_MM + 1e-3)
+    assert -W / 2 < lo < -W / 2 + TAIL_STEP_CORNER_MM and W / 2 - TAIL_STEP_CORNER_MM < hi < W / 2
+    # no inside corner sharper than the fillet: rounding them to it adds nothing
+    # but slivers of the arcs' polygon steps (a square corner would add 0.21 mm2)
+    assert _inside_corner_wedge(poly, r) < 0.01
 
 
-def test_short_cable_narrows_as_far_as_its_flare_fits():
-    w, off, W = 21.1, 4.7, 30.5
-    # a long cable takes the strip as it is
-    assert strip_within_cable(w, off, W, 30.0) == (w, off)
-    # a 12 mm cable has room for an 8 mm flare: each side moves in at most 8 / (pi/2)
-    w2, off2 = strip_within_cable(w, off, W, 12.0)
-    lo, hi = off2 - w2 / 2, off2 + w2 / 2
-    assert lo <= off - w / 2 + 1e-9 and hi >= off + w / 2 - 1e-9          # still carries every wire
-    assert tail_flare_length(w2, W, float("inf"), off2) + MIN_STRAIGHT_MM <= 12.0 + 1e-3
-    assert w2 < W - 1.0                                                    # and is narrower than the tab
-    # never wider than the connector-centred strip with the same reach
-    sym = 2 * max(abs(off - w / 2), abs(off + w / 2))
-    assert w2 <= sym + 1e-9 or sym >= W
-    # no room for any flare: the connector's width
-    assert strip_within_cable(w, off, W, MIN_STRAIGHT_MM) is None
+def test_a_small_step_keeps_its_fillet_and_a_flush_side_stays_straight():
+    W, r = 30.5, 1.0
+    # the high side moves out 0.3 mm, less than fillet + corner: an S of the same
+    # two arcs, so no inside corner sharper than the fillet, and shorter
+    w, off = W - 0.3, -0.15                       # the low side on the tab's edge
+    low, high = tail_side_edges(w, W, 23.0, off, r)
+    assert len(low) == 1 and low[0] == (0.0, pytest.approx(-W / 2))          # flush: straight on
+    assert high[0][1] == pytest.approx(off + w / 2) and high[-1] == (0.0, pytest.approx(W / 2))
+    assert 0.0 < high[0][0] < r + TAIL_STEP_CORNER_MM
+    poly = make_tail_poly(np.zeros(2), [1.0, 0.0], [0.0, -1.0], w, W, 24.0, 30.0, off, step_fillet=r)
+    assert poly.is_valid and _inside_corner_wedge(poly, r) < 0.01
+
+
+def _inside_corner_wedge(poly, r):
+    """The largest piece rounding the polygon's inside corners to `r` adds."""
+    infill = concave_fillet_infill(poly, 0.98 * r)
+    return max([g.area for g in getattr(infill, "geoms", [infill])], default=0.0)
+
+
+def test_typed_widths_and_older_designs_keep_the_flare():
+    """A width the user typed is routed with the long flare (the router fans
+    wires into it), and a tail narrowed before the step came back as it was."""
+    w, W, off = 12.0, 30.5, 5.0
+    assert tail_widening_length(w, W, 100.0, off) == pytest.approx(
+        np.pi / 2 * (off - w / 2 + W / 2) / TAIL_FLARE_MAX_SLOPE)
+    assert tail_step_fillet({"mode": "fit", "fit_offset_mm": 2.0}) is None
+    assert tail_step_fillet({"mode": "manual"}) is None
+    assert tail_step_fillet({"mode": "fit", "step_fillet_mm": 1.0}) == 1.0
+
+
+def test_a_typed_width_narrower_than_the_pads_still_routes_through_its_flare():
+    g = client.post("/generate", json=dict(outline=[[0, 0], [34, 0], [34, 8], [0, 8]], tail_width_mm=6.0,
+                                           cable_length_mm=24.0, **SMALL))
+    assert g.status_code == 200, g.text[:300]
+    t = g.json()["edit_data"]["layout"]["tail"]
+    assert t["mode"] == "manual" and t.get("step_fillet_mm") is None
+    assert g.json()["drc"]["violations"] == 0
+
+
+def test_short_cable_narrows_fully_or_not_at_all():
+    w, off, W, r = 21.1, 4.7, 30.5, 1.0
+    step = tail_widening_length(w, W, float("inf"), off, r)
+    assert step <= r + TAIL_STEP_CORNER_MM
+    # every tail of the automatic 12 mm minimum narrows to its wires
+    for cable in (30.0, 12.0, step + MIN_STRAIGHT_MM):
+        assert strip_within_cable(w, off, W, cable, r) == (w, off)
+    # too short for the step and the straight run past the board: the connector's width
+    assert strip_within_cable(w, off, W, step + MIN_STRAIGHT_MM - 0.1, r) is None
 
 
 def test_designs_saved_before_the_offset_have_none():
@@ -293,9 +329,10 @@ def test_off_centre_strip_is_as_narrow_as_its_wires(name, conn):
     o = np.asarray(ed["outline"], dtype=float)
     mid = 0.5 * (o[0] + o[1])
     poly = Polygon(ed["final_outline"]).buffer(0)
-    flare = tail_flare_length(t["width_mm"], t["connector_min_width_mm"], float("inf"), t["fit_offset_mm"])
+    step = tail_widening_length(t["width_mm"], t["connector_min_width_mm"], float("inf"), t["fit_offset_mm"],
+                                t["step_fillet_mm"])
     cuts = [_cut(poly, d, mid, np.asarray(t["t_hat"]), np.asarray(t["n_out"]))
-            for d in np.arange(1.0, t["length_mm"] - flare, 0.25)]
+            for d in np.arange(1.0, t["length_mm"] - step, 0.25)]
     narrowest = min(cuts, key=lambda c: c[1] - c[0])
     assert narrowest[1] - narrowest[0] == pytest.approx(hi - lo, abs=0.05)
     assert narrowest[0] == pytest.approx(lo, abs=0.05) and narrowest[1] == pytest.approx(hi, abs=0.05)
@@ -329,7 +366,7 @@ def test_extension_corridor_stays_over_the_off_centre_lanes():
     out = r.json()["edit_data"]
     o = np.asarray(out["outline"], dtype=float)
     mid = 0.5 * (o[0] + o[1])
-    depth = float((s - mid) @ n) + 4.0                      # down the extension, above its flare
+    depth = float((s - mid) @ n) + 4.0                      # down the extension, above its step
     lo, hi = _cut(Polygon(out["final_outline"]).buffer(0), depth, mid, np.asarray(t["t_hat"]), n)
     assert (lo + hi) / 2 == pytest.approx(t["fit_offset_mm"], abs=0.05)
     r = client.post("/export-edited", json={"edit_data": out, "routes": routes})

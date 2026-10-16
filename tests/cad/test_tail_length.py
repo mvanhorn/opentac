@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from opentac.cad.main import _recipe_params, app
 from opentac.cad.pipeline.case import case_cable_check
-from opentac.cad.pipeline.geometry import fit_tail_strip, tail_flare_length
+from opentac.cad.pipeline.geometry import fit_tail_strip, tail_widening_length
 from opentac.cad.pipeline.narrow_tail import MIN_STRAIGHT_MM
 from opentac.cad.pipeline.tail_length import (
     AUTO_TAIL_MIN_MM, REASON_CASE, REASON_FIT, REASON_MIN, REASON_TYPED, round_up_length,
@@ -76,7 +76,8 @@ def test_automatic_length_narrows_fully_and_clears_the_case(name):
     assert t["width_mm"] == pytest.approx(width) and t["fit_offset_mm"] == pytest.approx(offset)
     wide = t["connector_min_width_mm"]
     if width < wide - 1e-6:
-        assert length >= tail_flare_length(width, wide, float("inf"), offset) + MIN_STRAIGHT_MM - 1e-6
+        assert length >= tail_widening_length(width, wide, float("inf"), offset, t["step_fillet_mm"]) \
+            + MIN_STRAIGHT_MM - 1e-6
     # (b) the printed case leaves the connector body clear
     check = case_cable_check(ed["final_outline"], _cable_y(ed))
     assert check["short_mm"] == 0 and check["warnings"] == []
