@@ -21,7 +21,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 try:
-    # Local convenience only: put GEMINI_API_KEY in backend/.env and the
+    # Local convenience only: put GEMINI_API_KEY in opentac/cad/.env and the
     # double-click launcher picks it up. On Render the env vars are real and
     # there is no file, so a missing dotenv is not an error.
     from dotenv import load_dotenv

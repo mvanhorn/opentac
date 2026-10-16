@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Check docs/learn/js/transfer.js against opentac_transfer.py.
+"""Check docs/learn/js/transfer.js against opentac.transfer.
 
-    uv run python scripts/learn/check_transfer.py [--sources DIR]
+    uv run python scripts/learn/check_transfer.py
 
 Builds the transfer matrix M (A taxels -> B taxels) with the Python Transfer
-class and with the page's JS port, for every ordered pair of the three
+class (the package's own, opentac/transfer.py) and with the page's JS port, for every ordered pair of the three
 recorded skins and a few placements (rotation, shift), and requires them to
 agree to 1e-9. Needs node. Run build_data.py first.
 """
@@ -23,7 +23,6 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[2]
 DATA = REPO / "docs" / "learn" / "data"
 JS = REPO / "docs" / "learn" / "js" / "transfer.js"
-DEFAULT_SOURCES = Path.home() / "Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology"
 
 NODE_DRIVER = r"""
 const T = require(process.argv[2]);
@@ -41,24 +40,15 @@ process.stdout.write(JSON.stringify(out));
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--sources", type=Path,
-                    default=Path(os.environ.get("OPENTAC_SOURCES", DEFAULT_SOURCES)))
-    args = ap.parse_args()
-    sys.path.insert(0, str(args.sources / "Arduino" / "stm_test" / "tactile_imu_fast_cfg"))
-    from opentac_force import SkinForce        # noqa: E402
-    from opentac_transfer import Layout, Transfer  # noqa: E402
+    argparse.ArgumentParser(description=__doc__).parse_args()
+    sys.path.insert(0, str(REPO))
+    from opentac.transfer import Layout, Transfer  # noqa: E402
 
     skins = json.loads((DATA / "skins.json").read_text())
     names = ["leap_palm", "foot", "agileX_2mm"]
 
     def layout(name):
-        # Layout only reads xy_mm and pitch_mm; skip SkinForce's calibration lookup,
-        # which these uncalibrated pitches do not have.
-        sf = SkinForce.__new__(SkinForce)
-        sf.xy_mm = np.asarray(skins[name]["xy"], float)
-        sf.pitch_mm = float(skins[name]["pitch"])
-        return Layout(sf)
+        return Layout.from_xy(skins[name]["xy"], skins[name]["pitch"])
 
     cases = []
     for a in names:
@@ -87,7 +77,7 @@ def main():
         if err > 1e-9:
             print(f"MISMATCH {c['a']} -> {c['b']} angle {c['angle']}: max |dM| {err:.3g}")
             sys.exit(1)
-    print(f"OK: {len(cases)} placements, JS transfer matrix == opentac_transfer.Transfer (max |dM| {worst:.1e})")
+    print(f"OK: {len(cases)} placements, JS transfer matrix == opentac.transfer.Transfer (max |dM| {worst:.1e})")
 
 
 if __name__ == "__main__":

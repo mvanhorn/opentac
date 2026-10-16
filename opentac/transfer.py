@@ -77,8 +77,19 @@ class Layout:
     def __init__(self, manifest):
         m = _as_manifest(manifest)
         self.manifest = m
-        self.xy = np.asarray(m.xy, dtype=float)
-        self.pitch = square_pitch_mm(m)
+        self._index(np.asarray(m.xy, dtype=float), square_pitch_mm(m))
+
+    @classmethod
+    def from_xy(cls, xy, pitch_mm: float) -> "Layout":
+        """A Layout from taxel centres (mm) and a square pitch, without a manifest."""
+        lay = cls.__new__(cls)
+        lay.manifest = None
+        lay._index(np.asarray(xy, dtype=float), float(pitch_mm))
+        return lay
+
+    def _index(self, xy, pitch):
+        self.xy = xy
+        self.pitch = pitch
         self.n = len(self.xy)
         self.ref = self.xy[0]
         ij = np.round((self.xy - self.ref) / self.pitch).astype(int)
