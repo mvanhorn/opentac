@@ -77,7 +77,7 @@ const TAIL_STEPS = [
   {
     view: "tool", selector: "#download",
     title: "Download",
-    body: "Download a ZIP of manufacturing files — a KiCad board file, footprints, Gerbers, a drill file, and a placement manifest — ready for a fab or for KiCad.",
+    body: "Download a ZIP of manufacturing files — a KiCad board file, footprints, Gerbers, a drill file, and a placement manifest — ready for a fab or for KiCad. It also has the printed case as STL files, in its case/ folder.",
   },
   {
     view: "tool", selector: "#nav-help",

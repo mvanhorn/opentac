@@ -557,6 +557,10 @@
               lid a single piece. Both halves stop at the cable edge, so the tail
               leaves through the open side.
             </p>
+            <p class="hint">
+              Download ZIP includes the case (bottom and all three lids) with the
+              settings below. The lid chosen here is marked as the primary one.
+            </p>
 
             <fieldset class="case-top-choice">
               <legend>Top piece</legend>
@@ -678,23 +682,27 @@
           </div>
         </div>
 
-        <div class="panel download-bar">
-          <label class="download-bar__name" for="design-name">
-            <span class="mini">Name</span>
-            <input id="design-name" type="text" spellcheck="false"
-                   autocomplete="off"
-                   title="Base name for every file you download from this design, and the label printed on the front silkscreen just above the connector. Defaults to the file you started from, or the date and time if you drew it from scratch.">
-          </label>
-          <span id="design-name-hint" class="mini download-bar__hint" hidden
-                title="The silkscreen label is drawn into the Gerbers when the board is generated. The downloaded files will use the new name, but the printed board still carries the old one.">Regenerate to print this name</span>
-          <span id="pdf-status" class="mini download-bar__status"></span>
-          <button id="download-pdf" type="button" class="secondary" disabled
-                  title="A 1:1 printable outline. Print it at 100%, cut it out and hold it against the real part to check the fit before ordering boards.">Download printable PDF</button>
-          <button id="download-velostat-dxf" type="button" class="secondary" disabled
-                  title="The Velostat piece as a DXF in millimetres, for a laser cutter. Covers the sensor area only, not the tail.">Velostat DXF</button>
-          <button id="download-velostat-pdf" type="button" class="secondary" disabled
-                  title="The Velostat shape printed twice, mirrored across a fold line. Fold the paper with the Velostat inside and cut both together.">Velostat fold PDF</button>
-          <button id="download" type="button" class="primary" disabled>Download ZIP</button>
+        <div class="panel download-panel">
+          <div class="download-bar">
+            <label class="download-bar__name" for="design-name">
+              <span class="mini">Name</span>
+              <input id="design-name" type="text" spellcheck="false"
+                     autocomplete="off"
+                     title="Base name for every file you download from this design, and the label printed on the front silkscreen just above the connector. Defaults to the file you started from, or the date and time if you drew it from scratch.">
+            </label>
+            <span id="design-name-hint" class="mini download-bar__hint" hidden
+                  title="The silkscreen label is drawn into the Gerbers when the board is generated. The downloaded files will use the new name, but the printed board still carries the old one.">Regenerate to print this name</span>
+            <span id="pdf-status" class="mini download-bar__status"></span>
+            <button id="download-pdf" type="button" class="secondary" disabled
+                    title="A 1:1 printable outline. Print it at 100%, cut it out and hold it against the real part to check the fit before ordering boards.">Download printable PDF</button>
+            <button id="download-velostat-dxf" type="button" class="secondary" disabled
+                    title="The Velostat piece as a DXF in millimetres, for a laser cutter. Covers the sensor area only, not the tail.">Velostat DXF</button>
+            <button id="download-velostat-pdf" type="button" class="secondary" disabled
+                    title="The Velostat shape printed twice, mirrored across a fold line. Fold the paper with the Velostat inside and cut both together.">Velostat fold PDF</button>
+            <button id="download" type="button" class="primary" disabled
+                    title="Everything for this sensor in one archive: the board files for the fab, the manifest, the 1:1 PDF, the Velostat cut files, and the printed case (bottom and all three lids, in case/).">Download ZIP</button>
+          </div>
+          <p id="zip-status" class="mini download-bar__note" aria-live="polite"></p>
         </div>
       </section>
     </main>
@@ -803,7 +811,9 @@
             <li>An Excellon drill file for vias.</li>
             <li><code>manifest.json</code> &mdash; taxel placements and the scan matrix, for driving the sensor from a microcontroller. It also carries a <code>design</code> block with every setting the board was made from.</li>
             <li><code>design.json</code> &mdash; the design itself, so you can reopen it here later.</li>
+            <li><code>case/</code> &mdash; the printed case as STL files: the bottom, the lid with shear-sensing bumps, and the flat and hatched lids. Print the bottom and one lid. <code>case/README.txt</code> says which lid is the primary one and which settings were used.</li>
           </ul>
+          <p>The case is built when you press Download ZIP, from the settings in the case panel (its defaults if you have not changed them), so the download takes a few seconds longer, more on a large board. The primary lid is the one chosen in the case panel, or the bumped lid if you have not chosen one. If the case cannot be built for your board, the ZIP downloads without it and a note under the button says why.</p>
           <h3>Reopening a design</h3>
           <p>Keep the ZIP and you can carry on where you left off: <strong>Open</strong> in the mode switcher (or <strong>Continue a saved design</strong> on the front page) takes the ZIP back &mdash; no need to unzip it &mdash; and puts the board and every setting back on screen, including routes you moved by hand.</p>
           <p>If the app has been updated since you downloaded it, the exact board can no longer be guaranteed, so it is rebuilt from its saved settings instead and you are told so. That rebuild reproduces the same board; only hand edits to individual routes are lost.</p>
@@ -819,6 +829,7 @@
         <section id="help-bumps" class="panel help-section">
           <h2>Printed case and shear bumps</h2>
           <p>The case is two 3D-printed parts: a bottom with a pocket that the sensor and its piezoresistive layer drop into, and a lid held on by a ribbed rim. No glue and no screws. Both halves stop at the cable edge, so the tail leaves through the open side.</p>
+          <p>Download ZIP includes the case in its <code>case/</code> folder: the bottom and all three lids, built with the settings in the case panel (<strong>Add a printed case</strong>, under the board preview). Use that panel to change the settings, preview the parts, or download a single part.</p>
           <p>The lid comes in three versions:</p>
           <dl class="help-glossary">
             <dt>Flat</dt>

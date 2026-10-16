@@ -616,7 +616,9 @@ export function createRouteEditor({
     } else {
       setStatus(renderPreview ? "Tail extension preview ready. DRC clean." : "Edited export ready. DRC clean.");
     }
-    if (download) downloadZip(data.zip_b64, downloadName("edited", "zip"));
+    // Awaited: downloadZip adds the printed case on the backend first, and the
+    // Download button stays busy until the file is actually saved.
+    if (download) await downloadZip(data.zip_b64, downloadName("edited", "zip"));
     updateButtons();
     return true;
   }

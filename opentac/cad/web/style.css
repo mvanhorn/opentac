@@ -627,6 +627,12 @@ button.mode-button.active {
   flex: 0 0 auto;
 }
 .download-bar__status { margin-top: 0; margin-right: auto; }
+/* What happened to the printed case on the last Download ZIP. A line under
+   the bar rather than in it, so a long reason does not squeeze the buttons. */
+.download-panel { flex: 0 0 auto; }
+.download-bar__note { margin: 0; padding: 0 14px 10px; text-align: right; }
+.download-bar__note:empty { display: none; }
+.download-bar__note--warn { color: #d8a33c; }
 
 /* Base name for every file this design produces. Sits at the left of the bar so
    it reads as a property of the design rather than of one button. */

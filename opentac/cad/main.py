@@ -59,6 +59,7 @@ from opentac.cad.export.design import (
 from opentac.cad.export.legacy_manifest import (
     is_legacy_manifest, recover as recover_legacy, geometry_svg,
 )
+from opentac.cad.export.case_zip import build_case_files, zip_with_case
 from opentac.cad.export.print_pdf import generate_print_pdf
 from opentac.cad.export.silk_backmark import backmark
 from opentac.cad.export.velostat import velostat_polygon, velostat_dxf, velostat_fold_pdf
@@ -245,6 +246,26 @@ class CaseResponse(BaseModel):
     top_stl_b64: str
     stats: dict
     warnings: list[str]
+
+
+class ZipWithCaseRequest(BaseModel):
+    zip_b64: str = Field(..., description="The board ZIP from /generate or /export-edited")
+    edit_data: dict
+    params: dict | None = Field(
+        None, description="Overrides for CaseParams fields, as for /case. bumps and hatch are "
+                          "ignored: every lid style is built")
+    bump_params: dict | None = Field(None, description="Overrides for BumpParams, for the bumped lid")
+    primary: str = Field("bumps", description="The lid case/README.txt names as the one to "
+                                              "print: bumps, flat or hatch")
+    name: str = Field("", description="File stem for the case files, as the page names its downloads")
+
+
+class ZipWithCaseResponse(BaseModel):
+    zip_b64: str
+    case_files: list[str] = Field(..., description="STL paths added under case/; empty if none")
+    case_error: str | None = Field(
+        None, description="Why the case, or one of its lids, was left out; null if all went in")
+    warnings: list[str] = []
 
 
 class RedoPaddingRequest(BaseModel):
@@ -2305,6 +2326,43 @@ def bump_sheet(req: BumpSheetRequest):
         raise HTTPException(status_code=500, detail=f"Bump sheet error: {str(e)}")
 
 
+def _case_inputs(edit_data: dict, params: dict | None, bump_params: dict | None):
+    """What build_case needs from a board's edit_data, plus the CaseParams.
+
+    Shared by /case and /zip-with-case so the case in the ZIP is built from
+    exactly the inputs the case panel uses. Raises ValueError for edit_data
+    without a board.
+    """
+    missing = [k for k in ("params", "layout", "outline") if k not in edit_data]
+    if missing:
+        raise ValueError(
+            f"edit_data is missing {', '.join(missing)} — generate a board first.")
+    stored = edit_data["params"]
+    placements = np.asarray(edit_data["layout"]["placements_xy"], dtype=float)
+    removed = {int(i) for i in (edit_data.get("removed_pix") or [])}
+    active = [i for i in range(len(placements)) if i not in removed]
+    outline = np.asarray(edit_data["outline"], dtype=float)
+    cable_y = float(outline[:2, 1].min())
+
+    overrides = {k: v for k, v in (params or {}).items()
+                 if k in CaseParams.__dataclass_fields__ and v is not None}
+    overrides.pop("bump_params", None)
+    cp = CaseParams(**overrides)
+    if bump_params:
+        bumps = {k: v for k, v in bump_params.items()
+                 if k in BumpParams.__dataclass_fields__ and v is not None}
+        cp.bump_params = BumpParams(**bumps)
+
+    board = {
+        "args": (edit_data.get("final_outline", edit_data["outline"]), cable_y,
+                 placements, active,
+                 float(stored["pitch_x_mm"]), float(stored["pitch_y_mm"])),
+        "active": active,
+        "tail_extension": (edit_data.get("layout") or {}).get("tail_extension"),
+    }
+    return board, cp
+
+
 @app.post("/case", response_model=CaseResponse)
 def case(req: CaseRequest):
     """Two printable case halves for an already-generated board.
@@ -2320,36 +2378,12 @@ def case(req: CaseRequest):
     case around it.
     """
     try:
-        edit_data = req.edit_data
-        missing = [k for k in ("params", "layout", "outline") if k not in edit_data]
-        if missing:
-            raise ValueError(
-                f"edit_data is missing {', '.join(missing)} — generate a board first.")
-        stored = edit_data["params"]
-        placements = np.asarray(edit_data["layout"]["placements_xy"], dtype=float)
-        removed = {int(i) for i in (edit_data.get("removed_pix") or [])}
-        active = [i for i in range(len(placements)) if i not in removed]
-        outline = np.asarray(edit_data["outline"], dtype=float)
-        cable_y = float(outline[:2, 1].min())
-
-        overrides = {k: v for k, v in (req.params or {}).items()
-                     if k in CaseParams.__dataclass_fields__ and v is not None}
-        overrides.pop("bump_params", None)
-        cp = CaseParams(**overrides)
-        if req.bump_params:
-            bumps = {k: v for k, v in req.bump_params.items()
-                     if k in BumpParams.__dataclass_fields__ and v is not None}
-            cp.bump_params = BumpParams(**bumps)
-
-        result = build_case(
-            edit_data.get("final_outline", edit_data["outline"]), cable_y,
-            placements, active,
-            float(stored["pitch_x_mm"]), float(stored["pitch_y_mm"]), cp,
-            tail_extension=(edit_data.get("layout") or {}).get("tail_extension"))
+        board, cp = _case_inputs(req.edit_data, req.params, req.bump_params)
+        result = build_case(*board["args"], cp, tail_extension=board["tail_extension"])
 
         stats = dict(result.stats)
         stats.update({
-            "taxels": len(active),
+            "taxels": len(board["active"]),
             "recess_depth_mm": cp.recess_depth_mm,
             "plate_thickness_mm": cp.plate_thickness_mm,
             "lid_thickness_mm": cp.lid_thickness_mm,
@@ -2369,6 +2403,51 @@ def case(req: CaseRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Case error: {str(e)}")
+
+
+@app.post("/zip-with-case", response_model=ZipWithCaseResponse)
+def zip_with_case_endpoint(req: ZipWithCaseRequest):
+    """The board ZIP with the printed case added under case/.
+
+    Called by the Download ZIP button, not by /generate: three lids are three
+    boolean-heavy meshes (measured 0.3s on a typical board and 1.7s on the
+    largest example design, locally; the free tier is ~10x slower), and only a
+    user who downloads needs them. See export/case_zip.py.
+
+    Never fails because of the case. A board the case cannot be built for
+    still gets its ZIP back, with case_error saying why; only a zip_b64 that
+    is not a ZIP is an error (400), and the page then downloads the ZIP it
+    already holds.
+    """
+    try:
+        zipfile.ZipFile(io.BytesIO(base64.b64decode(req.zip_b64, validate=True))).close()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"zip_b64 is not a ZIP: {e}")
+
+    warnings: list[str] = []
+    try:
+        board, cp = _case_inputs(req.edit_data, req.params, req.bump_params)
+        built = build_case_files(*board["args"], cp, primary=req.primary, stem=req.name,
+                                 tail_extension=board["tail_extension"])
+        files, left_out, warnings = built.files, built.left_out, built.warnings
+    except Exception as e:  # noqa: BLE001 - the board ZIP must still go out
+        files = {}
+        left_out = {"case": str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"}
+
+    def sentence(text):
+        text = str(text).strip()
+        return text if text.endswith((".", "!", "?")) else text + "."
+
+    if not files:
+        error = sentence(f"The printed case was left out: {left_out.get('case', 'it could not be built')}")
+    elif left_out:
+        error = " ".join(sentence(f"The {k} was left out: {v}") for k, v in left_out.items())
+    else:
+        error = None
+    return ZipWithCaseResponse(
+        zip_b64=zip_with_case(req.zip_b64, files),
+        case_files=[p for p in files if p.endswith(".stl")],
+        case_error=error, warnings=warnings)
 
 
 @app.post("/redo-padding", response_model=RedoPaddingResponse)

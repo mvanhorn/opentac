@@ -5,6 +5,10 @@
 //
 // The shear bumps are a SETTING here, not a separate part: "flat lid" and
 // "bumped lid" are two versions of the same top piece.
+//
+// Download ZIP also puts the case in the ZIP (case/, every lid), built from
+// this panel's settings via otcCaseZipSettings; this panel is for previewing
+// and tuning it, and for downloading single parts.
 import { API_BASE } from "./config.js";
 import { downloadName } from "./design-name.js";
 import { resetBumpView, showBumpStl } from "./bump-viewer.js";
@@ -33,6 +37,10 @@ let boardReady = false;
 let bottomBytes = null;
 let topBytes = null;
 let busy = false;
+// Whether the user has picked a lid here (changed the choice, or built a case
+// with it). Until then the ZIP's primary lid is the bumped one, whatever the
+// radio's initial value -- see otcCaseZipSettings below.
+let lidChosen = false;
 
 function lidStyle() {
   const sel = document.querySelector('input[name="case-top"]:checked');
@@ -80,7 +88,10 @@ enableEl.addEventListener("change", () => {
 });
 
 for (const el of document.querySelectorAll('input[name="case-top"]')) {
-  el.addEventListener("change", updateButtons);
+  el.addEventListener("change", () => {
+    lidChosen = true;
+    updateButtons();
+  });
 }
 hatchBumpsEl.addEventListener("change", updateButtons);
 
@@ -108,42 +119,65 @@ dlBottomBtn.addEventListener("click", () =>
 dlTopBtn.addEventListener("click", () =>
   topBytes && download(topBytes, downloadName("case_top", "stl")));
 
+// The panel's fields as CaseParams / BumpParams overrides. Read whether or not
+// the panel is open: untouched fields hold the backend's defaults, so this is
+// "the user's settings, or the defaults" without tracking which is which.
+function caseParams() {
+  return {
+    recess_depth_mm: num(F("case-recess"), 0.2),
+    plate_thickness_mm: num(F("case-plate"), 0.6),
+    lid_thickness_mm: num(F("case-lid"), 0.8),
+    skirt_width_mm: num(F("case-skirt"), 4.0),
+    rib_period_mm: num(F("case-period"), 20),
+    rib_gap_mm: num(F("case-gap"), 10),
+    recess_tolerance_mm: num(F("case-tolerance"), 0.2),
+    bumps: lidStyle() === "bumps",
+    hatch: lidStyle() === "hatch",
+    hatch_through: F("case-hatch-through").checked,
+    hatch_depth_mm: num(F("case-hatch-depth"), 0.4),
+    hatch_groove_mm: num(F("case-hatch-width"), 0.9),
+    hatch_tab_mm: num(F("case-hatch-tab"), 1.2),
+    hatch_bumps: hatchBumpsEl.checked,
+    hatch_bump_dia_mm: num(F("case-hatch-bump-dia"), 1.8),
+    hatch_bump_height_mm: num(F("case-hatch-bump-height"), 0.6),
+  };
+}
+
+function bumpParams() {
+  return {
+    bump_height_mm: num(F("case-bump-height"), 2.0),
+    bump_base_frac: num(F("case-bump-base"), 80) / 100,
+    bump_top_ratio: num(F("case-bump-top"), 70) / 100,
+  };
+}
+
+/**
+ * Called by app.js when Download ZIP builds the case into the ZIP. Every lid
+ * goes in (the backend overrides bumps/hatch per lid); the lid choice only
+ * decides which one case/README.txt names as primary, and that is the bumped
+ * lid until the user picks one here.
+ */
+window.otcCaseZipSettings = () => ({
+  params: caseParams(),
+  bump_params: bumpParams(),
+  primary: lidChosen ? lidStyle() : "bumps",
+});
+
 generateBtn.addEventListener("click", async () => {
   const editData = window.otcGetEditData?.();
   if (!editData) {
     statusEl.innerHTML = '<span class="error">Generate a board first.</span>';
     return;
   }
+  // Building a case with a lid is choosing it, even if it is the preselected one.
+  lidChosen = true;
   busy = true;
   updateButtons();
   statusEl.textContent = "Building the case…";
   try {
-    const params = {
-      recess_depth_mm: num(F("case-recess"), 0.2),
-      plate_thickness_mm: num(F("case-plate"), 0.6),
-      lid_thickness_mm: num(F("case-lid"), 0.8),
-      skirt_width_mm: num(F("case-skirt"), 4.0),
-      rib_period_mm: num(F("case-period"), 20),
-      rib_gap_mm: num(F("case-gap"), 10),
-      recess_tolerance_mm: num(F("case-tolerance"), 0.2),
-      bumps: lidStyle() === "bumps",
-      hatch: lidStyle() === "hatch",
-      hatch_through: F("case-hatch-through").checked,
-      hatch_depth_mm: num(F("case-hatch-depth"), 0.4),
-      hatch_groove_mm: num(F("case-hatch-width"), 0.9),
-      hatch_tab_mm: num(F("case-hatch-tab"), 1.2),
-      hatch_bumps: hatchBumpsEl.checked,
-      hatch_bump_dia_mm: num(F("case-hatch-bump-dia"), 1.8),
-      hatch_bump_height_mm: num(F("case-hatch-bump-height"), 0.6),
-    };
+    const params = caseParams();
     const body = { edit_data: editData, params };
-    if (params.bumps) {
-      body.bump_params = {
-        bump_height_mm: num(F("case-bump-height"), 2.0),
-        bump_base_frac: num(F("case-bump-base"), 80) / 100,
-        bump_top_ratio: num(F("case-bump-top"), 70) / 100,
-      };
-    }
+    if (params.bumps) body.bump_params = bumpParams();
     const resp = await fetch(`${API_BASE}/case`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

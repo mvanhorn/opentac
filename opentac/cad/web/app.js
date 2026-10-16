@@ -1220,6 +1220,7 @@ window.addEventListener("otc:restore-design", (e) => {
   // Any case in the page belongs to whatever board was here before. Drop it
   // before the restored board lands.
   window.otcCaseInvalidate?.();
+  setZipNote("");
   routeEditor.load(editData, svg);
   // Both paths enable the case: it is built from the board's geometry, which a
   // recovered design has in full.
@@ -1294,9 +1295,15 @@ const pcbPreview = document.getElementById("pcb-preview");
 const downloadBtn = document.getElementById("download");
 const routeEditStatus = document.getElementById("route-edit-status");
 let lastZipB64 = null;
+const zipNoteEl = document.getElementById("zip-status");
+// True while Download ZIP waits on the backend for the case. Like
+// generateInFlight, it stops the health ping reading a busy worker as down.
+let zipInFlight = false;
+// The case takes a few seconds locally and ~10x that on the free tier. Past
+// this, give up on it and hand over the board ZIP rather than keep waiting.
+const CASE_TIMEOUT_MS = 120000;
 
-function downloadZip(zipB64, filename) {
-  if (!zipB64) return;
+function saveZip(zipB64, filename) {
   const bin = atob(zipB64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -1307,6 +1314,73 @@ function downloadZip(zipB64, filename) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function setZipNote(text, warn = false) {
+  if (!zipNoteEl) return;
+  zipNoteEl.textContent = text || "";
+  zipNoteEl.classList.toggle("download-bar__note--warn", !!warn);
+}
+
+// The ZIP the user downloads carries the printed case (case/: the bottom and
+// all three lids). It is added here, at download time, by /zip-with-case, not
+// by /generate: building three lids would slow every generate on the free-tier
+// backend, and most generates are never downloaded. The case is built from the
+// case panel's settings (its defaults if untouched).
+//
+// It never holds back the board: if the case cannot be built, or the request
+// fails or times out, the board ZIP is saved as it is and the note says why.
+async function addCaseToZip(zipB64) {
+  const editData = routeEditor.getEditData();
+  if (!editData) {
+    return { zipB64, note: "The printed case was left out: there is no board geometry to build it from.", warn: true };
+  }
+  const settings = window.otcCaseZipSettings?.() || {};
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), CASE_TIMEOUT_MS);
+  zipInFlight = true;
+  try {
+    const resp = await fetch(`${API_BASE}/zip-with-case`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        zip_b64: zipB64,
+        edit_data: editData,
+        params: settings.params || null,
+        bump_params: settings.bump_params || null,
+        primary: settings.primary || "bumps",
+        name: downloadName("", "zip").replace(/\.zip$/, ""),
+      }),
+      signal: ctl.signal,
+    });
+    if (!resp.ok) {
+      const detail = await resp.json().catch(() => ({}));
+      throw new Error(detail.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    markBackendAlive();
+    const n = (data.case_files || []).length;
+    if (data.case_error) {
+      return { zipB64: data.zip_b64 || zipB64, note: `${data.case_error} The board files are complete.`, warn: true };
+    }
+    const w = (data.warnings || []).length;
+    const warnings = w ? ` The case builder gave ${w} warning${w > 1 ? "s" : ""}, listed in case/README.txt.` : "";
+    return { zipB64: data.zip_b64, note: `The printed case is in the ZIP's case/ folder: ${n} STL files and a README.${warnings}`, warn: false };
+  } catch (err) {
+    const why = err.name === "AbortError" ? "building it took too long" : err.message.replace(/\.$/, "");
+    return { zipB64, note: `The printed case was left out: ${why}. The board files are complete.`, warn: true };
+  } finally {
+    clearTimeout(timer);
+    zipInFlight = false;
+  }
+}
+
+async function downloadZip(zipB64, filename) {
+  if (!zipB64) return;
+  setZipNote("Preparing download… adding the printed case.");
+  const out = await addCaseToZip(zipB64);
+  saveZip(out.zipB64, filename);
+  setZipNote(out.note, out.warn);
 }
 
 const routeEditor = createRouteEditor({
@@ -1596,6 +1670,7 @@ async function runGenerate(overrides = {}) {
   downloadBtn.disabled = true;
   setPrintPdf(null);
   lastZipB64 = null;
+  setZipNote("");
   clearPrinted();
   // Any previously built case belongs to the OLD board. Drop it before the new
   // one lands, so a stale STL can never be downloaded as if it fitted.
@@ -1904,16 +1979,31 @@ function renderDrcDetails(drc) {
 }
 
 // ---- download zip (base64 -> Blob) ----
+// Both paths end in downloadZip, which adds the printed case. The button says
+// it is working for the whole wait: the edited export and the case are two
+// backend calls, and on the free tier the pair can take a while.
 downloadBtn.addEventListener("click", async () => {
-  if (routeEditor.hasEditableRoutes()) {
-    try {
-      await routeEditor.exportEdited({ download: true });
-    } catch (error) {
-      routeEditStatus.innerHTML = `<span class="error">Edited export failed: ${error.message}</span>`;
+  if (zipInFlight || downloadBtn.disabled) return;
+  const label = downloadBtn.textContent;
+  downloadBtn.disabled = true;
+  downloadBtn.textContent = "Preparing download…";
+  setZipNote("Preparing download…");
+  try {
+    if (routeEditor.hasEditableRoutes()) {
+      try {
+        await routeEditor.exportEdited({ download: true });
+      } catch (error) {
+        routeEditStatus.innerHTML = `<span class="error">Edited export failed: ${error.message}</span>`;
+        setZipNote("");
+      }
+      return;
     }
-    return;
+    await downloadZip(lastZipB64, downloadName("", "zip"));
+  } finally {
+    downloadBtn.textContent = label;
+    // A generate started meanwhile owns the button now.
+    downloadBtn.disabled = generateInFlight || !lastZipB64;
   }
-  downloadZip(lastZipB64, downloadName("", "zip"));
 });
 
 // ---- health ping ----
@@ -1944,10 +2034,12 @@ function markBackendAlive() {
   let delay = 1000;
 
   async function attempt() {
-    if (generateInFlight) {
+    if (generateInFlight || zipInFlight) {
       el.textContent = "backend: working…";
       el.className = "health health--unknown";
-      el.title = "A generate is running; the backend answers again when it finishes.";
+      el.title = zipInFlight
+        ? "Adding the printed case to the download; the backend answers again when it finishes."
+        : "A generate is running; the backend answers again when it finishes.";
       setTimeout(attempt, 5000);
       return;
     }
