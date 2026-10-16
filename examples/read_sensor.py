@@ -5,27 +5,40 @@
 Run `uv run opentac setup my_design.zip` once first, so the board and this
 computer know which sensor is plugged in.
 """
+import sys
 import time
 
 import numpy as np
 
-from opentac.device import Sensor
+from opentac.device import DeviceError, Sensor
 
-with Sensor() as s:
-    print(s)
-    if s.manifest is None:
-        raise SystemExit("this computer has no manifest for the board's sensor: run opentac setup")
-    zero = np.mean([f.taxels for f in s.frames(limit=30)], axis=0)    # nothing touching
-    t0, n, shown = time.time(), 0, 0.0
-    for frame in s.frames():
-        n += 1
-        if frame.t - shown < 0.2:          # print five times a second
-            continue
-        shown = frame.t
-        above = frame.taxels - zero
-        k = int(np.argmax(above))
-        x, y = s.manifest.xy[k]
-        print(f"{n / (time.time() - t0):6.0f} fps   peak {above[k]:6.0f} counts at "
-              f"({x:6.1f}, {y:6.1f}) mm")
-        if time.time() - t0 > 5:
-            break
+
+def main():
+    with Sensor() as s:
+        print(s)
+        if s.manifest is None:
+            sys.exit("this computer has no manifest for the board's sensor: run "
+                     "`uv run opentac setup my_design.zip` first")
+        zero = np.mean([f.taxels for f in s.frames(limit=30)], axis=0)    # nothing touching
+        t0, n, shown = time.time(), 0, 0.0
+        for frame in s.frames():
+            n += 1
+            if frame.t - shown < 0.2:          # print five times a second
+                continue
+            shown = frame.t
+            above = frame.taxels - zero
+            k = int(np.argmax(above))
+            x, y = s.manifest.xy[k]
+            print(f"{n / (time.time() - t0):6.0f} fps   peak {above[k]:6.0f} counts at "
+                  f"({x:6.1f}, {y:6.1f}) mm")
+            if time.time() - t0 > 5:
+                break
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except DeviceError as exc:          # no board, no skin, no answer: say so in one line
+        sys.exit(f"error: {exc}")
+    except KeyboardInterrupt:
+        sys.exit(130)

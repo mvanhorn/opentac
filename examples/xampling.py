@@ -2,11 +2,13 @@
 
     uv run python examples/xampling.py
 
-Keep the sensor untouched while it zeroes.
+Run `uv run opentac setup my_design.zip` once first. Keep the sensor untouched
+while it zeroes.
 """
+import sys
 import time
 
-from opentac.device import Sensor
+from opentac.device import DeviceError, Sensor
 
 
 def fps(sensor, seconds=2.0):
@@ -17,16 +19,26 @@ def fps(sensor, seconds=2.0):
             return n / (time.time() - t0)
 
 
-with Sensor() as s:
-    print(f"raster: {fps(s):.0f} fps, {s.stored['active']} taxels per frame")
-    z = s.zero()                              # nothing touching
-    print(f"zeroed: noise median <= {z['noise_median']}, max {z['noise_max']} counts")
-    s.xampling(budget=64, grow=False)         # fixed: exactly 64 reads per frame
-    frame = s.read()
-    print(f"xampling, fixed: {fps(s):.0f} fps, {int(frame.mask.sum())} taxels per frame")
-    s.xampling(budget=64)                     # the default: 64 search reads, then grow around contacts
-    print("press the sensor...")
-    for frame in s.frames(limit=500):
-        pass
-    print(f"xampling, grow: last frame read {int(frame.mask.sum())} taxels")
-    s.raster()
+def main():
+    with Sensor() as s:
+        print(f"raster: {fps(s):.0f} fps, {s.stored['active']} taxels per frame")
+        z = s.zero()                              # nothing touching
+        print(f"zeroed: noise median <= {z['noise_median']}, max {z['noise_max']} counts")
+        s.xampling(budget=64, grow=False)         # fixed: exactly 64 reads per frame
+        frame = s.read()
+        print(f"xampling, fixed: {fps(s):.0f} fps, {int(frame.mask.sum())} taxels per frame")
+        s.xampling(budget=64)                     # default: 64 search reads, then grow around contacts
+        print("press the sensor...")
+        for frame in s.frames(limit=500):
+            pass
+        print(f"xampling, grow: last frame read {int(frame.mask.sum())} taxels")
+        s.raster()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except DeviceError as exc:          # no board, no skin, no answer: say so in one line
+        sys.exit(f"error: {exc}")
+    except KeyboardInterrupt:
+        sys.exit(130)
