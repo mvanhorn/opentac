@@ -88,7 +88,8 @@ def test_viewer_snapshot(tmp_path):
 def test_cli_manifest_check(capsys):
     assert main(["manifest", "check", str(EXAMPLES / "square_9x9_60pin.json")]) == 0
     out = capsys.readouterr().out
-    assert "READOUT60  60-pin readout board: fits" in out and "NODE16     no:" in out
+    assert "  fits the 60-pin board (READOUT60)" in out
+    assert "  does not fit the 30-pin pair (NODE16): pad" in out
 
 
 def test_cli_manifest_from_qr(tmp_path, capsys):

@@ -53,5 +53,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["opentac"]
 
+# The prebuilt firmware goes into the wheel as opentac/device/firmware/, so
+# `opentac flash` works from a pip install. firmware/prebuilt/ stays the only
+# copy in git (opentac/device/flash.py looks in both places).
+[tool.hatch.build.targets.wheel.force-include]
+"firmware/prebuilt" = "opentac/device/firmware"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

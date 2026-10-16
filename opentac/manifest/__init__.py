@@ -59,6 +59,28 @@ class Manifest:
     def get(self, key, default=None):
         return self.raw.get(key, default)
 
+    def __repr__(self):
+        """Manifest(name: board, rows x cols, taxels, pitch), not the arrays."""
+        parts = []
+        try:
+            from opentac.device.config import infer_board, label
+            board = infer_board(self)
+            if board:
+                parts.append(label(board))
+        except Exception:          # a repr must not raise; the board is a nicety
+            pass
+        if isinstance(self.raw.get("r"), int) and isinstance(self.raw.get("c"), int):
+            parts.append(f"{self.raw['r']} x {self.raw['c']}")
+        parts.append(f"{self.n} taxels")
+        steps = []
+        for axis in (0, 1):
+            values = np.unique(np.round(self.xy[:, axis], 4))
+            if len(values) > 1:
+                steps.append(f"{np.diff(values).min():.2f}")
+        if steps:
+            parts.append(f"pitch {' x '.join(steps)} mm")
+        return f"Manifest({self.name + ': ' if self.name else ''}{', '.join(parts)})"
+
     def grid_index(self) -> tuple[np.ndarray, np.ndarray]:
         """(row, col) of each taxel on the geometric grid: row 0 at the top,
         col 0 at the left. Derived from positions, because the scan indices
@@ -89,7 +111,8 @@ def _read_raw(source) -> tuple[dict, bytes, str]:
             with zipfile.ZipFile(path) as z:
                 names = [n for n in z.namelist() if n.endswith("manifest.json")]
                 if not names:
-                    raise ManifestError(f"{path.name} has no manifest.json")
+                    raise ManifestError(f"{path.name} has no manifest.json: pass the design "
+                                        f".zip that OpenTac-CAD downloads, which holds one")
                 data = z.read(sorted(names, key=len)[0])
         except zipfile.BadZipFile:
             raise ManifestError(f"{path.name} is not a zip file") from None
@@ -111,6 +134,10 @@ def validate(raw: dict, scan: bool = False) -> list[str]:
     if not isinstance(raw, dict):
         raise ManifestError("not a manifest: the JSON is not an object")
     if "pixels" not in raw:
+        if "edit_data" in raw:
+            raise ManifestError("this is design.json, OpenTac-CAD's save file for reopening a "
+                                "design, not its manifest: pass the design .zip it came in "
+                                "(it holds manifest.json), or the manifest.json from that ZIP")
         raise ManifestError("not a manifest: no 'pixels'")
     v = raw.get("v")
     if v is None:

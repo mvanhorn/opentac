@@ -68,13 +68,51 @@ def boards() -> dict[str, Board]:
     return out
 
 
+#: What people call each board -> the name its firmware reports. The docs say
+#: "60-pin board" and "30-pin pair"; the firmware and the CLI's older names are
+#: READOUT60 / readout60 and NODE16 / node16. READOUT32 is the earlier 70-pin board.
+ALIASES = {
+    "readout60": "READOUT60", "60pin": "READOUT60", "60-pin": "READOUT60",
+    "node16": "NODE16", "30pin": "NODE16", "30-pin": "NODE16",
+    "readout32": "READOUT32", "70pin": "READOUT32", "70-pin": "READOUT32",
+}
+
+#: How the docs name each board (docs/hardware.md).
+LABELS = {"READOUT60": "60-pin board", "NODE16": "30-pin pair",
+          "READOUT32": "earlier 70-pin board"}
+
+#: The boards new sensors are made for; READOUT32 is still read, but not offered.
+CURRENT = ("READOUT60", "NODE16")
+
+
+def canonical(name: str) -> str:
+    """The firmware's name for a board: '60pin', '60-pin', 'readout60' -> 'READOUT60'.
+
+    Raises ManifestError for a name no board goes by.
+    """
+    key = str(name).strip().lower()
+    if key in ALIASES:
+        return ALIASES[key]
+    for known in boards():            # a board added as boards/*.json, by its own name
+        if known.lower() == key:
+            return known
+    raise ManifestError(f"no board called {name!r}: use readout60 or 60pin (the 60-pin "
+                        f"board), node16 or 30pin (the 30-pin pair), or readout32 or 70pin "
+                        f"(the earlier 70-pin board)")
+
+
+def label(name: str) -> str:
+    """'READOUT60' -> '60-pin board (READOUT60)', the way messages name a board."""
+    return f"{LABELS[name]} ({name})" if name in LABELS else name
+
+
 def board(name: str) -> Board:
-    """A board by name, case-insensitive: 'READOUT60', 'node16', ..."""
+    """A board by any of its names, case-insensitive: 'READOUT60', 'node16', '60pin', '30-pin'."""
     known = boards()
-    for key, b in known.items():
-        if key.lower() == str(name).lower():
-            return b
-    raise ManifestError(f"no wiring table for board {name!r}; known: {', '.join(known)}")
+    key = canonical(name)
+    if key not in known:
+        raise ManifestError(f"no wiring table for board {key!r}; known: {', '.join(known)}")
+    return known[key]
 
 
 def derive_pitch_um(manifest: dict, warnings: list | None = None) -> tuple[int, int]:
@@ -278,6 +316,20 @@ def fits(manifest) -> dict[str, str | None]:
         except ManifestError as exc:
             out[name] = str(exc)
     return out
+
+
+def infer_board(manifest) -> str | None:
+    """The one board a skin is made for, from fits(); None if that is not one board.
+
+    The earlier 70-pin board counts only when no current board fits.
+    """
+    ok = [name for name, reason in fits(manifest).items() if reason is None]
+    current = [name for name in ok if name in CURRENT]
+    if len(current) == 1:
+        return current[0]
+    if not current and len(ok) == 1:
+        return ok[0]
+    return None
 
 
 def describe_lines(codes) -> str:

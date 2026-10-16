@@ -63,6 +63,10 @@ def cache_lookup(config_id: int) -> manifest_mod.Manifest | None:
 class Sensor:
     """One readout board, on its own USB port or as node `node` behind a bus controller.
 
+    This is `opentac.Sensor`, the real hardware. The simulator has a function
+    of the same name, `opentac.sim.Sensor(manifest)`, which returns a simulated
+    sensor with `press()`; both give the same `opentac.frame.Frame`.
+
     On open it asserts a known session: raster mode, MUX_SETTLE_US 8, IMU off
     (each a keyword argument; None or False leaves that setting as the board
     has it), plus any `settings` {name: value}. Session settings live on the

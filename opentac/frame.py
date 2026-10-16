@@ -17,6 +17,9 @@ class Frame:
     A taxel not read this frame (xampling reads a subset) is NaN, and `mask`
     is False there. `t` is seconds on the host clock. `imu` holds whatever the
     board reported alongside the frame (accelerometer, orientation), or is empty.
+    `node` is the bus node the frame came from and `t_us` the bus controller's
+    clock in microseconds, shared by all nodes; both None for a board on its
+    own USB port and for the simulator.
     """
 
     taxels: np.ndarray
@@ -24,6 +27,8 @@ class Frame:
     mask: np.ndarray | None = None
     imu: dict = field(default_factory=dict)
     units: str = "counts"
+    node: int | None = None
+    t_us: int | None = None
 
     def __post_init__(self):
         self.taxels = np.asarray(self.taxels, dtype=float)

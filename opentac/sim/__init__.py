@@ -47,6 +47,9 @@ _TWIST_SOLVER_STEPS = 26
 def Sensor(manifest, model: str = "foam", readout=None, **params):
     """A simulated sensor for a flat manifest. Returns a FoamSensor or a MujocoSensor.
 
+    Not to be confused with `opentac.Sensor` (`opentac.device.Sensor`), which
+    opens a real readout board on USB. Both give `opentac.frame.Frame`s.
+
     `manifest` is a Manifest, a manifest.json path, a design export .zip, or a
     dict. `readout`, if given, turns frames into ADC counts: a profile name
     ("v2", "v3"), a profile JSON path, a `Readout`, or any object with a

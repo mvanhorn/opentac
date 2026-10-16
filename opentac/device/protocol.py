@@ -72,8 +72,7 @@ class BoardFrame(Frame):
     changes since boot (it going backwards means the board rebooted), `mode` is
     the TAC_MODE that produced it (0 raster, 1 xamp_fixed, 2 xamp_grow), `dt_us`
     is the time since the previous frame, `dropped` counts IMU samples the
-    board had to drop. `t_us` is the bus controller's clock for a bus node,
-    shared by every node; None on USB.
+    board had to drop. `node` and `t_us` (from Frame) are set for a bus node.
     """
 
     index: int = 0
@@ -81,8 +80,6 @@ class BoardFrame(Frame):
     mode: int = 0
     dt_us: int = 0
     dropped: int = 0
-    node: int | None = None
-    t_us: int | None = None
 
     @property
     def sparse(self) -> bool:

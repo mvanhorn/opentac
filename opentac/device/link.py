@@ -7,7 +7,9 @@ prefixes what the node writes with `<n>|` (frames with `<n>,<t_us>|`).
 """
 from __future__ import annotations
 
+import errno
 import re
+import sys
 import time
 from collections import deque
 
@@ -16,30 +18,77 @@ from opentac.device.protocol import DeviceError, explain
 BAUD = 115200            # ignored on USB CDC, but pyserial wants a number
 #: USB vendor ids: STMicroelectronics (the readout boards' CDC) and PJRC (Teensy).
 VENDOR_IDS = {0x0483, 0x16C0}
+#: Port names a USB CDC device gets (macOS, Linux), for ports that report no vendor id.
+CDC_NAMES = ("usbmodem", "ttyACM")
+
+LINUX_SERIAL_FIX = "sudo usermod -aG dialout $USER, then log out and back in"
+
+
+class NoDeviceError(DeviceError):
+    """No OpenTac board (or bus controller) of the kind asked for answered on USB.
+
+    `found` is port -> what answered there (see probe). `denied` lists ports the
+    operating system would not open (Linux: the user is not in the dialout
+    group); `busy` lists ports another program holds.
+    """
+
+    def __init__(self, message, found=None):
+        super().__init__(message)
+        self.found = dict(found or {})
+        self.denied = [p for p, k in self.found.items() if k == "denied"]
+        self.busy = [p for p, k in self.found.items() if k == "busy"]
 
 
 def candidate_ports() -> list[str]:
-    """USB serial ports that could be an OpenTac board or bus controller."""
+    """USB serial ports that could be an OpenTac board or bus controller.
+
+    A port whose USB vendor id is known must be ST's (the readout boards) or
+    PJRC's (the Teensy bus controller): probing writes `?` to it, which other
+    devices on a robot workstation should never see. Ports that report no
+    vendor id (some virtual machines and containers) are tried by name, and
+    only when no port matched by vendor id.
+    """
     from serial.tools import list_ports
-    ports = []
-    for p in list_ports.comports():
+    listed = list(list_ports.comports())
+    names = {q.device for q in listed}
+    by_vid, unknown = set(), set()
+    for p in listed:
         name = p.device
-        if p.vid in VENDOR_IDS or "usbmodem" in name or "ttyACM" in name:
-            # macOS lists each port twice; the cu. one does not wait for carrier.
-            if name.startswith("/dev/tty.") and name.replace("/dev/tty.", "/dev/cu.") in \
-                    [q.device for q in list_ports.comports()]:
-                continue
-            ports.append(name)
-    return sorted(set(ports))
+        # macOS lists each port twice; the cu. one does not wait for carrier.
+        if name.startswith("/dev/tty.") and name.replace("/dev/tty.", "/dev/cu.") in names:
+            continue
+        if p.vid is not None:
+            if p.vid in VENDOR_IDS:
+                by_vid.add(name)
+        elif any(tag in name for tag in CDC_NAMES):
+            unknown.add(name)
+    return sorted(by_vid or unknown)
+
+
+def _refused(exc) -> str | None:
+    """Why a port would not open: 'denied' (permissions), 'busy' (another program has it)."""
+    code, text = getattr(exc, "errno", None), str(exc)
+    if sys.platform == "win32":
+        # Windows says "Access is denied" when another program has the port open.
+        return "busy" if ("Access is denied" in text or "PermissionError" in text) else None
+    if code in (errno.EACCES, errno.EPERM) or "Permission denied" in text:
+        return "denied"
+    if code == errno.EBUSY or "Resource busy" in text:
+        return "busy"
+    return None
 
 
 def probe(port: str, wait_s: float = 1.0) -> str | None:
-    """What answers on `port`: 'board', 'bus', or None (busy, or not OpenTac)."""
+    """What answers on `port`: 'board', 'bus', or None (not OpenTac, or no answer).
+
+    'denied' when the operating system will not let this user open the port
+    (Linux without the dialout group), 'busy' when another program holds it.
+    """
     import serial
     try:
         link = serial.Serial(port, BAUD, timeout=0.1)
-    except (OSError, serial.SerialException):
-        return None
+    except (OSError, serial.SerialException) as exc:
+        return _refused(exc)
     try:
         time.sleep(0.2)
         link.reset_input_buffer()
@@ -56,26 +105,52 @@ def probe(port: str, wait_s: float = 1.0) -> str | None:
     return None
 
 
+def survey() -> dict[str, str | None]:
+    """Port -> what answers there (see probe), for every candidate port."""
+    return {p: probe(p) for p in candidate_ports()}
+
+
+def not_found(what: str, found: dict, hint: str = "") -> NoDeviceError:
+    """The error for "no OpenTac <what> on USB", naming ports that would not open."""
+    denied = [p for p, k in found.items() if k == "denied"]
+    busy = [p for p, k in found.items() if k == "busy"]
+    if denied:
+        them = "it" if len(denied) == 1 else "them"
+        msg = (f"found {', '.join(denied)} but cannot open {them} (permission denied): "
+               f"{LINUX_SERIAL_FIX}")
+    elif busy:
+        msg = (f"found {', '.join(busy)} but another program has it open (a viewer, a serial "
+               f"monitor, another opentac command): close it and try again")
+    elif hint:
+        msg = f"no OpenTac {what} found on USB.{hint}"
+    else:
+        msg = (f"no OpenTac {what} found on USB. Is it plugged in (with a data cable), and is "
+               f"no other program (a viewer) holding its port?")
+        if "board" in what:
+            msg += (" A new board has no firmware yet: put it on with `opentac flash` "
+                    "(docs/use/flash.md).")
+    return NoDeviceError(msg, found)
+
+
 def find(kind: str) -> str:
     """The one port of `kind` ('board' or 'bus'); a clear error if none or several."""
-    found = {p: probe(p) for p in candidate_ports()}
+    found = survey()
     match = [p for p, k in found.items() if k == kind]
     if len(match) == 1:
         return match[0]
     what = "readout board" if kind == "board" else "bus controller"
     if not match:
-        other = [p for p, k in found.items() if k is not None]
+        other = [p for p, k in found.items() if k in ("board", "bus")]
         hint = ""
         if kind == "board" and other:
             hint = f" A bus controller answers on {other[0]}: pass node=N (CLI: --node N)."
-        raise DeviceError(f"no OpenTac {what} found on USB.{hint} Is it plugged in, and is no "
-                          f"other program (a viewer) holding its port?")
+        raise not_found(what, found, hint)
     raise DeviceError(f"several {what}s found: {', '.join(match)}. Pass port= (CLI: --port).")
 
 
 def find_any() -> tuple[str, str]:
     """('board', port) for a single board on USB, else ('bus', port) for a bus controller."""
-    found = {p: probe(p) for p in candidate_ports()}
+    found = survey()
     for kind in ("board", "bus"):
         match = [p for p, k in found.items() if k == kind]
         if len(match) == 1:
@@ -83,8 +158,7 @@ def find_any() -> tuple[str, str]:
         if len(match) > 1:
             raise DeviceError(f"several OpenTac {kind}s found: {', '.join(match)}. "
                               f"Pass port= (CLI: --port).")
-    raise DeviceError("no OpenTac readout board or bus controller found on USB. Is it plugged "
-                      "in, and is no other program (a viewer) holding its port?")
+    raise not_found("readout board or bus controller", found)
 
 
 class Transport:
@@ -97,6 +171,13 @@ class Transport:
         try:
             self.link = serial.Serial(port, BAUD, timeout=0.2)
         except (OSError, serial.SerialException) as exc:
+            why = _refused(exc)
+            if why == "denied":
+                raise DeviceError(f"cannot open {port} (permission denied): "
+                                  f"{LINUX_SERIAL_FIX}") from None
+            if why == "busy":
+                raise DeviceError(f"cannot open {port}: another program has it open (a viewer, "
+                                  f"a serial monitor); close it and try again") from None
             raise DeviceError(f"cannot open {port}: {exc}") from None
         self.port = port
         self._sent = ""

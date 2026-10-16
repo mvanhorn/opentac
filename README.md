@@ -31,6 +31,10 @@ uv run opentac setup my_design.zip   # tell the board which sensor is attached (
 uv run opentac view                  # live heatmap
 ```
 
+A new board has no firmware yet: hold its BOOT0 button while plugging it in, then run
+`uv run opentac flash --board readout60` (or `node16` for the 30-pin pair). See
+[Flash the firmware](https://opentac.github.io/use/flash/), which also covers Linux permissions.
+
 ```python
 import opentac
 sensor = opentac.Sensor()     # finds the board; it already knows its sensor
@@ -60,6 +64,8 @@ you open this folder. Other agents: see [AGENTS.md](AGENTS.md).
 | 30-pin (two stacked boards) | 15 rows x 15 columns | 16 x 22.8 mm |
 
 Both plug straight into USB and carry an IMU. 30-pin boards can be daisy-chained over I2C.
+Where a command takes `--board`, the 60-pin board is `readout60` or `60pin`, the 30-pin pair
+`node16` or `30pin`.
 
 ## Citing
 

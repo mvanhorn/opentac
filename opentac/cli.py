@@ -16,14 +16,31 @@ def _cad(args) -> int:
 
 # ----- readout boards -----------------------------------------------------------
 
+def _name_value(text):
+    """argparse type for --set: 'NAME=VALUE' -> (NAME, VALUE)."""
+    name, sep, value = text.partition("=")
+    if not sep or not name.strip() or not value.strip():
+        raise argparse.ArgumentTypeError(f"takes NAME=VALUE, e.g. MUX_SETTLE_US=10; got {text!r}")
+    return name.strip(), value.strip()
+
+
+def _node(text):
+    """argparse type for --node: a number, `pick` or `all`."""
+    if text in ("pick", "all") or text.isdigit():
+        return text
+    raise argparse.ArgumentTypeError(f"takes a node number, `pick` or `all`; got {text!r}")
+
+
 def _settings(pairs):
-    out = {}
-    for pair in pairs or []:
-        name, sep, value = pair.partition("=")
-        if not sep:
-            raise SystemExit(f"--set takes NAME=VALUE, got {pair!r}")
-        out[name.strip()] = value.strip()
-    return out
+    return dict(pairs or [])
+
+
+def _board_arg(p, help_text):
+    """--board, taking the names the docs use (60pin, 30pin) and the firmware's (readout60, ...)."""
+    from opentac.device.config import ALIASES
+    p.add_argument("--board", type=str.lower, choices=list(ALIASES), metavar="BOARD",
+                   help=f"{help_text}: readout60 or 60pin (the 60-pin board), node16 or 30pin "
+                        f"(the 30-pin pair), readout32 or 70pin (the earlier 70-pin board)")
 
 
 #: Open a board without changing anything on it.
@@ -58,8 +75,6 @@ def _open(args, all_nodes=False, session=None):
         return [s], bus
     if node == "all":
         return list(bus), bus
-    if not node.isdigit():
-        raise SystemExit(f"--node takes a number, `pick` or `all`, not {node!r}")
     return [bus[int(node)]], bus
 
 
@@ -83,18 +98,26 @@ def _describe_skin(stored, indent="  "):
 def _setup(args) -> int:
     from opentac import manifest
     from opentac.device import board, build_config, cache_path, extract
-    from opentac.device.config import describe_lines
+    from opentac.device.config import describe_lines, infer_board, label
 
     m = manifest.load(args.manifest, scan=True)
     if args.dry_run:
-        if not args.board:
-            raise SystemExit("--dry-run needs --board (readout60, node16 or readout32)")
-        b = board(args.board)
+        if args.board:
+            b = board(args.board)
+        else:
+            name = infer_board(m)
+            if name is None:
+                args.parser.error("--dry-run could not tell the board from the manifest's pads "
+                                  "(`opentac manifest check` says which boards it fits): "
+                                  "pass --board readout60 or --board node16")
+            b = board(name)
+            print(f"board: the {label(b.name)}, from the manifest's pads")
         spec = extract(m.raw, b)
         blob = build_config(spec, m.config_id)
         for note in m.warnings + spec["warnings"]:
             print(f"warning: {note}")
-        print(f"{m.name}: {spec['rows']} x {spec['cols']}, {len(spec['active'])} taxels on {b.name}")
+        print(f"{m.name}: {spec['rows']} x {spec['cols']}, {len(spec['active'])} taxels on "
+              f"the {label(b.name)}")
         print(f"  rows    -> {describe_lines(spec['row_order'])}")
         print(f"  columns -> {describe_lines(spec['col_order'])}")
         print(f"  config  {len(blob)} bytes, skin id {m.config_id:08X}; nothing sent")
@@ -122,6 +145,7 @@ def _setup(args) -> int:
 
 def _info(args) -> int:
     from opentac.device import Bus
+    from opentac.device.config import label
     from opentac.device.link import find_any
 
     if args.node is None and not args.port:
@@ -146,7 +170,7 @@ def _info(args) -> int:
     try:
         for s in sensors:
             info = s.info()
-            print(f"board {s.board_name}, firmware API {s.caps['api_version']}, up to "
+            print(f"{label(s.board_name)}, firmware API {s.caps['api_version']}, up to "
                   f"{s.caps['steps']} driven x {s.caps['channels']} sensed lines")
             if info["skin"] is None:
                 print("no skin: run `opentac setup <manifest>`")
@@ -209,7 +233,8 @@ def _flash(args) -> int:
 
 def _manifest_check(args) -> int:
     from opentac import manifest
-    from opentac.device import boards, fits
+    from opentac.device import fits
+    from opentac.device.config import CURRENT, label
 
     m = manifest.load(args.file, scan=True)
     for note in m.warnings:
@@ -219,12 +244,18 @@ def _manifest_check(args) -> int:
           f"{m.n} taxels, pads {pads[0]}..{pads[-1]}, "
           f"{'shear bumps' if m.shear_groups is not None else 'no shear bumps'}, "
           f"skin id {m.config_id:08X}")
-    ok = False
-    titles = {name: b.title for name, b in boards().items()}
-    for name, reason in fits(m).items():
-        print(f"  {name:<10} {titles[name] + ': fits' if reason is None else 'no: ' + reason}")
-        ok = ok or reason is None
-    return 0 if ok else 1
+    result = fits(m)
+    current = [name for name in CURRENT if name in result]
+    for name in current:
+        reason = result[name]
+        print(f"  fits the {label(name)}" if reason is None
+              else f"  does not fit the {label(name)}: {reason}")
+    # Older boards are named only when none of the current ones can read the skin.
+    if not any(result[name] is None for name in current):
+        for name, reason in result.items():
+            if name not in current and reason is None:
+                print(f"  fits the {label(name)} only")
+    return 0 if any(reason is None for reason in result.values()) else 1
 
 
 def _manifest_from_qr(args) -> int:
@@ -254,10 +285,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     def board_args(p, nodes="a node number, `pick` to choose by LED"):
         p.add_argument("--port", help="serial port (found automatically if omitted)")
-        p.add_argument("--node", help=f"a sensor behind a bus controller: {nodes}")
+        p.add_argument("--node", type=_node, help=f"a sensor behind a bus controller: {nodes}")
 
     def session_args(p):
-        p.add_argument("--set", action="append", metavar="NAME=VALUE",
+        p.add_argument("--set", action="append", metavar="NAME=VALUE", type=_name_value,
                        help="set a board parameter for this session, e.g. MUX_SETTLE_US=10 or "
                             "GAIN_SW=2 (repeatable; `opentac info` lists them)")
         p.add_argument("--imu", action="store_true", help="keep the IMU on (off by default)")
@@ -271,9 +302,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("manifest", help="the sensor's manifest.json or design .zip")
     board_args(p)
     p.add_argument("--dry-run", action="store_true", help="check and build the config, send nothing")
-    p.add_argument("--board", help="with --dry-run: readout60, node16 or readout32")
+    _board_arg(p, "with --dry-run, the board to build for (default: the one the manifest fits)")
     p.add_argument("--out", help="with --dry-run: also write the config bytes here")
-    p.set_defaults(func=_setup)
+    p.set_defaults(func=_setup, parser=p)
 
     p = sub.add_parser("info", help="what is attached: board, stored sensor, parameters")
     board_args(p)
@@ -297,9 +328,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--description", default="", help="free text stored with the take")
     p.set_defaults(func=_record)
 
-    p = sub.add_parser("flash", help="put the prebuilt firmware on the board (over USB, no button)")
-    p.add_argument("--board", choices=["readout60", "node16", "readout32"],
-                   help="which board (default: the one the running firmware reports)")
+    p = sub.add_parser("flash", help="put the prebuilt firmware on the board over USB (a new "
+                       "board: hold BOOT0 while plugging it in, and pass --board)")
+    _board_arg(p, "which board (default: the one the running firmware reports; needed for a "
+                  "new board)")
     p.add_argument("--port", help="serial port (found automatically if omitted)")
     p.add_argument("--bin", help="flash this binary instead of the prebuilt one")
     p.add_argument("--force", action="store_true", help="flash even if the board reports another name")
@@ -320,6 +352,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
+    # Line by line even when output goes to a file or a pipe, so a log shows the
+    # startup banner (`opentac cad > log.txt`) and progress as they happen.
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(line_buffering=True)
+        except (ValueError, OSError):
+            pass
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command is None:
