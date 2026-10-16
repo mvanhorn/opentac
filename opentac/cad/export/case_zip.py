@@ -65,6 +65,17 @@ def _reason(exc: Exception) -> str:
     return str(exc) if isinstance(exc, ValueError) else f"{type(exc).__name__}: {exc}"
 
 
+def _stl_is_closed(data: bytes) -> bool:
+    """Watertight as the file will be read, not as the mesh was in memory.
+
+    An STL stores only triangle corners; a mesh that is closed in memory can come
+    back open once near-duplicate vertices are merged on load, and the file is
+    what the slicer gets.
+    """
+    import trimesh
+    return bool(trimesh.load(io.BytesIO(data), file_type="stl").is_watertight)
+
+
 def build_case_files(final_outline, cable_y, placements, active, pitch_x, pitch_y,
                      base: CaseParams, *, primary: str = DEFAULT_PRIMARY, stem: str = "",
                      tail_extension: dict | None = None) -> CaseFiles:
@@ -113,7 +124,7 @@ def build_case_files(final_outline, cable_y, placements, active, pitch_x, pitch_
     path = f"{CASE_DIR}{prefix}{BOTTOM_SUFFIX}.stl"
     out.files[path] = bottom.export(file_type="stl")
     names["bottom"] = path
-    if not bottom.is_watertight:
+    if not _stl_is_closed(out.files[path]):
         out.warnings.append("The bottom piece is not a closed solid; it may not slice cleanly.")
     for style in order:
         if style not in tops:
@@ -121,7 +132,7 @@ def build_case_files(final_outline, cable_y, placements, active, pitch_x, pitch_
         path = f"{CASE_DIR}{prefix}{LIDS[style][0]}.stl"
         out.files[path] = tops[style].export(file_type="stl")
         names[style] = path
-        if not tops[style].is_watertight:
+        if not _stl_is_closed(out.files[path]):
             out.warnings.append(
                 f"The {LID_NAMES[style]} is not a closed solid; it may not slice cleanly.")
 

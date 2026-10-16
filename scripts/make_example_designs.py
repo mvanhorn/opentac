@@ -42,29 +42,65 @@ GROUP_ORDER = [("robot", "Robot hands and grippers"), ("legged robot", "Legged r
                ("calibration", "Calibration set")]
 
 
-def build(spec: dict) -> dict:
+CASE_BLOCKS = re.compile(r"Lengthen the cable by at least ([\d.]+)mm")
+
+
+def generate_fitting(spec: dict, params: dict):
+    """Generate for the 60-pin board at most, raising the pitch in 3% steps if the grid is too big."""
     from opentac.cad.main import GenerateRequest, generate
     from opentac.cad.pipeline.layout import ConnectorCapacityError
 
-    params = dict(spec["params"])
+    scaled = dict(params)
     scale = 1.0
     for _ in range(12):
         try:
             resp = generate(GenerateRequest(
                 outline=spec["outline"], router="hug", board_mode=spec.get("board_mode", "expand"),
-                readout_board="auto", copper_layers=2, design_name=spec["slug"][:24], **params))
-            break
+                readout_board="auto", copper_layers=2, design_name=spec["slug"][:24], **scaled))
+            return resp, scaled, scale
         except Exception as exc:  # FastAPI wraps pipeline errors in HTTPException
             detail = str(getattr(exc, "detail", exc))
             if "readout board reads at most" not in detail and not isinstance(exc, ConnectorCapacityError):
-                return {"slug": spec["slug"], "error": detail[:300]}
+                raise RuntimeError(detail[:300]) from exc
             scale *= 1.03
             for k in ("pixel_w_mm", "pixel_h_mm", "pitch_x_mm", "pitch_y_mm"):
-                params[k] = round(spec["params"][k] * scale, 3)
-    else:
-        return {"slug": spec["slug"], "error": "does not fit the 60-pin readout board"}
+                scaled[k] = round(params[k] * scale, 3)
+    raise RuntimeError("does not fit the 60-pin readout board")
 
-    zip_bytes = base64.b64decode(resp.zip_b64)
+
+def build(spec: dict) -> dict:
+    """Generate one design and add its printed case, as OpenTac-CAD's Download ZIP does.
+
+    The designs were fabricated before the printed case existed, with a 12 mm cable
+    tail. Where the case would cover the connector or leave too little cable to bend,
+    the tail is lengthened by what the case builder asks for (plus 1 mm) and the board
+    is generated again, so every ZIP holds a case the sensor actually plugs through.
+    """
+    from opentac.cad.main import _case_inputs
+    from opentac.cad.export.case_zip import build_case_files, zip_with_case
+
+    params = dict(spec["params"])
+    for _ in range(5):
+        try:
+            resp, used, scale = generate_fitting(spec, params)
+        except RuntimeError as exc:
+            return {"slug": spec["slug"], "error": str(exc)}
+        board, cp = _case_inputs(resp.edit_data, None, None)
+        case = build_case_files(*board["args"], cp, primary="bumps", stem=spec["slug"],
+                                tail_extension=board["tail_extension"])
+        need = [float(m) for w in case.warnings for m in CASE_BLOCKS.findall(w)]
+        # No steady-width tail below the cable edge: the case cannot cut a slot round
+        # it and leaves the edge open; 2 mm more straight tail gives it one.
+        need += [1.0 for w in case.warnings if w.startswith("No cable tail was found")]
+        if not need:
+            break
+        params["cable_length_mm"] = round(params.get("cable_length_mm", 12.0) + max(need) + 1.0, 1)
+    else:
+        return {"slug": spec["slug"], "error": f"printed case still blocks the connector: {case.warnings}"}
+    if case.left_out or any("not a closed solid" in w for w in case.warnings):
+        return {"slug": spec["slug"], "error": f"printed case: {case.left_out or case.warnings}"}
+
+    zip_bytes = base64.b64decode(zip_with_case(resp.zip_b64, case.files))
     (FILES / f"{spec['slug']}.zip").write_bytes(zip_bytes)
     (FILES / f"{spec['slug']}.svg").write_text(resp.svg, encoding="utf-8")
     man = json.loads(zipfile.ZipFile(io.BytesIO(zip_bytes)).read("manifest.json"))
@@ -74,11 +110,13 @@ def build(spec: dict) -> dict:
         "fabricated_as": spec["fabricated_as"],
         "taxels": int(s["active_pixels"]), "rows": int(man["r"]), "cols": int(man["c"]),
         "readout_board": {30: "30-pin", 60: "60-pin"}.get(int(s["connector_pos"]), f"{s['connector_pos']}-pos"),
-        "pitch_mm": [params["pitch_x_mm"], params["pitch_y_mm"]],
-        "taxel_mm": [params["pixel_w_mm"], params["pixel_h_mm"]],
+        "pitch_mm": [used["pitch_x_mm"], used["pitch_y_mm"]],
+        "taxel_mm": [used["pixel_w_mm"], used["pixel_h_mm"]],
         "pitch_raised": scale > 1.0,
+        "cable_length_mm": params.get("cable_length_mm", 12.0),
         "drc_violations": int(resp.drc.get("violations", 0)),
         "zip_kb": round(len(zip_bytes) / 1024),
+        "case_warnings": case.warnings,
     }
 
 
@@ -127,15 +165,13 @@ def write_page(rows: list[dict]) -> None:
         "# Ready-to-order designs",
         "",
         "These are the sensors we fabricated for the paper, regenerated with the current",
-        "OpenTac-CAD for the OpenTac readout boards. Each download is a complete export:",
-        "KiCad board, Gerbers, manifest, the saved design (open it in OpenTac-CAD to edit),",
-        "a printable 1:1 PDF and the piezoresistive-layer cut files. Order it as described",
-        "in [Order the sensor](../build/order-sensor.md), then build it with the",
+        "OpenTac-CAD for the OpenTac readout boards. Each download is the same complete export",
+        "OpenTac-CAD's **Download ZIP** gives: KiCad board, Gerbers, manifest, the saved design",
+        "(open it in OpenTac-CAD to edit), a printable 1:1 PDF, the piezoresistive-layer cut",
+        "files and the [printed case](../build/index.md#the-printed-case) in `case/` (bottom,",
+        "bumped lid, and flat and hatched lids). Order the board as described in",
+        "[Order the sensor](../build/order-sensor.md), then build it with the",
         "[assembly guide](../build/assembly.md).",
-        "",
-        "These ZIPs do not contain the [printed case](../build/index.md#the-printed-case).",
-        "To get it, open the ZIP in OpenTac-CAD (**Open** in the mode switcher) and press",
-        "**Download ZIP**: the new ZIP has the case in its `case/` folder.",
         "",
         "All are 2-layer boards made in grow mode. Open a design in OpenTac-CAD to switch to",
         "4 layers, change the outline or the taxel size. In the previews, taxels are pale blue,",
