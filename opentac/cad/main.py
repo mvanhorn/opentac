@@ -52,7 +52,7 @@ from opentac.cad.pipeline.narrow_tail import narrow_routed_tail
 from opentac.cad.pipeline.validate import validate_routes
 from opentac.cad.pipeline.smooth import chamfer_layer, los_simplify_layer, taxel_copper_keepout_mm
 from opentac.cad.pipeline.drc import TaxelCopper, drc_check
-from opentac.cad.export.kicad_pcb import generate_kicad_pcb
+from opentac.cad.export.kicad_pcb import generate_kicad_pcb, kicad_project_files
 from opentac.cad.export.kicad_footprint import build_pixel_footprint_text, make_footprint_name
 from opentac.cad.export.manifest import export_manifest
 from opentac.cad.export.design import (
@@ -1605,6 +1605,8 @@ def _build_outputs(
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("board.kicad_pcb", pcb_text)
+        for name, text in kicad_project_files(params).items():
+            zf.writestr(name, text)
         zf.writestr(f"{fp_name}.kicad_mod", fp_text)
         zf.writestr("manifest.json", manifest_json)
         if pdf_bytes:

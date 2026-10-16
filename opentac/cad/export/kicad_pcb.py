@@ -116,14 +116,12 @@ def generate_kicad_pcb(
     for name in all_nets:
         lines.append(f'  (net {net_map[name]} "{name}")')
 
-    # Setup
+    # Setup. The design rules live in board.kicad_pro (kicad_project_files):
+    # KiCad 5-style tokens here (last_trace_width, trace_clearance, ...) make
+    # KiCad ignore the project's rules and check against its rigid-board
+    # defaults (0.3 mm holes), which every OpenTac via fails.
     lines.append('  (setup')
-    lines.append(f'    (last_trace_width {fmt(trace_w)})')
-    lines.append(f'    (trace_clearance {fmt(clearance)})')
-    lines.append(f'    (via_size {fmt(via_dia)})')
-    lines.append(f'    (via_drill {fmt(via_drill)})')
-    lines.append('    (edge_width 0.15)')
-    lines.append(f'    (user_trace_width {fmt(trace_w)})')
+    lines.append('    (pad_to_mask_clearance 0)')
     lines.append('  )')
     lines.append('  (net_class "Default" "default"')
     lines.append(f'    (clearance {fmt(clearance)})')
@@ -589,3 +587,62 @@ def _build_connector(conn_dir, conn_pos, conn_at, conn_rot, pad_to_net, net_map,
 
     out.append('  )')
     return '\n'.join(out)
+
+
+def kicad_project_files(params) -> dict[str, str]:
+    """board.kicad_pro and board.kicad_dru for the exported board.
+
+    The rules are the ones the board was generated to, read from the same
+    parameters the generator and its own DRC use, so KiCad's DRC checks the
+    design against what it is rather than against KiCad's rigid-board
+    defaults. One scoped exception, in the custom rules: the connector's gold
+    fingers (J1) run to the end of the tab and carry the connector
+    footprint's own drill.
+    """
+    import json
+
+    def mm(x):
+        return round(float(x), 4)
+
+    annular = (float(params.via_dia_mm) - float(params.via_drill_mm)) / 2
+    rules = {
+        "min_clearance": mm(min(params.gap_mm, params.clearance_mm)),
+        "min_track_width": mm(params.trace_w_mm),
+        "min_via_diameter": mm(params.via_dia_mm),
+        # KiCad measures a round pad on its polygon approximation (max_error
+        # 0.005 mm), so a nominal 0.1 mm ring reads as 0.0966 mm.
+        "min_via_annular_width": mm(annular - 0.005),
+        "min_through_hole_diameter": mm(params.via_drill_mm),
+        "min_copper_edge_clearance": mm(params.board_edge_clear_mm),
+        "min_hole_clearance": mm(params.clearance_mm),
+        "min_hole_to_hole": 0.25,
+        "max_error": 0.005,
+    }
+    pro = {
+        "board": {"design_settings": {"rules": rules}},
+        "meta": {"filename": "board.kicad_pro", "version": 1},
+    }
+    dru = (
+        "(version 1)\n"
+        "# The connector's gold fingers (J1) run to the end of the tab: the FPC is\n"
+        "# inserted by them, and JLCPCB cuts fingers back to 0.2 mm from a flex\n"
+        "# outline. Each finger also carries the connector footprint's 0.2 mm drill,\n"
+        "# 0.05 mm from the finger's sides, as on every sensor made so far.\n"
+        "(rule \"Gold fingers reach the tab edge\"\n"
+        "  (condition \"A.Parent == 'J1' || B.Parent == 'J1'\")\n"
+        "  (constraint edge_clearance (min 0mm))\n"
+        "  (severity ignore))\n"
+        "(rule \"Gold finger drills\"\n"
+        "  (condition \"A.Parent == 'J1'\")\n"
+        "  (constraint annular_width (min 0mm))\n"
+        "  (severity ignore))\n"
+        # Inside a taxel the row and column electrodes are the design's
+        # electrode gap apart, which can be tighter than the routing clearance
+        # (the calibration set goes down to 0.1 mm). Everything else keeps the
+        # net class's routing clearance.
+        "# A taxel's two electrodes are the electrode gap apart.\n"
+        "(rule \"Taxel electrode gap\"\n"
+        "  (condition \"A.Parent == 'PX*' && B.Parent == A.Parent\")\n"
+        f"  (constraint clearance (min {mm(params.gap_mm)}mm)))\n"
+    )
+    return {"board.kicad_pro": json.dumps(pro, indent=2) + "\n", "board.kicad_dru": dru}
