@@ -4,6 +4,15 @@
 // framework or a second HTML page (all tool state lives in module-level JS
 // in app.js/stl-viewer.js, so a real page navigation would lose it).
 
+import { SITE_BASE } from "./config.js";
+
+// Links to the OpenTac website carry data-site-path (a path on the site) and
+// the published URL as their href; point them at the site this page came from.
+// They open in a new tab, so following one never loses the design on screen.
+for (const a of document.querySelectorAll("a[data-site-path]")) {
+  a.href = new URL(a.dataset.sitePath, SITE_BASE).href;
+}
+
 const VIEWS = ["landing", "tool", "help"];
 const sections = {
   landing: document.getElementById("view-landing"),

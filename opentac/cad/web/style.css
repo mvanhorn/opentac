@@ -44,6 +44,19 @@ button.linklike {
   font-size: 12px;
 }
 button.linklike:hover:not(:disabled) { color: var(--text); border-color: var(--line); }
+/* The way out to the project website, set apart from the tool's own views. */
+.topnav .site-link {
+  margin-left: auto;
+  align-self: center;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav .site-link:hover { color: var(--text); border-color: var(--accent); }
 
 .health { font-size: 12px; padding: 3px 10px; border-radius: 12px; }
 .health--unknown { background: #3a3a1a; color: #d8d38a; }
@@ -633,6 +646,9 @@ button.mode-button.active {
 .download-bar__note { margin: 0; padding: 0 14px 10px; text-align: right; }
 .download-bar__note:empty { display: none; }
 .download-bar__note--warn { color: #d8a33c; }
+/* What to do with the download: a pointer to the website's assembly guide. */
+.download-bar__next { margin: 0; padding: 0 14px 12px; text-align: right; }
+a[data-site-path]:not(.site-link) { color: var(--accent); }
 
 /* Base name for every file this design produces. Sits at the left of the bar so
    it reads as a property of the design rather than of one button. */
@@ -874,7 +890,10 @@ dl.bump-stats dd { margin: 0; color: var(--text); }
   .help-nav { position: static; flex-direction: row; flex-wrap: wrap; }
   .tour-card { width: min(280px, calc(100vw - 24px)); }
   .topbar { flex-wrap: wrap; }
-  .topnav { order: 3; width: 100%; justify-content: center; }
+  .topnav { order: 3; width: 100%; justify-content: center; flex-wrap: wrap; }
+  .topnav .site-link { margin-left: 4px; }
+  .download-bar { flex-wrap: wrap; justify-content: flex-start; }
+  .download-bar__note, .download-bar__next { text-align: left; }
 }
 
 /* ---- Describe mode: the plain-English chat panel (chat-panel.js) --------

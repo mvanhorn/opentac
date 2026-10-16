@@ -25,6 +25,9 @@
       <button id="nav-tool" type="button" class="linklike">Tool</button>
       <button id="nav-help" type="button" class="linklike">Help</button>
       <button id="nav-tour" type="button" class="linklike">Tutorial</button>
+      <!-- Home above is this tool's start screen; this is the project website. -->
+      <a class="site-link" href="https://opentac.github.io/" data-site-path="" target="_blank" rel="noopener"
+         title="The OpenTac website: build guide, readout boards, firmware and paper. Opens in a new tab, so your design stays here.">OpenTac website<span aria-hidden="true"> &#8599;</span></a>
     </nav>
     <div id="health" class="health health--unknown">backend: checking…</div>
   </header>
@@ -159,7 +162,7 @@
             your computer, and hands back the finished manufacturing files.
           </p>
           <ol>
-            <li>Do steps 1–2 on the left (install Python, download the code).</li>
+            <li>Do steps 1–2 on the left (download the code, and run the start script once: it sets up Python and the packages).</li>
             <li>Install Claude Code from
               <a href="https://claude.com/claude-code" target="_blank" rel="noopener">claude.com/claude-code</a>.</li>
             <li>Open a terminal in the downloaded folder and run <code>claude</code>.</li>
@@ -560,6 +563,8 @@
             <p class="hint">
               Download ZIP includes the case (bottom and all three lids) with the
               settings below. The lid chosen here is marked as the primary one.
+              Printing and fitting the parts:
+              <a href="https://opentac.github.io/build/assembly/#print-the-case" data-site-path="build/assembly/#print-the-case" target="_blank" rel="noopener">assembly guide</a>.
             </p>
 
             <fieldset class="case-top-choice">
@@ -703,6 +708,12 @@
                     title="Everything for this sensor in one archive: the board files for the fab, the manifest, the 1:1 PDF, the Velostat cut files, and the printed case (bottom and all three lids, in case/).">Download ZIP</button>
           </div>
           <p id="zip-status" class="mini download-bar__note" aria-live="polite"></p>
+          <p class="mini download-bar__next">
+            After the download: check the fit with the printable PDF, order the flex PCB,
+            then print the case and put the sensor together with the
+            <a href="https://opentac.github.io/build/assembly/" data-site-path="build/assembly/" target="_blank" rel="noopener">assembly guide</a>
+            on the OpenTac website. It ends with the sensor showing live readings.
+          </p>
         </div>
       </section>
     </main>
@@ -814,6 +825,7 @@
             <li><code>case/</code> &mdash; the printed case as STL files: the bottom, the lid with shear-sensing bumps, and the flat and hatched lids. Print the bottom and one lid. <code>case/README.txt</code> says which lid is the primary one and which settings were used.</li>
           </ul>
           <p>The case is built when you press Download ZIP, from the settings in the case panel (its defaults if you have not changed them), so the download takes a few seconds longer, more on a large board. The primary lid is the one chosen in the case panel, or the bumped lid if you have not chosen one. If the case cannot be built for your board, the ZIP downloads without it and a note under the button says why.</p>
+          <p>What to do with the files is on the OpenTac website: <a href="https://opentac.github.io/build/order-sensor/" data-site-path="build/order-sensor/" target="_blank" rel="noopener">Order the sensor</a> for the flex PCB, and the <a href="https://opentac.github.io/build/assembly/" data-site-path="build/assembly/" target="_blank" rel="noopener">assembly guide</a> from the fit check to live readings.</p>
           <h3>Reopening a design</h3>
           <p>Keep the ZIP and you can carry on where you left off: <strong>Open</strong> in the mode switcher (or <strong>Continue a saved design</strong> on the front page) takes the ZIP back &mdash; no need to unzip it &mdash; and puts the board and every setting back on screen, including routes you moved by hand.</p>
           <p>If the app has been updated since you downloaded it, the exact board can no longer be guaranteed, so it is rebuilt from its saved settings instead and you are told so. That rebuild reproduces the same board; only hand edits to individual routes are lost.</p>
