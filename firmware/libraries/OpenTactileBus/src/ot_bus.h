@@ -1,4 +1,4 @@
-// OpenTAC bus v2 -- one Teensy 4.0 controller, 1..18 sensor nodes, one I2C bus.
+// OpenTac bus v2 -- one Teensy 4.0 controller, 1..18 sensor nodes, one I2C bus.
 //
 // A node is not a different kind of board. It runs the single-board firmware
 // (stm_test/tactile_imu_fast_cfg) built with -DOT_BUS_NODE, so it is
@@ -164,7 +164,7 @@ static inline void otbBuildUdid(uint8_t *udid, const uint8_t *uid) {
   udid[0] = 0x80;                    // capabilities: address type 'random'
   udid[1] = 0x08;                    // UDID version
   udid[2] = 0xFF; udid[3] = 0xFF;    // vendor: none registered
-  udid[4] = 0x00; udid[5] = 0x02;    // device: OpenTAC bus v2 node (v1 was 1)
+  udid[4] = 0x00; udid[5] = 0x02;    // device: OpenTac bus v2 node (v1 was 1)
   udid[6] = 0x00; udid[7] = 0x04;    // interface: SMBus
   const uint32_t h = otbCrc32(uid, OTB_UID_BYTES);
   udid[OTB_UDID_SPECIFIC + 0] = (uint8_t)(h >> 24);

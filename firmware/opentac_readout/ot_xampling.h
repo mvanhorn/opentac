@@ -1,4 +1,4 @@
-// OpenTAC-Xampling -- binary compressive sampling over any provisioned skin.
+// OpenTac Xampling -- binary compressive sampling over any provisioned skin.
 //
 // The same scheme as the hand-written Teensy sketches (binary_sampling_64x64,
 // adaptiveFR_binary, binary_sampling_SHIFTING_SHEAR), derived instead from the
@@ -39,7 +39,7 @@
 //
 // Pattern. The 32x32 ctrMsrRows/ctrMsrCols tables, verbatim, shifted one taxel
 // per frame mod 32 -- but diagonally, not along the row as the sketches did
-// (see the end of xampFrame). Every OpenTAC skin fits in 32x32,
+// (see the end of xampFrame). Every OpenTac skin fits in 32x32,
 // so the physical grid is laid on the table's top-left corner; a position that
 // falls off the skin or into a hole in its mask is skipped and does not count
 // toward any budget.

@@ -1,4 +1,4 @@
-// OpenTAC single-board API surface -- modes, parameters, capabilities.
+// OpenTac single-board API surface -- modes, parameters, capabilities.
 //
 // The vocabulary here is deliberately NOT new. v1/API.md already defines a
 // hardware-validated command surface for the bus nodes -- SET_MODE, SET_PARAM,

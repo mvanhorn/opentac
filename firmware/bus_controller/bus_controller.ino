@@ -1,4 +1,4 @@
-// OpenTAC bus v2 controller -- Teensy 4.0. Bus on Wire: SDA 18, SCL 19, 1 MHz.
+// OpenTac bus v2 controller -- Teensy 4.0. Bus on Wire: SDA 18, SCL 19, 1 MHz.
 //
 // Talks to 1..18 bus nodes (tactile_imu_fast_cfg built with -DOT_BUS_NODE)
 // and to the laptop over USB. It adds almost nothing of its own: every node
@@ -600,7 +600,7 @@ void setup() {
   Wire.setClock(OTB_BUS_HZ);
   delay(200);                           // let the nodes finish booting
   const uint8_t count = enumerate();
-  Serial.print("# OpenTAC bus v2 controller: ");
+  Serial.print("# OpenTac bus v2 controller: ");
   Serial.print(count);
   Serial.println(" node(s). Send N to list them, @<n> <command> to talk to one.");
   lastHotplugUs = micros();

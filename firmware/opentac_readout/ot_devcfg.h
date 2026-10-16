@@ -1,4 +1,4 @@
-// OpenTAC DeviceConfig -- the little the STM needs to know about the skin.
+// OpenTac DeviceConfig -- the little the STM needs to know about the skin.
 //
 // One generic firmware plus one provisioned config equals a working sensor.
 // Everything geometric (pixels, outline, bump centres, plotting) stays on the
@@ -41,10 +41,10 @@
 //           4  crc32 over bytes [0, 28+payload_len)
 //
 // Active taxels are enumerated row-major over set mask bits, which is exactly
-// the order OpenTAC writes `pixels` and `shear.b` in -- so frame sample k,
+// the order OpenTac writes `pixels` and `shear.b` in -- so frame sample k,
 // shear_group[k], pixels[k] and shear.b[k] all describe the same taxel.
 //
-// Logical row index is PAD order and is not geometric: OpenTAC's own manifest
+// Logical row index is PAD order and is not geometric: OpenTac's own manifest
 // readme says so, and `pixels` confirms it -- the old example permutes rows as
 // 0,1,2,5,4,3. So pitch alone does not place a taxel. row_geom/col_geom carry
 // the permutation, and with them

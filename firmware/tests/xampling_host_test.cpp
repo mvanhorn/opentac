@@ -1,7 +1,9 @@
 // Host test for ot_xampling.h, run against real provisioned configs.
 //
-//   python3 ../opentac_device.py provision ../../manifest_32x32.json --dry-run --out /tmp/c32.bin
-//   c++ -std=c++17 -O2 -DOTCFG_NO_FLASH -I.. xampling_host_test.cpp -o xtest && ./xtest /tmp/c32.bin
+// From the repository root:
+//   uv run opentac setup examples/manifests/square_9x9_60pin.json --dry-run --out /tmp/c60.bin
+//   c++ -std=c++17 -O2 -DOTCFG_NO_FLASH -DOT_BOARD_READOUT60 -Ifirmware/opentac_readout \
+//       firmware/tests/xampling_host_test.cpp -o /tmp/xtest && /tmp/xtest /tmp/c60.bin
 //
 // NODE16 configs need -DOT_BOARD_NODE16, the same as the firmware build.
 //

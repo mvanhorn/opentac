@@ -4,7 +4,7 @@
 // A variant of tactile_imu_fast_32x32 that stops assuming the skin is a full
 // 32x32 rectangle. The array size, the row and column hardware ordering, which
 // taxels exist and their physical pitch all come from a DeviceConfig held in
-// flash, which the host derives from the OpenTAC manifest and sends once over
+// flash, which the host derives from the OpenTac manifest and sends once over
 // this same USB CDC link. Fabricate a skin, provision the board, and it
 // remembers across power cycles -- no recompile per sensor.
 //
@@ -62,7 +62,7 @@
 //
 // ----- Bus node build (-DOT_BUS_NODE) ----------------------------------------
 //
-// The same firmware as a node on the OpenTAC bus (stm_test/v2): many boards
+// The same firmware as a node on the OpenTac bus (stm_test/v2): many boards
 // behind one Teensy 4.0 on I2C1 (SCL PA15, SDA PB7), auto-addressed by SMBus
 // ARP. Only the transport changes. The command lines above arrive over the bus
 // instead of USB and the replies go back the same way, so provisioning,
@@ -2016,7 +2016,7 @@ void setup() {
   loadDeviceConfig();
   loadXampling();
 
-  OT_OUT.println(F("# OpenTAC single-board API, board " OT_BOARD_NAME " -- `?` for capabilities"));
+  OT_OUT.println(F("# OpenTac single-board API, board " OT_BOARD_NAME " -- `?` for capabilities"));
   OT_OUT.println(F("# V,seq,accel_mg[3]"));
   OT_OUT.println(F("# M,gen,mode,tac_en,vib_en,ori_en,active,shear"));
 #if defined(OT_BOARD_READOUT60)
