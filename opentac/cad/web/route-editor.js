@@ -252,8 +252,12 @@ export function createRouteEditor({
   }
 
   function setTailInfo() {
+    const state = updateTailButtons();
     if (tailInfoEl) {
-      tailInfoEl.textContent = `${Math.max(0, tailPath.length - 1)} segment(s) · ${tailLength().toFixed(1)} mm`;
+      let text = `${Math.max(0, tailPath.length - 1)} segment(s) · ${tailLength().toFixed(1)} mm`;
+      if (state.current) text += " · The connector lands on the board here: undo, and run the tail further out before it turns.";
+      else if (state.blocked) text += " · Greyed-out directions would put the connector on the board: run the tail further out first.";
+      tailInfoEl.textContent = text;
     }
   }
 
@@ -387,19 +391,67 @@ export function createRouteEditor({
     renderTailPreview();
   }
 
-  function addTailSegment(angleDeg = null) {
-    if (!tailPath.length) tailPath = [tailStartPoint()];
+  // The tail path with one more segment, as addTailSegment would draw it.
+  function tailPathWith(angleDeg = null) {
+    const path = tailPath.length ? tailPath.map((p) => p.slice()) : [tailStartPoint()];
     const length = Number.parseFloat(tailLengthInput?.value) || 20;
     const angle = angleDeg == null ? (Number.parseFloat(tailAngleInput?.value) || 0) : angleDeg;
-    if (tailAngleInput && angleDeg != null) tailAngleInput.value = String(angleDeg);
-    const last = tailPath[tailPath.length - 1];
+    const last = path[path.length - 1];
     const rad = angle * Math.PI / 180;
-    tailPath.push([snap(last[0] + length * Math.cos(rad)), snap(last[1] + length * Math.sin(rad))]);
+    path.push([snap(last[0] + length * Math.cos(rad)), snap(last[1] + length * Math.sin(rad))]);
+    return path;
+  }
+
+  function tailExtensionWidth() {
+    return Number.parseFloat(tailWidthInput?.value) || defaultTailExtensionWidth();
+  }
+
+  // Would this path put the extension or its connector on the board
+  // (tail-guard.js)? A path that turns too early lands the turned connector
+  // on the board's own wiring; no routing can make that work.
+  function tailPathBlocked(path) {
+    const guard = window.OTTailGuard;
+    if (!guard || !editData) return false;
+    return !!guard.overlap(guard.prepare(editData), path, tailExtensionWidth());
+  }
+
+  const TAIL_BLOCKED_TITLE = "The connector would land on the board. Run the tail further out before it turns.";
+
+  // Each direction (and Add segment, at the typed angle) is disabled when its
+  // segment would put the extension or the connector on the board.
+  function updateTailButtons() {
+    let blocked = 0;
+    const buttons = [[tailAddBtn, null], ...tailDirButtons.map(([id, angle]) => [document.getElementById(id), angle])];
+    for (const [btn, angle] of buttons) {
+      if (!btn) continue;
+      if (btn.dataset.title === undefined) btn.dataset.title = btn.title || "";
+      const off = tailPathBlocked(tailPathWith(angle));
+      btn.disabled = off;
+      btn.title = off ? TAIL_BLOCKED_TITLE : btn.dataset.title;
+      if (off && angle != null) blocked++;
+    }
+    const current = tailPath.length > 1 && tailPathBlocked(tailPath);
+    if (tailApplyBtn) {
+      tailApplyBtn.disabled = current;
+      tailApplyBtn.title = current ? TAIL_BLOCKED_TITLE : "";
+    }
+    return { blocked, current };
+  }
+
+  function addTailSegment(angleDeg = null) {
+    const next = tailPathWith(angleDeg);
+    if (tailPathBlocked(next)) return;
+    if (tailAngleInput && angleDeg != null) tailAngleInput.value = String(angleDeg);
+    tailPath = next;
     renderTailPreview();
   }
 
   async function applyTailExtension() {
     if (!editData?.layout) return;
+    if (tailPath.length > 1 && tailPathBlocked(tailPath)) {
+      setStatus(TAIL_BLOCKED_TITLE, true);
+      return;
+    }
     if (tailPath.length < 2) {
       editData.layout.tail_extension = {
         ...(editData.layout.tail_extension || {}),
@@ -798,6 +850,9 @@ export function createRouteEditor({
     renderTailPreview();
   });
   tailApplyBtn?.addEventListener("click", applyTailExtension);
+  for (const input of [tailLengthInput, tailAngleInput, tailWidthInput]) {
+    input?.addEventListener("input", () => { if (tailPath.length) setTailInfo(); });
+  }
   zoomOutBtn?.addEventListener("click", () => zoomSvg(1.18));
   zoomInBtn?.addEventListener("click", () => zoomSvg(0.85));
   zoomResetBtn?.addEventListener("click", resetSvgView);
