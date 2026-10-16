@@ -8132,16 +8132,6 @@
 		(layer "Edge.Cuts")
 		(uuid "102cf2ae-1006-4827-a2ef-a80df3f438ce")
 	)
-	(gr_line
-		(start 166.29 148.285181)
-		(end 166.29 148.285184)
-		(stroke
-			(width 0.05)
-			(type default)
-		)
-		(layer "Edge.Cuts")
-		(uuid "b17437f2-fb37-474b-99ec-39fba2979560")
-	)
 	(gr_arc
 		(start 167.209476 132.646861)
 		(mid 167.269663 132.83935)
@@ -8166,7 +8156,7 @@
 	(gr_arc
 		(start 167.289981 147.285184)
 		(mid 166.997093 147.99229)
-		(end 166.29 148.285181)
+		(end 166.29 148.285184)
 		(stroke
 			(width 0.05)
 			(type default)
