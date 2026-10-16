@@ -3,6 +3,8 @@
 **/__pycache__
 docs
 hardware
-firmware
+# firmware sources stay out; the prebuilt binaries are package data (pyproject force-include)
+firmware/*
+!firmware/prebuilt
 tests
 site
