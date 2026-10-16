@@ -13,11 +13,18 @@ decoder-page address), and requires byte-identical output. It also feeds both
 sides random one-character corruptions and requires them to refuse the same
 ones, and compares the JS port of Python's float formatting and round() on
 values chosen to hit their edge cases.
+
+It also checks what the page draws and lists beside the file: the JS port of
+the taxel footprint rule (kicad_footprint.pixel_geometry) against Python's on
+every board, that the page's bits-per-field table adds up to the payload, and
+that every example link on the site (an <a> or link with data-design="<slug>")
+opens the code of that example design.
 """
 from __future__ import annotations
 
 import json
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -32,6 +39,8 @@ MANIFESTS = REPO / "examples" / "manifests"
 # QR format cannot state (taxel_core: cp0 == rp0 + r); see tests/readout/test_manifest.py.
 NOT_CAD = {"pinky_tip_30pin.json"}
 MUTATIONS = 40   # per design
+# Pages with example links into the decoder, marked data-design="<slug>".
+EXAMPLE_PAGES = [REPO / "docs" / "qr.md", REPO / "docs" / "use" / "qr-recovery.md"]
 
 NODE_DRIVER = r"""
 const Q = require(process.argv[2]);
@@ -39,7 +48,17 @@ const job = JSON.parse(require('fs').readFileSync(process.argv[3], 'utf8'));
 const texts = job.texts.map(t => { try { return {ok: Q.fromText(t).json}; } catch (e) { return {err: e.message}; } });
 const repr = job.floats.map(x => Q.floatRepr(x));
 const rounds = job.rounds.map(x => Q.floatRepr(Q.pyRound(x, 4)));
-process.stdout.write(JSON.stringify({texts, repr, rounds}));
+const drawn = job.boards.map(t => {
+  const res = Q.fromText(t), c = res.core, fp = Object.fromEntries(c.footprint);
+  const g = Q.pixelGeometry(c.w, c.h, fp.trace_w, fp.gap, fp.center_clear, fp.edge_clear, fp.via_dia);
+  const bits = Object.entries(res.trace).filter(([k, v]) => k !== 'crcValue' && typeof v === 'number')
+    .reduce((a, [k, v]) => a + v, 0);
+  const geo = Object.fromEntries(Object.entries(g).map(([k, v]) =>
+    [k, Array.isArray(v) ? v.map(x => Q.floatRepr(x)) : (Number.isInteger(v) && k === 'totalSlots' ? v : Q.floatRepr(v))]));
+  return {geo, bits, bytes: res.bytes};
+});
+const examples = job.examples.map(t => { try { return Q.payloadFromText(t); } catch (e) { return null; } });
+process.stdout.write(JSON.stringify({texts, repr, rounds, drawn, examples}));
 """
 
 
@@ -99,19 +118,57 @@ def round_cases(rng):
     return vals
 
 
+def example_links():
+    """(page, slug, link fragment) for every example link into the decoder."""
+    out = []
+    for page in EXAMPLE_PAGES:
+        text = page.read_text(encoding="utf-8")
+        # <a href="#P" data-design="S"> on the decoder page, and
+        # [..](../qr.md#P){ data-design="S" } (attr_list) elsewhere
+        for m in re.finditer(r'<a href="#([^"]+)" data-design="([^"]+)"', text):
+            out.append((page.name, m.group(2), m.group(1)))
+        for m in re.finditer(r'\]\((?:\.\./)*qr\.md#([^)\s]+)\)\{\s*data-design="([^"]+)"\s*\}', text):
+            out.append((page.name, m.group(2), m.group(1)))
+    return out
+
+
+def python_geometry(payload):
+    """kicad_footprint.pixel_geometry for the decoded core, floats as repr."""
+    from opentac.cad.export.kicad_footprint import pixel_geometry
+    from opentac.cad.export.taxel_core import b41decode, decode
+    c = decode(b41decode(payload))
+    fp = c["footprint"]
+    g = pixel_geometry(c["w"], c["h"], fp["trace_w"], fp["gap"], fp["center_clear"],
+                       fp["edge_clear"], fp["via_dia"])
+    names = {"xL": "xL", "xR": "xR", "ymid": "ymid", "pitch": "pitch", "y0": "y0",
+             "spineYLo": "spine_y_lo", "spineYHi": "spine_y_hi", "totalSlots": "total_slots",
+             "xEndLeftMax": "x_end_left_max", "xEndRightMin": "x_end_right_min",
+             "viaX": "via_x", "viaY": "via_y", "colEndX": "col_end_x"}
+    out = {}
+    for js, py in names.items():
+        v = getattr(g, py)
+        out[js] = [repr(float(x)) for x in v] if isinstance(v, list) else (v if py == "total_slots" else repr(float(v)))
+    return out
+
+
 def main() -> int:
     rng = random.Random(1)
     from opentac.cad.export.taxel_core import b41encode, encode
-    cases = []
+    cases, boards, payload_of = [], [], {}
     for name, man in sources():
         payload = b41encode(encode(man))
         cases += [(name, t) for t in texts_for(payload, rng)]
+        boards.append((name, payload))
+        payload_of[name] = payload
     floats, rounds = edge_floats(rng), round_cases(rng)
+    examples = example_links()
 
     with tempfile.TemporaryDirectory() as tmp:
         driver, job = Path(tmp) / "driver.js", Path(tmp) / "job.json"
         driver.write_text(NODE_DRIVER)
-        job.write_text(json.dumps({"texts": [t for _, t in cases], "floats": floats, "rounds": rounds}))
+        job.write_text(json.dumps({"texts": [t for _, t in cases], "floats": floats, "rounds": rounds,
+                                   "boards": [p for _, p in boards],
+                                   "examples": [frag for _, _, frag in examples]}))
         res = json.loads(subprocess.run(["node", str(driver), str(JS), str(job)], check=True,
                                         capture_output=True, text=True).stdout)
 
@@ -137,12 +194,35 @@ def main() -> int:
             designs.add(name)
         else:
             refused += 1
+    for (name, payload), drawn in zip(boards, res["drawn"]):
+        want = python_geometry(payload)
+        if drawn["geo"] != want:
+            print(f"MISMATCH taxel footprint {name}:\n  python: {want}\n  js:     {drawn['geo']}")
+            bad += 1
+        if drawn["bits"] != 8 * drawn["bytes"]:
+            print(f"MISMATCH bit table {name}: fields add up to {drawn['bits']} bits, "
+                  f"payload has {8 * drawn['bytes']}")
+            bad += 1
+
+    if not examples:
+        print("MISMATCH: no example links found on " + ", ".join(p.name for p in EXAMPLE_PAGES))
+        bad += 1
+    for (page, slug, frag), got in zip(examples, res["examples"]):
+        if slug not in payload_of:
+            print(f"MISMATCH {page}: example link names {slug!r}, which is not an example design")
+            bad += 1
+        elif got != payload_of[slug]:
+            print(f"MISMATCH {page}: the {slug} link does not open its code; "
+                  f"it should be #{payload_of[slug].replace('/', '*')}")
+            bad += 1
+
     if bad:
         print(f"FAILED: {bad} mismatches")
         return 1
     print(f"OK: {len(designs)} boards, {decoded} texts decoded to byte-identical manifest.json, "
           f"{refused} corrupted texts refused by both; {len(floats)} float reprs and "
-          f"{len(rounds)} round() calls identical")
+          f"{len(rounds)} round() calls identical; taxel footprint and bit table checked on "
+          f"{len(boards)} boards; {len(examples)} example links open their designs")
     return 0
 
 
