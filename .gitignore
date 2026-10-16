@@ -12,7 +12,12 @@ site/
 
 # data stays out of git (Zenodo / Releases)
 recordings/
+/takes/
 *.npz
+
+# what the README and the skill's examples write when run from the repo root
+/insole_out/
+/*.zip
 
 # Third-party 3D models (LCSC/EasyEDA, manufacturers) are not redistributed: see hardware/README.md
 hardware/libs/3dmodels/

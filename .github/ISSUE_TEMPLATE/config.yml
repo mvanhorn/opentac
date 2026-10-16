@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://opentac.github.io/get-started/
+    about: Designing, ordering, assembling and reading a sensor, step by step.

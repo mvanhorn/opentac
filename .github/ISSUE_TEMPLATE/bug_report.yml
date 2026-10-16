@@ -1,0 +1,57 @@
+name: Bug report
+description: Something in OpenTac-CAD, the readout boards, the firmware or the Python package does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The details below are what we need to reproduce the problem.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead. Include error messages in full.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - OpenTac-CAD (designing a sensor)
+        - Readout board, firmware or `opentac` command
+        - Simulation or transfer
+        - Ordering, assembly or the website
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: board
+    attributes:
+      label: Readout board
+      options:
+        - None / not relevant
+        - 60-pin
+        - 30-pin pair
+        - 30-pin boards on a Teensy 4.0 bus
+    validations:
+      required: true
+  - type: textarea
+    id: info
+    attributes:
+      label: Output of `uv run opentac info`
+      description: Run it from the repository root with the board plugged in. Without a board, paste the output of `uv run opentac --version` instead.
+      render: text
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: e.g. macOS 15.5, Ubuntu 24.04, Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Design ZIP, screenshots, photos
+      description: |
+        If the problem involves a sensor design, attach the design ZIP from OpenTac-CAD (drag it into this box). For readings that are missing or mirrored, a screenshot of `uv run opentac view` and a photo of the sensor's tail in the connector help.
