@@ -227,12 +227,10 @@ The layout stage always splits it into two hops (`COL_5_0`, `COL_5_1`).
 
 Hug joins them back into one net, bridged by a link trace that hugs around
 the concavity (`assign_rowcol_nets_joined`) — no crossing is possible by
-construction. Measured DRC 0 on all 16 shapes in the harness used to finalize
-it, including deep concave ones that scored 40+ violations under legacy, and
-this holds in `fixed_keepout` as well as `expand`. Since hug is what you
-always use, a concave shape is no longer a reason to change anything — but
-`preflight()` still names the re-entrant band, which is worth repeating to
-the user because it explains where the link trace will run.
+construction, in `fixed_keepout` as well as `expand`, including deep concave
+shapes. A concave shape is not a reason to change anything, but `preflight()`
+names the re-entrant band, which is worth repeating to the user because it
+explains where the link trace will run.
 
 The tradeoff is board area: the link eats into the notch (`pocket_fill_mm2`
 drops), so a hug board keeps the concavity less open than a hand-perfect
@@ -263,13 +261,10 @@ ROW_1_0 — net refused, not emitted`, leaving 2 taxels dead. That is the
 "too many channels for the space" symptom below, not a routing defect — the
 fix is a coarser pitch, a smaller grid, or grow mode, never a retry.
 
-**A nonzero DRC count is always a real problem now, in every mode.**
-Board-edge clearance flags inside the connector's own landing zone (where
-copper legitimately runs onto the pads) are suppressed before the count is
-returned — they used to be noise near the tail that was safe to eyeball past,
-they no longer appear at all, so do not discount any DRC line as "probably
-just the connector edge." If DRC is not clean, find out why rather than
-retrying blindly — start with "Split nets" above.
+**A nonzero DRC count is always a real problem, in every mode.** Copper
+running onto the connector's own pads is not counted, so do not discount any
+DRC line as "probably just the connector edge." If DRC is not clean, find out
+why rather than retrying blindly — start with "Split nets" above.
 
 `pipeline/route_astar.py` exists and is *not* wired in. Do not switch to it:
 it runs a grid search per net inside the fixed-mode retry loop and takes
