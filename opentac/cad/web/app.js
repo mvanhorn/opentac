@@ -2048,12 +2048,12 @@ function setVelostat(stats) {
     const hasPdf = !!lastVelostat?.fold_pdf_b64;
     const folds = !lastVelostat || !hasPdf || !!lastVelostat.fold;
     downloadVeloPdfBtn.disabled = !hasPdf;
-    downloadVeloPdfBtn.textContent = folds ? "Layer fold PDF" : "Layer PDF";
+    downloadVeloPdfBtn.textContent = folds ? "Piezo layer fold PDF" : "Piezo layer PDF";
     downloadVeloPdfBtn.title = !lastVelostat || hasPdf
       ? (folds
           ? "The shape of the piezoresistive layer (e.g. Velostat, LINQSTAT) printed twice, mirrored across a fold line. Fold the paper with the sheet inside and cut both together."
           : "The shape of the piezoresistive layer (e.g. Velostat, LINQSTAT), too large to print twice on one sheet, so printed once at 1:1. Tape the sheet under the paper and cut both together.")
-      : "This sensor is too large for one A3 sheet. Use the Layer DXF instead.";
+      : "This sensor is too large for one A3 sheet. Use the piezo layer DXF instead.";
   }
 }
 
