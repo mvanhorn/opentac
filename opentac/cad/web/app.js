@@ -1334,6 +1334,16 @@ let wakeStarted = 0;
 let noticeTimer = null;
 let noticeTicker = null;
 let upWaiters = [];
+// A probe that fails at once, again and again, is not reaching the network at
+// all: an ad or privacy blocker cancels requests to .../health
+// (net::ERR_BLOCKED_BY_CLIENT). A sleeping server holds the request open while
+// it boots instead. With the probe blocked the page cannot know the server's
+// state, so it stops waiting on it: requests go straight out, as they did
+// before this check existed, and the first one after a quiet spell simply
+// takes about a minute.
+let probeBlocked = false;
+let fastProbeFailures = 0;
+const PROBE_FAST_FAIL_MS = 1500;
 let generateInFlight = false;
 // Bumped by every Generate press. A press that waited for the server runs only
 // if no later press came in meanwhile.
@@ -1389,7 +1399,20 @@ function markBackendAlive() {
 
 // Probe /health until it answers. Retries rather than probing once, because
 // the first visitor after a quiet spell always hits a booting service.
+function giveUpProbing() {
+  probeBlocked = true;
+  probing = false;
+  hideWakeNotice();
+  setBadge("unknown", "Server: status unknown",
+    "This browser blocks the page's server check (often an ad or privacy blocker). " +
+    "Generate still works; the first one after a quiet spell can take about a minute.");
+  const waiting = upWaiters;
+  upWaiters = [];
+  waiting.forEach((resolve) => resolve());
+}
+
 function startProbing() {
+  if (probeBlocked) { giveUpProbing(); return; }
   if (probing) return;
   probing = true;
   serverUp = false;
@@ -1410,6 +1433,7 @@ function startProbing() {
       setTimeout(attempt, 5000);
       return;
     }
+    const sent = Date.now();
     try {
       // Per-try timeout: a request to a waking instance can hang well past the
       // point where retrying is the better move.
@@ -1419,11 +1443,16 @@ function startProbing() {
       clearTimeout(t);
       if (r.ok) {
         probing = false;
+        fastProbeFailures = 0;
         markBackendAlive();
         return;
       }
-    } catch {
-      /* fall through to the retry below */
+      fastProbeFailures = 0;
+    } catch (err) {
+      // A TypeError straight away: the request never left the browser.
+      const instant = err instanceof TypeError && Date.now() - sent < PROBE_FAST_FAIL_MS;
+      fastProbeFailures = instant ? fastProbeFailures + 1 : 0;
+      if (HOSTED && fastProbeFailures >= 2) { giveUpProbing(); return; }
     }
     if (serverUp) { probing = false; return; }
     if (Date.now() - wakeStarted < WAKE_DEADLINE_MS) {
@@ -1444,6 +1473,7 @@ function startProbing() {
 // not heard from for longer than Render's idle timeout has most likely gone
 // back to sleep, so it counts as not ready until /health answers again.
 function serverReadyNow() {
+  if (probeBlocked) return true;
   if (!serverUp) return false;
   if (!HOSTED || generateInFlight || zipInFlight) return true;
   return Date.now() - lastServerAnswer < IDLE_SLEEP_MS;
