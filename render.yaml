@@ -9,6 +9,20 @@ services:
     plan: free
     healthCheckPath: /health
     autoDeploy: true
+    # Rebuild (and restart) only when something the image is built from changes:
+    # the files deploy/Dockerfile copies. A docs-only push used to restart the
+    # service too, and a Generate sent during a restart fails or hangs.
+    buildFilter:
+      paths:
+        - pyproject.toml
+        - uv.lock
+        - README.md
+        - opentac/**
+        - .claude/skills/**
+        - examples/stl/**
+        - firmware/prebuilt/**
+        - deploy/**
+        - render.yaml
     envVars:
       - key: GEMINI_API_KEY
         sync: false
