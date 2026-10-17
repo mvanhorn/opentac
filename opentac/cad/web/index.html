@@ -29,57 +29,59 @@
       <a class="site-link" href="https://opentac.github.io/" data-site-path="" target="_blank" rel="noopener"
          title="The OpenTac website: build guide, readout boards, firmware and paper. Opens in a new tab, so your design stays here.">OpenTac website<span aria-hidden="true"> &#8599;</span></a>
     </nav>
-    <div id="health" class="health health--unknown">backend: checking…</div>
+    <div id="health" class="health health--unknown">Server: checking…</div>
   </header>
+  <!-- Shown only on the hosted site while its sleeping server starts (app.js,
+       "server status"). A local `opentac cad` serves this page itself and is
+       already up, so it never shows there. -->
+  <div id="server-notice" class="server-notice" role="status" aria-live="polite" hidden></div>
 
   <!-- ================= Landing ================= -->
   <section id="view-landing" class="app-view">
     <div class="landing">
       <div class="panel landing-hero">
-        <h2>Custom tactile sensors, wrapped around any real part</h2>
+        <h2>Design a tactile sensor from an outline</h2>
         <p>
-          OpenTac-CAD designs custom piezoresistive tactile sensor arrays — for robot
-          grippers, prosthetic hands, wearables, or any surface that needs to feel
-          contact — and turns them into a fully routed, manufacturable PCB: sensor
-          pixels, wiring, connector, DRC-checked routing, and KiCad/Gerber files,
-          generated automatically from a shape you draw, import, or scan. No PCB
-          design experience required.
+          OpenTac-CAD lays out a piezoresistive tactile sensor on a flex PCB, for a
+          gripper finger, a hand, a wearable or any other surface. You give it a 2D
+          outline: draw it here, import a DXF, or unfold a surface of an STL model.
+          It places the taxels, routes every row and column to the connector, checks
+          the result against the design rules (DRC) and writes KiCad and Gerber files.
+          No manual PCB layout is needed.
         </p>
         <div class="row landing-hero__actions">
-          <button id="landing-tour-btn" type="button" class="primary">Take the guided tour</button>
-          <button id="landing-help-btn" type="button" class="secondary">Browse the help reference</button>
+          <button id="landing-tour-btn" type="button" class="primary">Start the tutorial</button>
+          <button id="landing-help-btn" type="button" class="secondary">Open the help page</button>
         </div>
       </div>
 
       <div class="panel landing-glossary">
-        <strong>New here? Four words cover almost everything:</strong>
+        <strong>Terms used in this tool</strong>
         <dl>
           <dt>Taxel</dt>
-          <dd>one pressure-sensing spot — a "touch pixel". A sensor is a grid of them, like camera pixels for touch.</dd>
+          <dd>one sensing element of the skin: a pair of interleaved copper electrodes under the piezoresistive layer. The sensor is a grid of taxels.</dd>
           <dt>Pitch</dt>
-          <dd>the spacing between taxel centers. Smaller pitch = more taxels packed into the same shape.</dd>
+          <dd>the distance between neighbouring taxel centers. A smaller pitch fits more taxels into the same outline.</dd>
           <dt>Cable edge</dt>
-          <dd>the edge of your shape (shown orange) where a flat ribbon cable exits to plug into your electronics.</dd>
+          <dd>the edge of the outline (orange) where the tail leaves the board. The tail ends in the connector for the readout board.</dd>
           <dt>DRC</dt>
-          <dd>design-rule check — an automatic inspection that confirms no wires touch or run too close. 0 violations = manufacturable.</dd>
+          <dd>design-rule check: no two traces touch or run closer than the set clearance, and no copper runs past the board edge. 0 violations means the board passes.</dd>
         </dl>
       </div>
 
       <h3 class="landing-modes__label">Start from an example</h3>
       <p class="landing-section-sub">
-        Each card is a real, finished design — including two unfolded from 3D models of
-        actual robot gripper parts. One click loads it fully generated: look at the wiring,
-        tweak any parameter (taxel size, spacing, cable edge), and download manufacturing
-        files. Everything stays editable, exactly like a design you drew yourself.
+        Each example opens in the tool and generates its board. Two of the outlines are
+        unfolded from STL models of gripper parts. Every parameter stays editable, as for
+        a design you draw yourself.
       </p>
       <div class="landing-examples" id="landing-examples"></div>
 
-      <h3 class="landing-modes__label">Or start from a real robot part</h3>
+      <h3 class="landing-modes__label">Start from a robot part</h3>
       <p class="landing-section-sub">
-        Surfaces of actual robot hands, grippers, and feet — each one already unwrapped
-        flat at true scale, ready to become a sensor. The orange area on each model is the
-        surface the sensor covers. Pick one, choose where its cable should exit, and
-        generate.
+        Surfaces of robot hands and grippers, already unfolded flat at true scale. The
+        orange area on each model is the surface the sensor covers. After you pick one,
+        set the cable edge and press Generate.
       </p>
       <div class="stl-example-filter">
         <label>Show
@@ -88,31 +90,31 @@
       </div>
       <div class="landing-stl-examples" id="landing-stl-examples"></div>
 
-      <h3 class="landing-modes__label">Choose how to start</h3>
+      <h3 class="landing-modes__label">Other ways to start</h3>
       <div class="landing-modes">
         <article class="panel mode-card">
-          <h2>Draw a shape</h2>
-          <p>Sketch your board outline directly on screen — with the same precision as a real CAD tool, typing exact edge lengths and angles, not just dragging by eye.</p>
+          <h2>Draw an outline</h2>
+          <p>Draw the outline with line, rectangle and arc tools. Edge lengths and angles can be typed as exact values.</p>
           <button type="button" class="primary mode-card__cta" data-mode="draw">Start drawing</button>
         </article>
         <article class="panel mode-card">
           <h2>Import a DXF</h2>
-          <p>Already have a shape from AutoCAD, Fusion 360, or similar? Upload a closed 2D outline (.dxf) and we'll turn it into your board.</p>
+          <p>Upload a closed 2D outline as a .dxf file, for example from AutoCAD or Fusion 360. The largest closed shape in the file becomes the board outline.</p>
           <button type="button" class="primary mode-card__cta" data-mode="dxf">Upload DXF</button>
         </article>
         <article class="panel mode-card">
           <h2>Import an STL</h2>
-          <p>Have a 3D model of the actual part — a gripper jaw, a fingertip, a prosthetic socket? Upload it and unfold its surface at true scale, like unwrapping paper from the part, so your sensor fits exactly.</p>
+          <p>Upload a 3D model of the part, select the surfaces the sensor should cover, and unfold them flat at true scale. The flat outline wraps back onto the part.</p>
           <button type="button" class="primary mode-card__cta" data-mode="stl">Upload STL</button>
         </article>
         <article class="panel mode-card">
-          <h2>Continue a saved design</h2>
-          <p>Already downloaded a design from here? Open that ZIP again to pick up where you left off &mdash; the board comes back exactly as it was, hand-moved routes included, ready to edit and re-download.</p>
+          <h2>Open a saved design</h2>
+          <p>Open a ZIP downloaded from this tool. The board and its settings come back as they were, including routes moved by hand, and stay editable.</p>
           <button type="button" class="primary mode-card__cta" data-mode="open">Open a design</button>
         </article>
         <article class="panel mode-card">
           <h2>Describe it in words</h2>
-          <p>Not sure where to start? Say what you want in plain English — the size, the shape, how fine the sensing needs to be — and an assistant designs it with the real generator, then hands it to you here to edit.</p>
+          <p>Type the size, shape and taxel pitch you want. An assistant builds the design with the same generator and loads it here for editing.</p>
           <button type="button" class="primary mode-card__cta" data-mode="chat">Describe a sensor</button>
         </article>
       </div>
@@ -120,12 +122,12 @@
       <h3 class="landing-modes__label">Two more ways to use OpenTac-CAD</h3>
       <div class="landing-guides">
         <article class="panel guide-card">
-          <h2>Run it on your own computer — much faster</h2>
+          <h2>Run it on your own computer</h2>
           <p>
-            This website runs on a free server that falls asleep when idle, so your first
-            Generate of the day can wait up to a minute for it to wake. The exact same app
-            runs locally with none of that — designs generate in a second or two, and your
-            shapes never leave your machine.
+            This website uses a free server that sleeps after 15 minutes without use and
+            takes about a minute to start again. Run on your own computer, the same app
+            starts without that wait, generates faster, and your outlines stay on your
+            machine.
           </p>
           <ol>
             <li>
@@ -152,27 +154,26 @@
           </p>
         </article>
         <article class="panel guide-card">
-          <h2>Or describe your sensor in plain English</h2>
+          <h2>Describe the sensor to Claude Code</h2>
           <p>
             The project includes a skill for
             <a href="https://claude.com/claude-code" target="_blank" rel="noopener">Claude Code</a>
-            (Anthropic's AI coding agent). Instead of drawing anything, you describe the sensor —
-            <em>"a tactile sensor shaped like a size-9 shoe insole with the cable at the heel"</em> —
-            and it works out real dimensions, builds the outline, runs this same design pipeline on
-            your computer, and hands back the finished manufacturing files.
+            (Anthropic's coding agent). You describe the sensor, for example
+            <em>"a tactile sensor shaped like a size-9 shoe insole with the cable at the heel"</em>.
+            It works out the dimensions, builds the outline, runs the same design pipeline on
+            your computer and writes the manufacturing files.
           </p>
           <ol>
             <li>Do steps 1–2 on the left (download the code, and run the start script once: it sets up Python and the packages).</li>
             <li>Install Claude Code from
               <a href="https://claude.com/claude-code" target="_blank" rel="noopener">claude.com/claude-code</a>.</li>
             <li>Open a terminal in the downloaded folder and run <code>claude</code>.</li>
-            <li>Describe the sensor you want, in your own words. Mention the shape, the size,
-              and where the cable should come out — it will ask about anything else it needs.</li>
+            <li>Describe the sensor you want: the shape, the size, and where the cable
+              should come out. It asks about anything else it needs.</li>
           </ol>
           <p class="guide-card__note">
-            Good for shapes that are easier to describe than to draw — an insole, a glove
-            fingertip, a sensor matched to a part whose drawing or 3D model you already have
-            (it reads DXF and STL files too).
+            Useful for shapes that are easier to describe than to draw, such as an insole or a
+            glove fingertip. It also reads DXF and STL files of a part.
           </p>
         </article>
       </div>
@@ -293,6 +294,7 @@
           <h2 id="params-heading">2 · Parameters (mm)</h2>
 
           <h3 class="params-subhead">Sensor grid</h3>
+          <p class="hint">Taxel: one sensing element of the skin. The sensor is a grid of taxels.</p>
           <div class="params params--emphasis">
             <label class="check-field" title="Set the taxel size and pitch directly; how many fit is whatever the outline allows.">
               <input type="radio" name="grid_mode" value="size" checked />
@@ -312,8 +314,8 @@
             <em>Grow board to fit wiring</em> board mode.
           </p>
           <div class="params" id="grid-size-fields">
-            <label title="Width of one taxel (sensing spot).">Taxel W <input id="pixel_w_mm" type="number" step="0.1" value="4.0" /></label>
-            <label title="Height of one taxel (sensing spot).">Taxel H <input id="pixel_h_mm" type="number" step="0.1" value="4.0" /></label>
+            <label title="Width of one taxel.">Taxel W <input id="pixel_w_mm" type="number" step="0.1" value="4.0" /></label>
+            <label title="Height of one taxel.">Taxel H <input id="pixel_h_mm" type="number" step="0.1" value="4.0" /></label>
             <label title="Horizontal spacing between taxel centers. Never smaller than the taxel width.">Pitch X <input id="pitch_x_mm" type="number" step="0.1" value="4.2" /></label>
             <label title="Vertical spacing between taxel centers. Never smaller than the taxel height.">Pitch Y <input id="pitch_y_mm" type="number" step="0.1" value="4.2" /></label>
           </div>
@@ -335,7 +337,7 @@
             </label>
           </div>
 
-          <h3 class="params-subhead">Taxel footprint (one sensing spot's copper)</h3>
+          <h3 class="params-subhead">Taxel footprint (the copper of one taxel)</h3>
           <div class="params">
             <label title="Clearance from each taxel's own outer edge to its interdigitated fingers — not to be confused with Edge keepout above, which is the board-level margin from the outline.">
               Taxel edge clearance
@@ -354,7 +356,7 @@
               <input id="via_dia_mm" type="number" min="0.1" step="0.01" value="0.35" />
             </label>
           </div>
-          <div id="pixel-preview" class="pixel-preview" aria-label="Live preview of one sensor pixel's interdigitated footprint"></div>
+          <div id="pixel-preview" class="pixel-preview" aria-label="Live preview of one taxel's interdigitated footprint"></div>
 
           <h3 class="params-subhead">Board sizing <a href="#" class="help-link" data-help-target="help-board-sizing" title="What do these do?">(?)</a></h3>
           <div class="params params--emphasis">
@@ -372,7 +374,7 @@
               <input type="radio" name="board_mode" value="expand" checked />
               Grow board to fit wiring
             </label>
-            <label class="check-field" title="Keep the outline exactly as drawn: reserve a wiring keep-out band inside it and drop the sensor pixels that reach into that band.">
+            <label class="check-field" title="Keep the outline exactly as drawn: reserve a wiring keep-out band inside it and drop the taxels that reach into that band.">
               <input type="radio" name="board_mode" value="fixed_keepout" />
               Keep outline fixed, shrink sensor grid
             </label>
@@ -456,7 +458,7 @@
               <button id="cad-fit" type="button" class="secondary" title="Fit outline to view">Fit</button>
             </div>
             <p class="hint" id="fill-zone-hint" hidden>
-              Optional: this shape controls <em>where sensors get packed</em> inside your board — it won't change your board's outer edge or connector.
+              Optional: this shape controls <em>where taxels are placed</em> inside your board — it won't change your board's outer edge or connector.
             </p>
             <div class="cad-fields">
               <label>Length <input id="cad-length" type="number" step="0.1" placeholder="mm" /></label>
@@ -557,7 +559,7 @@
           </div>
           <div class="bump-body" id="case-body" hidden>
             <p class="hint">
-              The bottom piece has a shallow pocket for the flex and the Velostat.
+              The bottom piece has a shallow pocket for the flex and the piezoresistive layer.
               The lid drops on and is held by a rib that runs round the perimeter,
               broken at intervals — every gap in the rib is a bridge that keeps the
               lid a single piece. Both halves stop at the cable edge, so the tail
@@ -576,18 +578,18 @@
                 <input type="radio" name="case-top" value="flat" checked />
                 <span>Flat</span>
               </label>
-              <label class="radio-field" title="Shallow grooves along the boundaries between sensors, cut from the top so the underside stays flat. Full-thickness material stays over every sensor, so there is still something to push on it, but the lid bends much more easily between them — a press lands where you put it instead of spreading to the neighbours.">
+              <label class="radio-field" title="Shallow grooves along the boundaries between taxels, cut from the top so the underside stays flat. Full-thickness material stays over every taxel, so there is still something to push on it, but the lid bends much more easily between them — a press lands where you put it instead of spreading to the neighbours.">
                 <input type="radio" name="case-top" value="hatch" />
                 <span>Hatched — sharper spatial resolution</span>
               </label>
-              <label class="radio-field" title="One bump over each 2x2 group of sensors. Pressing sideways tilts the bump, so those four sensors read differently and you can tell which way the surface was pushed.">
+              <label class="radio-field" title="One bump over each 2x2 group of taxels. Pressing sideways tilts the bump, so those four taxels read differently and you can tell which way the surface was pushed.">
                 <input type="radio" name="case-top" value="bumps" />
                 <span>Shear-sensing bumps</span>
               </label>
             </fieldset>
 
             <div id="case-hatch-fields" hidden>
-              <label class="check-field" title="Cut the boundaries all the way through, leaving small tabs to hold the lid together. This decouples neighbouring sensors far better than a groove, which only thins the boundary and still carries load across it. Uncheck for a groove: a sealed lid with nothing to tear, but much less isolation.">
+              <label class="check-field" title="Cut the boundaries all the way through, leaving small tabs to hold the lid together. This decouples neighbouring taxels far better than a groove, which only thins the boundary and still carries load across it. Uncheck for a groove: a sealed lid with nothing to tear, but much less isolation.">
                 <input id="case-hatch-through" type="checkbox" checked />
                 <span>Cut through (tabs hold it together)</span>
               </label>
@@ -596,7 +598,7 @@
                   Cut width
                   <input id="case-hatch-width" type="number" min="0.3" max="3" step="0.1" value="0.90" />
                 </label>
-                <label title="Width of the little bridges that keep the lid in one piece. Narrower isolates each sensor better; too narrow and they tear.">
+                <label title="Width of the little bridges that keep the lid in one piece. Narrower isolates each taxel better; too narrow and they tear.">
                   Tab width
                   <input id="case-hatch-tab" type="number" min="0.4" max="4" step="0.1" value="1.20" />
                 </label>
@@ -605,9 +607,9 @@
                   <input id="case-hatch-depth" type="number" min="0.1" max="2" step="0.1" value="0.40" />
                 </label>
               </div>
-              <label class="check-field" title="A small raised bump on top of each sensor's tile. Against a finger or any curved object the bumps are what it touches, so the load concentrates into individual tiles instead of spreading across the plate. The underside stays flat.">
+              <label class="check-field" title="A small raised bump on top of each taxel's tile. Against a finger or any curved object the bumps are what it touches, so the load concentrates into individual tiles instead of spreading across the plate. The underside stays flat.">
                 <input id="case-hatch-bumps" type="checkbox" />
-                <span>Small bump on each sensor</span>
+                <span>Small bump on each taxel</span>
               </label>
               <div class="bump-fields" id="case-hatch-bump-fields" hidden>
                 <label title="Bump diameter. Must fit inside the tile with clearance from the cut around it.">
@@ -637,7 +639,7 @@
             </div>
 
             <div class="bump-fields">
-              <label title="Depth of the pocket in the bottom piece: the flex (~0.1mm) plus the Velostat (~0.1mm), not the whole board. At a 0.2mm layer height this is one layer, so there is no finer setting to print — shim under the board instead.">
+              <label title="Depth of the pocket in the bottom piece: the flex (~0.1mm) plus the piezoresistive layer (~0.1mm for Velostat), not the whole board. At a 0.2mm layer height this is one layer, so there is no finer setting to print — shim under the board instead.">
                 Pocket depth
                 <input id="case-recess" type="number" min="0.1" max="4" step="0.05" value="0.20" />
               </label>
@@ -704,11 +706,11 @@
             <button id="download-pdf" type="button" class="secondary" disabled
                     title="A 1:1 printable outline. Print it at 100%, cut it out and hold it against the real part to check the fit before ordering boards.">Download printable PDF</button>
             <button id="download-velostat-dxf" type="button" class="secondary" disabled
-                    title="The Velostat piece as a DXF in millimetres, for a laser cutter. Covers the sensor area only, not the tail.">Velostat DXF</button>
+                    title="The piezoresistive layer (e.g. Velostat, LINQSTAT) as a DXF in millimetres, for a laser cutter. Covers the sensor area only, not the tail.">Layer DXF</button>
             <button id="download-velostat-pdf" type="button" class="secondary" disabled
-                    title="The Velostat shape printed twice, mirrored across a fold line. Fold the paper with the Velostat inside and cut both together.">Velostat fold PDF</button>
+                    title="The shape of the piezoresistive layer (e.g. Velostat, LINQSTAT) printed twice, mirrored across a fold line. Fold the paper with the sheet inside and cut both together.">Layer fold PDF</button>
             <button id="download" type="button" class="primary" disabled
-                    title="Everything for this sensor in one archive: the board files for the fab, the manifest, the 1:1 PDF, the Velostat cut files, and the printed case (bottom and all three lids, in case/).">Download ZIP</button>
+                    title="Everything for this sensor in one archive: the board files for the fab, the manifest, the 1:1 PDF, the cut files for the piezoresistive layer, and the printed case (bottom and all three lids, in case/).">Download ZIP</button>
           </div>
           <p id="zip-status" class="mini download-bar__note" aria-live="polite"></p>
           <p class="mini download-bar__next">
@@ -759,31 +761,31 @@
 
         <section id="help-fill" class="panel help-section">
           <h2>Sensorize zone</h2>
-          <p>The sensorize zone is an optional second shape you can draw <em>inside</em> your board outline. It constrains <strong>where sensor pixels get packed</strong> — it does not change your board's outer edge, connector, or routing bounds.</p>
-          <p>Use it when only part of your board should be sensing area — for example, leaving a clear margin around a mounting hole, or concentrating sensors on a fingertip while leaving the rest of the outline as structural board.</p>
+          <p>The sensorize zone is an optional second shape you can draw <em>inside</em> your board outline. It constrains <strong>where taxels are placed</strong> — it does not change your board's outer edge, connector, or routing bounds.</p>
+          <p>Use it when only part of your board should be sensing area — for example, leaving a clear margin around a mounting hole, or concentrating taxels on a fingertip while leaving the rest of the outline as structural board.</p>
           <p>To use it: draw a board outline first (the toggle unlocks once you have one), switch the toolbar target to <strong>Sensorize zone</strong>, and draw a smaller shape with the same tools. It renders as a dashed green overlay so it's never confused with the board outline.</p>
         </section>
 
         <section id="help-board-sizing" class="panel help-section">
           <h2>Parameters glossary</h2>
-          <p>Most parameters are straightforward (pixel size, spacing, trace width). Two groups deserve more explanation: the pixel footprint (what each individual sensor looks like) and board sizing (four related but distinct mechanisms for making room for the wiring that connects every sensor pixel to the connector).</p>
+          <p>A taxel is one sensing element of the skin; the sensor is a grid of them. Most parameters are straightforward (taxel size, pitch, trace width). Two groups need more explanation: the taxel footprint (the copper of one taxel) and board sizing (four related but distinct mechanisms for making room for the wiring that connects every taxel to the connector).</p>
           <h3>Sensor grid: size or count</h3>
           <p>The sensor grid can be specified from either end:</p>
           <dl>
             <dt>Set taxel size</dt>
-            <dd>You give Pixel W/H and Pitch X/Y; how many fit is whatever your outline allows. The original behaviour.</dd>
+            <dd>You give Taxel W/H and Pitch X/Y; how many fit is whatever your outline allows. The original behaviour.</dd>
             <dt>Set rows &amp; columns</dt>
             <dd>You give the grid you want and the taxel size needed to fit it is calculated from your outline (its bounding box, minus the edge keepout, divided by the requested counts). Pitch is set equal to the taxel size, so taxels tile edge to edge with no gap. On a non-rectangular outline the taxel size is shrunk in small steps until the requested rows and columns really pack — corners that fall outside the shape are still dropped, so you may get slightly fewer taxels than rows × columns. Available in <em>Grow board to fit wiring</em> mode only: with the outline fixed, the packable area depends on the wiring keep-out band, whose width depends in turn on the row/column counts you are trying to set.</dd>
           </dl>
-          <h3>Pixel footprint</h3>
-          <p>Each sensor "pixel" is a pair of interdigitated copper electrodes — two interleaved comb-like patterns. A piezoresistive material laminated over the top bridges the fingers, so its resistance drops measurably under pressure. The live preview in the Parameters panel shows exactly what one pixel's electrodes look like as you adjust these:</p>
+          <h3>Taxel footprint</h3>
+          <p>Each taxel is a pair of interdigitated copper electrodes — two interleaved comb-like patterns. The piezoresistive layer laid over the top bridges the fingers, so its resistance drops measurably under pressure. The live preview in the Parameters panel shows what one taxel's electrodes look like as you adjust these:</p>
           <dl class="help-glossary">
-            <dt>Pixel edge clearance (<code>edge_clear_mm</code>)</dt>
-            <dd>Gap from the pixel's own outer boundary to its fingers. Not the same as <em>Edge keepout</em> above, which is a board-level margin from the outline — this one is local to a single pixel's footprint.</dd>
-            <dt>Pixel center clearance (<code>center_clear_mm</code>)</dt>
-            <dd>How far each finger reaches toward the opposite pad before stopping, controlling the gap down the pixel's center line.</dd>
+            <dt>Taxel edge clearance (<code>edge_clear_mm</code>)</dt>
+            <dd>Gap from the taxel's own outer boundary to its fingers. Not the same as <em>Edge keepout</em> above, which is a board-level margin from the outline — this one is local to a single taxel's footprint.</dd>
+            <dt>Taxel center clearance (<code>center_clear_mm</code>)</dt>
+            <dd>How far each finger reaches toward the opposite pad before stopping, controlling the gap down the taxel's center line.</dd>
             <dt>Via drill / diameter (<code>via_drill_mm</code> / <code>via_dia_mm</code>)</dt>
-            <dd>The plated hole connecting a pixel's top-layer pad to its routed trace underneath.</dd>
+            <dd>The plated hole connecting a taxel's top-layer pad to its routed trace underneath.</dd>
           </dl>
           <h3>Board sizing</h3>
           <dl class="help-glossary">
@@ -792,11 +794,11 @@
             <dt>2 or 4 copper layers (<code>copper_layers</code>)</dt>
             <dd>On 2 layers, columns run on the top copper and rows on the bottom, and every wire travels around the outside of the sensor field to the connector, so the board needs a wiring band around the field. On 4 layers the rows are wired on two inner layers instead: In1 carries each row straight through the field to the connector, in row order, and In2 joins the pieces of rows a notch cuts in two. Rows then need no band, so with a fixed outline more of it holds taxels. Either choice works with either board mode below. A 4-layer board costs more to fabricate, and needs the hug router.</dd>
             <dt>Grow board to fit wiring (<code>board_mode: "expand"</code>)</dt>
-            <dd>The default. Sensors are packed at maximum density inside the shape you drew, then the final board outline is grown outward until every wire fits. No sensor is ever dropped — but the exported board is larger than the shape you drew.</dd>
+            <dd>The default. Taxels are packed at maximum density inside the shape you drew, then the final board outline is grown outward until every wire fits. No taxel is ever dropped — but the exported board is larger than the shape you drew.</dd>
             <dt>Keep outline fixed, shrink sensor grid (<code>board_mode: "fixed_keepout"</code>)</dt>
-            <dd>The shape you drew is exactly the board you get. A wiring keep-out band is reserved just inside the outline — wider on the sides that carry more wires, narrow at the top where few pass — and only the area left over is filled with sensors, so pixels that would reach into the wiring zone are never placed. Because the keep-out is a clean geometric band, the surviving sensors stay a regular rectangular grid rather than a shape with holes punched in it. The band is sized from the actual wiring demand and the result is DRC-verified, falling back to a more conservative band if the dense one does not route cleanly. Trade-off: still fewer sensors than grow mode on the same outline.</dd>
+            <dd>The shape you drew is exactly the board you get. A wiring keep-out band is reserved just inside the outline — wider on the sides that carry more wires, narrow at the top where few pass — and only the area left over is filled with taxels, so taxels that would reach into the wiring zone are never placed. Because the keep-out is a clean geometric band, the surviving taxels stay a regular rectangular grid rather than a shape with holes punched in it. The band is sized from the actual wiring demand and the result is DRC-verified, falling back to a more conservative band if the dense one does not route cleanly. Trade-off: still fewer taxels than grow mode on the same outline.</dd>
             <dt>Board edge in grow mode</dt>
-            <dd>Set automatically. The final edge is shrink-wrapped about 2&nbsp;mm around the outermost sensors and wires, with rounded corners. On 4 copper layers that margin is added only where wires run at the edge, mostly near the connector; elsewhere the board keeps the shape you drew.</dd>
+            <dd>Set automatically. The final edge is shrink-wrapped about 2&nbsp;mm around the outermost taxels and wires, with rounded corners. On 4 copper layers that margin is added only where wires run at the edge, mostly near the connector; elsewhere the board keeps the shape you drew.</dd>
             <dt>Post-route safety net</dt>
             <dd>After wires are routed, if any wire still pokes outside the board, the board is grown just enough to contain it.</dd>
             <dt>Tail extension</dt>
@@ -820,7 +822,7 @@
           <h2>Exporting</h2>
           <p>The downloaded ZIP contains manufacturing files you can send to a PCB fab, or open in KiCad:</p>
           <ul>
-            <li>A <code>.kicad_pcb</code> board file and pixel/connector footprints.</li>
+            <li>A <code>.kicad_pcb</code> board file and the taxel and connector footprints.</li>
             <li>Gerber files (the industry-standard format PCB fabs use).</li>
             <li>An Excellon drill file for vias.</li>
             <li><code>manifest.json</code> &mdash; taxel placements and the scan matrix, for driving the sensor from a microcontroller. It also carries a <code>design</code> block with every setting the board was made from.</li>
@@ -830,12 +832,12 @@
           <p>The case is built when you press Download ZIP, from the settings in the case panel (its defaults if you have not changed them), so the download takes a few seconds longer, more on a large board. The primary lid is the one chosen in the case panel, or the bumped lid if you have not chosen one. If the case cannot be built for your board, the ZIP downloads without it and a note under the button says why.</p>
           <p>What to do with the files is on the OpenTac website: <a href="https://opentac.github.io/build/order-sensor/" data-site-path="build/order-sensor/" target="_blank" rel="noopener">Order the sensor</a> for the flex PCB, and the <a href="https://opentac.github.io/build/assembly/" data-site-path="build/assembly/" target="_blank" rel="noopener">assembly guide</a> from the fit check to live readings.</p>
           <h3>Reopening a design</h3>
-          <p>Keep the ZIP and you can carry on where you left off: <strong>Open</strong> in the mode switcher (or <strong>Continue a saved design</strong> on the front page) takes the ZIP back &mdash; no need to unzip it &mdash; and puts the board and every setting back on screen, including routes you moved by hand.</p>
+          <p>Keep the ZIP and you can carry on where you left off: <strong>Open</strong> in the mode switcher (or <strong>Open a saved design</strong> on the start screen) takes the ZIP back &mdash; no need to unzip it &mdash; and puts the board and every setting back on screen, including routes you moved by hand.</p>
           <p>If the app has been updated since you downloaded it, the exact board can no longer be guaranteed, so it is rebuilt from its saved settings instead and you are told so. That rebuild reproduces the same board; only hand edits to individual routes are lost.</p>
           <p>The sensor plugs into an OpenTac readout board, chosen under <strong>Board sizing</strong>. The 30-pin board reads up to 15 rows x 15 columns and the 60-pin board up to 30 x 30; "picked automatically" uses the 30-pin board when the grid fits it. The tail ends in the matching 0.5&nbsp;mm-pitch FPC connector, 30 or 60 positions. A grid larger than 30 x 30 does not fit either board: use a larger taxel pitch or a smaller outline.</p>
           <h3>The printable 1:1 PDF</h3>
           <p>Both the ZIP (<code>printable_1to1.pdf</code>) and the <strong>Download printable PDF</strong> button next to it give you a full-size paper template of your board. Print it, cut it out, and hold it against the real part <em>before</em> you order boards &mdash; it takes a minute and catches a wrong dimension that would otherwise arrive as a batch of useless PCBs.</p>
-          <p>It draws the board's <strong>real manufactured edge</strong>, including the cable tail and connector &mdash; not the shape you drew, which is smaller. The sensor grid is printed faintly inside so you can see where the sensing spots land.</p>
+          <p>It draws the board's <strong>real manufactured edge</strong>, including the cable tail and connector &mdash; not the shape you drew, which is smaller. The sensor grid is printed faintly inside so you can see where the taxels land.</p>
           <p><strong>Print it at 100%.</strong> Print dialogs default to "Fit to page" or "Shrink to printable area", which quietly resizes the sheet by a few percent and makes the template wrong. Every page carries a 100&nbsp;mm ruler: measure it with a real ruler after printing. If it is not exactly 100&nbsp;mm, reprint at <em>Actual size</em>. The sheet size used (A4 or A3) is printed at the top &mdash; pick that size in your print dialog.</p>
           <p>Boards too big for one sheet are split across several, with a dashed overlap line on each: trim to the dashed line and butt the next sheet against it.</p>
           <p>A bigger connector body can be wider than the cable/tail running into it, which puts a step in the board's cut outline. That step is always rounded with a 1&nbsp;mm fillet, at the connector tip and at the two inward notches where the tail meets the shoulder, so there are no sharp 90° corners to concentrate stress in the flex PCB.</p>
@@ -850,23 +852,23 @@
             <dt>Flat</dt>
             <dd>A plain lid. Reads normal force only.</dd>
             <dt>Hatched</dt>
-            <dd>Cuts or grooves along the boundaries between sensors, so a press lands where you put it instead of spreading to the neighbours. An optional small bump on each sensor concentrates contact from curved objects.</dd>
+            <dd>Cuts or grooves along the boundaries between taxels, so a press lands where you put it instead of spreading to the neighbours. An optional small bump on each taxel concentrates contact from curved objects.</dd>
             <dt>Shear-sensing bumps</dt>
-            <dd>One bump over each group of four sensors. Press straight down and all four read about the same. Push sideways and the bump tips, pressing harder on the two sensors it leans toward and lighter on the two it leans away from. That difference is the direction of the push.</dd>
+            <dd>One bump over each group of four taxels. Press straight down and all four read about the same. Push sideways and the bump tips, pressing harder on the two taxels it leans toward and lighter on the two it leans away from. That difference is the direction of the push.</dd>
           </dl>
           <h3>Bump settings</h3>
           <dl class="help-glossary">
             <dt>Bump height</dt>
             <dd>How far each bump stands above the lid. Taller tips more for the same sideways push, so shear reads more strongly, but it raises the surface and snags more easily.</dd>
             <dt>Bump width (% of block)</dt>
-            <dd>How much of its four-sensor block each bump covers. At 100% neighbouring bumps touch.</dd>
+            <dd>How much of its four-taxel block each bump covers. At 100% neighbouring bumps touch.</dd>
             <dt>Bump taper (top % of base)</dt>
             <dd>How pointed each bump is. Lower is more cone-like and tips more readily for the same push; 100% is a straight-sided post.</dd>
           </dl>
           <h3>Things to know</h3>
           <ul>
-            <li><strong>Every sensor gets covered.</strong> Bumps are placed on a regular grid of four-sensor blocks. Where the board's edge cuts a block short, that block still gets a full-size bump, so the sensors that are there keep reading direction.</li>
-            <li><strong>Non-square sensors get oval bumps.</strong> A bump is sized from the block it covers.</li>
+            <li><strong>Every taxel gets covered.</strong> Bumps are placed on a regular grid of four-taxel blocks. Where the board's edge cuts a block short, that block still gets a full-size bump, so the taxels that are there keep reading direction.</li>
+            <li><strong>Non-square taxels get oval bumps.</strong> A bump is sized from the block it covers.</li>
             <li><strong>Print it in something soft.</strong> TPU (roughly 85–95A) is the usual choice. A rigid plastic will not tip, so it will not read shear.</li>
             <li><strong>Rebuild it if you rebuild the board.</strong> The case is cut to fit one exact board outline. Pressing Generate again clears the old case on purpose.</li>
           </ul>
@@ -875,14 +877,14 @@
         <section id="help-faq" class="panel help-section">
           <h2>FAQ / troubleshooting</h2>
           <dl class="help-glossary">
-            <dt>"No pixels packed" / similar errors on Generate</dt>
-            <dd>Your outline is too small for the current pixel size, pitch, and edge keepout. Draw a larger outline or reduce those parameters.</dd>
+            <dt>"No taxels fit in the outline" / similar errors on Generate</dt>
+            <dd>Your outline is too small for the current taxel size, pitch, and edge keepout. Draw a larger outline or reduce those parameters.</dd>
             <dt>"Sensor fill region does not overlap the board outline"</dt>
             <dd>The sensorize zone you drew is fully outside the board outline — make sure it's drawn inside the outline shape.</dd>
             <dt>"No closed outline found — check for gaps or open ends" (DXF import)</dt>
             <dd>The DXF file doesn't contain one clean closed loop of geometry — check for gaps, unconnected segments, or stray extra shapes in the source file.</dd>
-            <dt>"backend: unreachable"</dt>
-            <dd>The backend server isn't responding. If this is a hosted deployment, it may be waking up from an idle sleep — wait a few seconds and reload.</dd>
+            <dt>"Server: not reachable"</dt>
+            <dd>The server has not answered for 90 seconds. On the hosted site the server sleeps after 15 minutes without use and takes about a minute to start; the page keeps trying every 30 seconds and runs a pending Generate once it answers. If it stays unreachable, reload the page. On your own computer, check that the window running <code>opentac cad</code> is still open.</dd>
           </dl>
         </section>
       </div>

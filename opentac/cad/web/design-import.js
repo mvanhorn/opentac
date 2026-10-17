@@ -119,6 +119,9 @@ async function fileToDesign(file) {
 }
 
 async function post(path, body) {
+  // On the hosted site the server may be asleep: wait for it (app.js shows the
+  // notice) rather than send a request that sits unanswered for a minute.
+  await window.otcServer?.ready();
   const resp = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -128,6 +131,7 @@ async function post(path, body) {
     const detail = await resp.json().catch(() => ({}));
     throw new Error(detail.detail || `HTTP ${resp.status}`);
   }
+  window.otcServer?.answered();
   return resp.json();
 }
 

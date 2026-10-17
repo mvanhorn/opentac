@@ -219,7 +219,7 @@ function renderStats(s, warnings) {
       ? "cut through, tabs holding it"
       : `grooved, ${s.hatch_web_mm} mm web`]);
     if (s.hatch_bumps) {
-      rows.push(["Bumps per sensor", `${s.hatch_bumps} on the ${s.hatch_bump_face} face`]);
+      rows.push(["Bumps per taxel", `${s.hatch_bumps} on the ${s.hatch_bump_face} face`]);
     }
   }
   if (s.lid_pieces > 1) {

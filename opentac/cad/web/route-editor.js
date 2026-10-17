@@ -2,7 +2,7 @@
 // Keeps generation untouched: edits are held in browser state, then submitted to
 // /export-edited so the final ZIP is rebuilt from the modified polylines.
 
-import { downloadName } from "./design-name.js";
+import { zipName } from "./design-name.js";
 
 const SNAP_MM = 0.1;
 
@@ -49,6 +49,7 @@ export function createRouteEditor({
   renderStats,
   readParams,
   onTailExtensionApplied,
+  onServerAnswer,
 }) {
   const toolsEl = document.getElementById("route-tools");
   const viewToolsEl = document.getElementById("pcb-view-tools");
@@ -104,9 +105,22 @@ export function createRouteEditor({
   let currentViewBox = null;
   let panDrag = null;
   let visualPreviewOnly = false;
+  // Which ZIP matches the board on screen, so Download ZIP can skip
+  // /export-edited when nothing changed. A board is identified by exactly what
+  // /export-edited would be sent for it: edit_data plus the live routes, as
+  // JSON. Comparing that, rather than flagging each edit, covers every way the
+  // board can change (route drags, chamfers, undo, a tail extension, Redo
+  // padding) and an undo back to the original counts as unchanged.
+  let generatedSig = null;   // the board as Generate or Open produced it
+  let generatedZip = null;   // ... and its ZIP, kept for an undo back to it
+  let readyZip = null;       // { sig, zipB64 }: the latest edited export and its board
 
   function hasEditableRoutes() {
     return !!editData && routes.length > 0;
+  }
+
+  function boardSignature() {
+    return JSON.stringify({ edit_data: editData, routes });
   }
 
   function mmToSvg(p) {
@@ -150,7 +164,7 @@ export function createRouteEditor({
   function markDirty() {
     dirty = true;
     drcStale = true;
-    setStatus("Route edits pending. Check DRC or download edited ZIP when ready.");
+    setStatus("Route edits pending. Press Check DRC, or Download ZIP to export the edited board.");
     updateButtons();
   }
 
@@ -522,7 +536,7 @@ export function createRouteEditor({
     const nearest = nearestSegment(routes[routeIndex].polyline_xy, mm);
     selectRoute(routeIndex, { kind: "segment", segmentIndex: nearest.index });
     if (nearest.index <= 0 || nearest.index >= routes[routeIndex].polyline_xy.length - 2) {
-      setStatus("End segments are locked because pad and pixel endpoints must stay fixed.");
+      setStatus("End segments are locked because pad and taxel endpoints must stay fixed.");
       return;
     }
     pushUndo();
@@ -640,16 +654,21 @@ export function createRouteEditor({
       : renderPreview
         ? "Building tail extension preview..."
         : "Checking edited-route DRC...");
+    const sig = boardSignature();
     const resp = await fetch(`${apiBase}/export-edited`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ edit_data: editData, routes }),
+      body: sig,
     });
     if (!resp.ok) {
       const detail = await resp.json().catch(() => ({}));
       throw new Error(detail.detail || `HTTP ${resp.status}`);
     }
     const data = await resp.json();
+    onServerAnswer?.();
+    // Check DRC and the tail extension preview build the same ZIP; keeping it
+    // means a Download ZIP straight after them does not build it again.
+    if (data.zip_b64) readyZip = { sig, zipB64: data.zip_b64 };
     renderStats(data.stats, data.drc);
     if (renderPreview && data.svg) {
       previewEl.innerHTML = data.svg;
@@ -670,7 +689,7 @@ export function createRouteEditor({
     }
     // Awaited: downloadZip adds the printed case on the backend first, and the
     // Download button stays busy until the file is actually saved.
-    if (download) await downloadZip(data.zip_b64, downloadName("edited", "zip"));
+    if (download) await downloadZip(data.zip_b64, zipName({ edited: sig !== generatedSig }));
     updateButtons();
     return true;
   }
@@ -688,8 +707,11 @@ export function createRouteEditor({
       throw new Error(detail.detail || `HTTP ${resp.status}`);
     }
     const data = await resp.json();
+    onServerAnswer?.();
     renderStats(data.stats, data.drc);
-    load(data.edit_data, data.svg);
+    // show(), not load(): this is the same board, re-padded, so it is still
+    // compared against the one Generate made (and /redo-padding returns no ZIP).
+    show(data.edit_data, data.svg);
     renderConnectorPreview(editData?.layout?.tail_extension?.path || tailPath);
     setStatus(data.drc.violations
       ? `Padding updated with ${data.drc.violations} DRC violation(s). Download remains available.`
@@ -768,7 +790,7 @@ export function createRouteEditor({
     if (tailPanel && !tailPanel.hidden) renderTailPreview();
   }
 
-  function load(nextEditData, svgText) {
+  function show(nextEditData, svgText) {
     editData = nextEditData;
     originalRoutes = cloneRoutes(editData.routes || []);
     routes = cloneRoutes(editData.routes || []);
@@ -783,6 +805,28 @@ export function createRouteEditor({
     bindSvg();
     setStatus(routes.length ? "Select a red or blue route to edit." : "");
     updateButtons();
+  }
+
+  // A new board from Generate or Open, with its ZIP when there is one.
+  function load(nextEditData, svgText, zipB64 = null) {
+    show(nextEditData, svgText);
+    generatedSig = boardSignature();
+    generatedZip = zipB64 || null;
+    readyZip = null;
+  }
+
+  // The ZIP for the board on screen if one is already in hand (from Generate,
+  // Open, Check DRC or a tail extension preview), else null.
+  function currentZip() {
+    const sig = boardSignature();
+    if (readyZip && readyZip.sig === sig) return readyZip.zipB64;
+    if (generatedZip && generatedSig === sig) return generatedZip;
+    return null;
+  }
+
+  // Whether the board on screen differs from the one Generate or Open made.
+  function isEdited() {
+    return generatedSig !== null && boardSignature() !== generatedSig;
   }
 
   undoBtn.addEventListener("click", () => {
@@ -861,6 +905,8 @@ export function createRouteEditor({
     load,
     hasEditableRoutes,
     exportEdited,
+    currentZip,
+    isEdited,
     getConnectorPos,
     // The live edit_data, including anything redo-padding or a connector swap
     // changed. The case wraps the FINAL outline, so it has to read this

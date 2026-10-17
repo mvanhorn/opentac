@@ -132,6 +132,22 @@ export function downloadName(part, ext) {
   return `${stem}${suffix}.${ext}`;
 }
 
+/**
+ * Filename for the board ZIP.
+ *   zipName({ edited: false })  -> fingertip_wrap.zip
+ *   zipName({ edited: true })   -> fingertip_wrap_edited.zip
+ *
+ * "edited" means the board was changed by hand in the PCB preview after
+ * Generate or Open, so the ZIP is not the one Generate made. It used to be added
+ * to every download, edited or not. A name that already ends in _edited (a ZIP
+ * reopened and edited again) does not get a second one.
+ */
+export function zipName({ edited = false } = {}) {
+  const plain = downloadName("", "zip");
+  if (!edited || /_edited\.zip$/i.test(plain)) return plain;
+  return downloadName("edited", "zip");
+}
+
 // ---- the editable field -----------------------------------------------------
 
 function syncInput() {

@@ -9,7 +9,7 @@ const BASE_STEPS = [
   {
     view: "landing",
     title: "Welcome to OpenTac-CAD",
-    body: "Design custom piezoresistive tactile sensor arrays — for robot grippers, prosthetic hands, wearables, anything that needs to feel contact — and get back a fully routed, manufacturable PCB. Pixels, wiring, connector, and fab files, generated automatically. This short tour walks through the basics.",
+    body: "OpenTac-CAD lays out a piezoresistive tactile sensor on a flex PCB from a 2D outline: the taxels, the wiring to the connector, and the fabrication files. A taxel is one sensing element of the skin. This tour walks through the steps.",
   },
   {
     view: "landing",
@@ -37,8 +37,8 @@ function modeStep(mode) {
   return [
     {
       view: "tool", mode: "draw", selector: "#cad-line",
-      title: "Mode: Draw a shape",
-      body: "This is what \"Draw a shape\" from the start screen opens. Use Line, Rectangle, H/V, or Arc to sketch your board outline on the canvas.",
+      title: "Mode: Draw an outline",
+      body: "This is what \"Draw an outline\" from the start screen opens. Use Line, Rectangle, H/V, or Arc to sketch your board outline on the canvas.",
     },
     {
       view: "tool", selector: "#cad-set-cable",
@@ -57,17 +57,17 @@ const TAIL_STEPS = [
   {
     view: "tool", selector: "#cad-target-fill",
     title: "Sensorize zone (optional)",
-    body: "Once you have an outline, this toggle lets you draw a second shape that controls where sensors get packed — it won't change your board's outer edge or connector.",
+    body: "Once you have an outline, this toggle lets you draw a second shape that controls where taxels are placed — it won't change your board's outer edge or connector.",
   },
   {
     view: "tool", selector: "#params-group",
     title: "Parameters",
-    body: "Sensor size, spacing, and routing clearances live here — watch the live pixel-footprint preview below update as you adjust them. The \"Board sizing\" group controls how the board grows to fit its own wiring — click the (?) link there for a full explanation.",
+    body: "Taxel size, pitch, and routing clearances live here — watch the live taxel footprint preview below update as you adjust them. The \"Board sizing\" group controls how the board grows to fit its own wiring — click the (?) link there for a full explanation.",
   },
   {
     view: "tool", selector: "#generate",
     title: "Generate",
-    body: "With an outline drawn (and parameters you're happy with), press Generate PCB to pack sensors, route wiring, and check manufacturability.",
+    body: "With an outline drawn (and parameters you're happy with), press Generate PCB to place the taxels, route the wiring, and run the design-rule check.",
   },
   {
     view: "tool", selector: "#pcb-preview",

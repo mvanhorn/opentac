@@ -3,7 +3,7 @@
 // or a DXF import (dxf-import.js). A second, optional polygon (the "sensorize
 // zone") constrains where sensors get packed inside the outline.
 import { API_BASE } from "./config.js";
-import { clearPrinted, designStem, downloadName, markPrinted } from "./design-name.js";
+import { clearPrinted, designStem, downloadName, markPrinted, zipName } from "./design-name.js";
 import { createRouteEditor } from "./route-editor.js";
 
 const canvas = document.getElementById("outline-canvas");
@@ -1229,7 +1229,9 @@ window.addEventListener("otc:restore-design", (e) => {
   // before the restored board lands.
   window.otcCaseInvalidate?.();
   setZipNote("");
-  routeEditor.load(editData, svg);
+  // The restored ZIP is the board as reopened, so Download ZIP can hand it
+  // over unchanged until something is edited.
+  routeEditor.load(editData, svg, geometryOnly ? null : (zipB64 || null));
   // Both paths enable the case: it is built from the board's geometry, which a
   // recovered design has in full.
   window.otcCaseBoardReady?.(true);
@@ -1247,6 +1249,7 @@ window.addEventListener("otc:restore-design", (e) => {
       `below — it is shaped from the board, so it fits the one you ` +
       `already had made. Downloading new manufacturing files is not possible: the wiring ` +
       `was never stored in this file.`;
+    revealResult();
     return;
   }
 
@@ -1255,6 +1258,7 @@ window.addEventListener("otc:restore-design", (e) => {
   setPrintPdf(stats);
   renderStats(stats, drc);
   genStatus.textContent = `Reopened ${label}. Edit and re-download, or press Generate PCB to rebuild it from its settings.`;
+  revealResult();
 });
 
 // The stats panel for a recovered board. renderStats cannot be reused: it
@@ -1269,7 +1273,7 @@ function renderRecoveredStats(editData, notes) {
   const h = ys.length ? Math.max(...ys) - Math.min(...ys) : 0;
   const p = editData.params || {};
   const rows = [
-    ["Sensing spots (taxels)", `${(editData.layout?.placements_xy || []).length}`],
+    ["Taxels", `${(editData.layout?.placements_xy || []).length}`],
     ["Board size", `${w.toFixed(1)} × ${h.toFixed(1)} mm, exactly as manufactured`],
     ["Taxel", `${p.pixel_w_mm} × ${p.pixel_h_mm} mm on a ${p.pitch_x_mm} × ${p.pitch_y_mm} mm pitch`],
     ["Recovered from", `${editData.recovered_from || "an older export"}`],
@@ -1295,6 +1299,166 @@ window.otcGetOutlineState = () => ({
   vertices: vertices.map((p) => p.slice()),
   cableEdgeConfirmed,
 });
+
+// ---- server status ----
+// On the hosted site (GitHub Pages) API_BASE is a free-tier Render service. It
+// sleeps after ~15 minutes without requests and takes 30-60 s to start, and a
+// request sent meanwhile is held until it is up. A local `opentac cad` serves
+// this page itself (API_BASE is ""), so it is already up and never sleeps, and
+// the notice below never shows there.
+//
+// Generate waits for the server rather than firing into a sleeping one. It
+// used to go out at once and sit for a minute under "Generating… (may take a
+// few seconds)" while the badge said "working", which read as a hang. Now the
+// status says it is waiting for the server, and the request goes out when
+// /health answers.
+//
+// Three rules keep the badge honest (each was a real false "unreachable"):
+//  * It never latches: after the wake window it re-probes every 30 s, so a
+//    server that comes up late still turns it green.
+//  * A successful API response marks the server up: a response IS proof of
+//    life, whatever the last probe said.
+//  * While our own request is in flight it does not probe: the single worker
+//    is busy computing that request and cannot answer /health, which is
+//    business as usual, not an outage.
+const HOSTED = API_BASE !== "";
+const WAKE_DEADLINE_MS = 90000;          // covers a cold start with room to spare
+const IDLE_SLEEP_MS = 14 * 60 * 1000;    // a little under Render's 15 minutes
+const NOTICE_DELAY_MS = 1500;            // an awake server answers well within this
+const healthEl = document.getElementById("health");
+const serverNoticeEl = document.getElementById("server-notice");
+let serverUp = false;
+let lastServerAnswer = 0;
+let probing = false;
+let wakeStarted = 0;
+let noticeTimer = null;
+let noticeTicker = null;
+let upWaiters = [];
+let generateInFlight = false;
+// Bumped by every Generate press. A press that waited for the server runs only
+// if no later press came in meanwhile.
+let generateTicket = 0;
+
+function setBadge(kind, text, title = "") {
+  if (!healthEl) return;
+  healthEl.textContent = text;
+  healthEl.className = `health health--${kind}`;
+  healthEl.title = title;
+}
+
+function wakeNoticeText() {
+  const waited = Date.now() - wakeStarted;
+  const s = Math.round(waited / 1000);
+  if (waited < WAKE_DEADLINE_MS) {
+    return `Starting the server, which takes about a minute after a quiet spell (${s} s so far). ` +
+      "You can keep working; Generate runs once the server is up.";
+  }
+  return `The server has not answered for ${s} s. Still trying every 30 s; ` +
+    "Generate runs once it answers. Reloading the page also retries.";
+}
+
+function showWakeNotice() {
+  if (serverUp) return;
+  if (healthEl?.textContent === "Server: checking…") {
+    setBadge("unknown", "Server: starting…", "The server sleeps when idle and takes about a minute to start.");
+  }
+  if (!HOSTED || !serverNoticeEl) return;
+  serverNoticeEl.textContent = wakeNoticeText();
+  serverNoticeEl.classList.toggle("server-notice--late", Date.now() - wakeStarted >= WAKE_DEADLINE_MS);
+  serverNoticeEl.hidden = false;
+  if (!noticeTicker) noticeTicker = setInterval(showWakeNotice, 1000);
+}
+
+function hideWakeNotice() {
+  clearTimeout(noticeTimer);
+  noticeTimer = null;
+  clearInterval(noticeTicker);
+  noticeTicker = null;
+  if (serverNoticeEl) serverNoticeEl.hidden = true;
+}
+
+function markBackendAlive() {
+  serverUp = true;
+  lastServerAnswer = Date.now();
+  setBadge("ok", "Server: ready");
+  hideWakeNotice();
+  const waiting = upWaiters;
+  upWaiters = [];
+  waiting.forEach((resolve) => resolve());
+}
+
+// Probe /health until it answers. Retries rather than probing once, because
+// the first visitor after a quiet spell always hits a booting service.
+function startProbing() {
+  if (probing) return;
+  probing = true;
+  serverUp = false;
+  wakeStarted = Date.now();
+  let delay = 1000;
+  setBadge("unknown", "Server: checking…");
+  clearTimeout(noticeTimer);
+  // Not at once: an awake server answers within a few hundred ms, and a notice
+  // that flashes up and away again is noise.
+  noticeTimer = setTimeout(showWakeNotice, NOTICE_DELAY_MS);
+
+  async function attempt() {
+    if (serverUp) { probing = false; return; }   // another response got there first
+    if (generateInFlight || zipInFlight) {
+      setBadge("unknown", "Server: busy", zipInFlight
+        ? "Adding the printed case to the download; the server answers again when it finishes."
+        : "A generate is running; the server answers again when it finishes.");
+      setTimeout(attempt, 5000);
+      return;
+    }
+    try {
+      // Per-try timeout: a request to a waking instance can hang well past the
+      // point where retrying is the better move.
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 10000);
+      const r = await fetch(`${API_BASE}/health`, { signal: ctl.signal, cache: "no-store" });
+      clearTimeout(t);
+      if (r.ok) {
+        probing = false;
+        markBackendAlive();
+        return;
+      }
+    } catch {
+      /* fall through to the retry below */
+    }
+    if (serverUp) { probing = false; return; }
+    if (Date.now() - wakeStarted < WAKE_DEADLINE_MS) {
+      setBadge("unknown", "Server: starting…",
+        "The server sleeps when idle and takes about a minute to start.");
+      setTimeout(attempt, delay);
+      delay = Math.min(delay * 1.6, 8000);
+      return;
+    }
+    setBadge("down", "Server: not reachable",
+      `No answer from ${API_BASE || "the server"} for ${WAKE_DEADLINE_MS / 1000} s. Retrying every 30 s.`);
+    setTimeout(attempt, 30000);   // never latch
+  }
+  attempt();
+}
+
+// Whether a request can go out now. On the hosted site a server this page has
+// not heard from for longer than Render's idle timeout has most likely gone
+// back to sleep, so it counts as not ready until /health answers again.
+function serverReadyNow() {
+  if (!serverUp) return false;
+  if (!HOSTED || generateInFlight || zipInFlight) return true;
+  return Date.now() - lastServerAnswer < IDLE_SLEEP_MS;
+}
+
+// Resolves once the server answers (at once if it is known to be up).
+function ensureServer() {
+  if (serverReadyNow()) return Promise.resolve();
+  const ready = new Promise((resolve) => upWaiters.push(resolve));
+  startProbing();
+  return ready;
+}
+
+// For the other modules that call the server (design-import.js).
+window.otcServer = { ready: ensureServer, answered: markBackendAlive };
 
 // ---- generate ----
 const genStatus = document.getElementById("gen-status");
@@ -1398,6 +1562,7 @@ const routeEditor = createRouteEditor({
   downloadZip,
   renderStats,
   readParams,
+  onServerAnswer: markBackendAlive,
 });
 
 
@@ -1580,7 +1745,7 @@ function renderPixelPreview() {
   const innerH = iy2 - iy1;
 
   if (!(innerW > tw) || !(innerH > tw)) {
-    pixelPreviewEl.innerHTML = '<div class="pixel-info">Invalid: pixel edge clearance too large for this pixel/trace size</div>';
+    pixelPreviewEl.innerHTML = '<div class="pixel-info">Invalid: taxel edge clearance too large for this taxel size and trace width</div>';
     return;
   }
 
@@ -1637,17 +1802,19 @@ pixelPreviewIds.forEach((id) => {
   document.getElementById(id)?.addEventListener("input", renderPixelPreview);
 });
 
-async function runGenerate(overrides = {}) {
+// The /generate body for what is on the canvas and in the form, or null with
+// the reason shown in the status line.
+function generateBody(overrides) {
   if (vertices.length < 3) {
     genStatus.innerHTML = `<span class="error">Need at least 3 outline vertices.</span>`;
-    return;
+    return null;
   }
   if (!cableEdgeConfirmed) {
     genStatus.innerHTML =
       `<span class="error">Cable edge not set — click the edge where the connector ` +
       `tail should exit, then press <strong>Set cable edge</strong>.</span>`;
     showCableEdgeBanner();
-    return;
+    return null;
   }
   const body = {
     outline: vertices,
@@ -1669,9 +1836,44 @@ async function runGenerate(overrides = {}) {
         `<span class="error">Your outline is ${w.toFixed(1)} × ${h.toFixed(1)} mm, but a single taxel plus ` +
         `its edge keepout needs ${needW.toFixed(1)} × ${needH.toFixed(1)} mm. Make the outline bigger, or ` +
         `reduce Taxel W/H or Edge keepout.</span>`;
-      return;
+      return null;
     }
   }
+  return body;
+}
+
+// Backend messages that predate the taxel wording, in the words the page uses.
+// The backend's own text is left alone: the pipeline matches on it.
+function readableError(err) {
+  const msg = String(err?.message || err);
+  if (/^No pixels packed/.test(msg)) {
+    return "No taxels fit in the outline. Make the outline larger, or reduce the taxel size, pitch or edge keepout.";
+  }
+  if (/^edgeClearMm too large/.test(msg)) {
+    return "Taxel edge clearance is too large for this taxel size and trace width.";
+  }
+  // fetch() rejects with a TypeError when no answer came back at all.
+  if (err instanceof TypeError) {
+    return "No answer from the server. See the Server badge at the top right, and try again when it says ready.";
+  }
+  return msg;
+}
+
+async function runGenerate(overrides = {}) {
+  if (!generateBody(overrides)) return;
+  const ticket = ++generateTicket;
+  if (!serverReadyNow()) {
+    genStatus.textContent = HOSTED
+      ? "Waiting for the server to start (about a minute after a quiet spell). The board is generated as soon as it is up."
+      : "Waiting for the server to answer. The board is generated as soon as it does.";
+    await ensureServer();
+    // Pressed again while waiting: the later press is the one that runs.
+    if (ticket !== generateTicket) return;
+  }
+  // Built after the wait, so a queued Generate uses the outline and settings
+  // as they are when it runs, not as they were when it was pressed.
+  const body = generateBody(overrides);
+  if (!body) return;
   genStatus.textContent = "Generating… (may take a few seconds)";
   generateInFlight = true;
   pcbPreview.classList.remove("pcb-preview--stale");
@@ -1698,7 +1900,9 @@ async function runGenerate(overrides = {}) {
     markBackendAlive();
     showSolvedGridSize(data.edit_data);
     if (data.edit_data) {
-      routeEditor.load(data.edit_data, data.svg);
+      // The generate ZIP goes with it: Download ZIP uses it as it is unless the
+      // board is edited first (route-editor.js currentZip).
+      routeEditor.load(data.edit_data, data.svg, data.zip_b64);
     } else {
       pcbPreview.innerHTML = data.svg;
       routeEditStatus.textContent = "";
@@ -1710,11 +1914,31 @@ async function runGenerate(overrides = {}) {
     window.otcCaseBoardReady?.(!!data.edit_data);
     renderStats(data.stats, data.drc);
     genStatus.textContent = "Done.";
+    revealResult();
   } catch (err) {
-    genStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+    genStatus.innerHTML = `<span class="error">Error: ${readableError(err)}</span>`;
   } finally {
     generateInFlight = false;
   }
+}
+
+// After Generate (or Open), bring the result into view: the status and stats,
+// with the PCB preview under them. Only when the preview is mostly off screen,
+// so someone already looking at it is not moved.
+function revealResult() {
+  const toolView = document.getElementById("view-tool");
+  const panel = document.getElementById("pcb-preview-panel");
+  const target = document.querySelector(".generate-panel") || panel;
+  if (!toolView || toolView.hidden || !panel || !target) return;
+  // After layout: the stats and the preview SVG were only just inserted.
+  requestAnimationFrame(() => {
+    const r = panel.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const shown = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+    if (shown >= Math.min(r.height, vh) * 0.5) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  });
 }
 
 // ---- mirror ----
@@ -1809,7 +2033,7 @@ downloadPdfBtn?.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-// ---- Velostat cut files ----
+// ---- cut files for the piezoresistive layer (Velostat, LINQSTAT, ...) ----
 // Same producer as the printable PDF (the export call), same lifecycle: they
 // ride on stats and are refreshed wherever setPrintPdf is. Too big to fold
 // gives one un-mirrored copy (fold null); too big for even that, no PDF.
@@ -1824,12 +2048,12 @@ function setVelostat(stats) {
     const hasPdf = !!lastVelostat?.fold_pdf_b64;
     const folds = !lastVelostat || !hasPdf || !!lastVelostat.fold;
     downloadVeloPdfBtn.disabled = !hasPdf;
-    downloadVeloPdfBtn.textContent = folds ? "Velostat fold PDF" : "Velostat PDF";
+    downloadVeloPdfBtn.textContent = folds ? "Layer fold PDF" : "Layer PDF";
     downloadVeloPdfBtn.title = !lastVelostat || hasPdf
       ? (folds
-          ? "The Velostat shape printed twice, mirrored across a fold line. Fold the paper with the Velostat inside and cut both together."
-          : "Too large to print twice on one sheet, so the shape is printed once at 1:1. Tape the Velostat under the sheet and cut both together.")
-      : "This sensor is too large for one A3 sheet. Use the Velostat DXF instead.";
+          ? "The shape of the piezoresistive layer (e.g. Velostat, LINQSTAT) printed twice, mirrored across a fold line. Fold the paper with the sheet inside and cut both together."
+          : "The shape of the piezoresistive layer (e.g. Velostat, LINQSTAT), too large to print twice on one sheet, so printed once at 1:1. Tape the sheet under the paper and cut both together.")
+      : "This sensor is too large for one A3 sheet. Use the Layer DXF instead.";
   }
 }
 
@@ -1894,7 +2118,7 @@ function renderStats(stats, drc) {
   // to judge the result. The full engineering table (every routing/tail
   // metric) stays available under a collapsible "All details".
   const summary = [
-    ["Sensing spots (taxels)", `${stats.active_pixels}`],
+    ["Taxels", `${stats.active_pixels}`],
     ["Readout board", readoutBoardText(stats.connector_pos)],
     ["Board mode", stats.board_mode === "fixed_keepout"
       ? "outline kept exactly as drawn"
@@ -1918,9 +2142,9 @@ function renderStats(stats, drc) {
     summary.push(["Routing warnings", `${stats.routing_warning_nets || 0} nets / ${stats.routing_problem_pixels || 0} taxels`]);
   }
   const rows = [
-    ["Total pixels", stats.total_pixels],
-    ["Active pixels", stats.active_pixels],
-    ["Removed pixels", stats.removed_pixels],
+    ["Total taxels", stats.total_pixels],
+    ["Active taxels", stats.active_pixels],
+    ["Removed taxels", stats.removed_pixels],
     ["Column routes", stats.col_routes],
     ["Row routes", stats.row_routes],
     ["Connector", `${stats.connector_pos}-pos${stats.connector_swap ? " (swapped row/column pad groups)" : ""}`],
@@ -1934,7 +2158,7 @@ function renderStats(stats, drc) {
     ] : []),
     ["Router", stats.router === "hug" ? "hug (wires follow the sensor shape)" : "legacy"],
     ...(stats.board_mode === "fixed_keepout" ? [
-      ["Pixels dropped for wiring", `${stats.dropped_by_keepout || 0} of ${stats.max_pack_pixels || 0} max-packed`],
+      ["Taxels dropped for wiring", `${stats.dropped_by_keepout || 0} of ${stats.max_pack_pixels || 0} max-packed`],
       ["Keep-out width", `${stats.fixed_keepout_min_mm || 0} mm thinnest → ${stats.fixed_keepout_max_mm || 0} mm at the tail`],
       ["Keep-out passes", `${stats.fixed_keepout_iterations || 0} carve, ${stats.fixed_keepout_route_attempts || 0} routing`],
       ["Keep-out routing", stats.fixed_keepout_routing_clean ? "clean"
@@ -1963,7 +2187,7 @@ function renderStats(stats, drc) {
     ["Max route outside", `${stats.max_route_outside_distance_mm || 0} mm`],
     ["Row routes left", stats.row_routes_left || 0],
     ["Row routes right", stats.row_routes_right || 0],
-    ["Routing warning pixels", stats.routing_problem_pixels],
+    ["Routing warning taxels", stats.routing_problem_pixels],
     ["Routing warning nets", stats.routing_warning_nets],
     ["Tail length", tailLengthText(stats)],
     ["Tail width", tailWidth],
@@ -2002,26 +2226,38 @@ function renderDrcDetails(drc) {
 }
 
 // ---- download zip (base64 -> Blob) ----
-// Both paths end in downloadZip, which adds the printed case. The button says
-// it is working for the whole wait: the edited export and the case are two
-// backend calls, and on the free tier the pair can take a while.
+// Every path ends in downloadZip, which adds the printed case. The board ZIP
+// itself is rebuilt by /export-edited only when the board was changed after
+// Generate or Open (a moved or chamfered route, a tail extension, Redo
+// padding); otherwise the ZIP already in hand is the same board, and
+// rebuilding it was a slow extra round trip on the free-tier server. The
+// button says it is working for the whole wait.
 downloadBtn.addEventListener("click", async () => {
   if (zipInFlight || downloadBtn.disabled) return;
   const label = downloadBtn.textContent;
   downloadBtn.disabled = true;
   downloadBtn.textContent = "Preparing download…";
-  setZipNote("Preparing download…");
+  setZipNote(serverReadyNow()
+    ? "Preparing download…"
+    : "Waiting for the server to start (about a minute after a quiet spell), then preparing the download…");
   try {
+    await ensureServer();
+    setZipNote("Preparing download…");
     if (routeEditor.hasEditableRoutes()) {
+      const ready = routeEditor.currentZip();
+      if (ready) {
+        await downloadZip(ready, zipName({ edited: routeEditor.isEdited() }));
+        return;
+      }
       try {
         await routeEditor.exportEdited({ download: true });
       } catch (error) {
-        routeEditStatus.innerHTML = `<span class="error">Edited export failed: ${error.message}</span>`;
+        routeEditStatus.innerHTML = `<span class="error">Edited export failed: ${readableError(error)}</span>`;
         setZipNote("");
       }
       return;
     }
-    await downloadZip(lastZipB64, downloadName("", "zip"));
+    await downloadZip(lastZipB64, zipName({ edited: false }));
   } finally {
     downloadBtn.textContent = label;
     // A generate started meanwhile owns the button now.
@@ -2029,72 +2265,8 @@ downloadBtn.addEventListener("click", async () => {
   }
 });
 
-// ---- health ping ----
-// Retries rather than probing once. When the backend is a free-tier Render
-// instance it sleeps after ~15 minutes idle and takes 30-60s to wake, so the
-// first visitor after a quiet spell always hits a booting service.
-//
-// Three rules keep the badge honest (each was a real false-"unreachable"):
-//  * It never latches: after the wake window it keeps re-probing every 30s,
-//    so a backend that comes up late still turns the badge green.
-//  * A successful generate marks the backend alive directly - a response IS
-//    proof of life, regardless of what the last probe said.
-//  * While OUR OWN generate is in flight it does not probe at all: the
-//    single backend worker is busy computing that request and cannot answer
-//    /health, which is business as usual, not an outage.
-let generateInFlight = false;
-function markBackendAlive() {
-  const el = document.getElementById("health");
-  if (!el) return;
-  el.textContent = "backend: ok";
-  el.className = "health health--ok";
-  el.title = "";
-}
-(function pingHealth() {
-  const el = document.getElementById("health");
-  const DEADLINE_MS = 90000;   // covers a cold start with room to spare
-  const started = Date.now();
-  let delay = 1000;
-
-  async function attempt() {
-    if (generateInFlight || zipInFlight) {
-      el.textContent = "backend: working…";
-      el.className = "health health--unknown";
-      el.title = zipInFlight
-        ? "Adding the printed case to the download; the backend answers again when it finishes."
-        : "A generate is running; the backend answers again when it finishes.";
-      setTimeout(attempt, 5000);
-      return;
-    }
-    try {
-      // Per-try timeout: a request to a waking instance can hang well past the
-      // point where retrying is the better move.
-      const ctl = new AbortController();
-      const t = setTimeout(() => ctl.abort(), 10000);
-      const r = await fetch(`${API_BASE}/health`, { signal: ctl.signal, cache: "no-store" });
-      clearTimeout(t);
-      if (r.ok) {
-        markBackendAlive();
-        return;
-      }
-    } catch {
-      /* fall through to the retry below */
-    }
-    if (Date.now() - started < DEADLINE_MS) {
-      el.textContent = "backend: waking…";
-      el.className = "health health--unknown";
-      el.title = "The backend sleeps when idle and takes up to a minute to start.";
-      setTimeout(attempt, delay);
-      delay = Math.min(delay * 1.6, 8000);
-      return;
-    }
-    el.textContent = "backend: unreachable";
-    el.className = "health health--down";
-    el.title = "Could not reach " + (API_BASE || "the backend") + " after 90s. Retrying in the background.";
-    setTimeout(attempt, 30000);   // never latch
-  }
-  attempt();
-})();
+// First probe of the server; see "server status" above.
+startProbing();
 
 redraw();
 setOutlineInfo();

@@ -34,6 +34,16 @@ eq(dn.downloadName("1to1", "pdf"), "fingertip_wrap_1to1.pdf", "PDF likewise");
 eq(dn.downloadName("bump_sheet", "stl"), "fingertip_wrap_bump_sheet.stl", "bump sheet likewise");
 eq(dn.downloadName("edited", "zip"), "fingertip_wrap_edited.zip", "edited ZIP likewise");
 
+// ---- the board ZIP: _edited only for a hand-edited board ---------------------
+eq(dn.zipName(), "fingertip_wrap.zip", "a board as generated is plain <name>.zip");
+eq(dn.zipName({ edited: false }), "fingertip_wrap.zip", "edited: false likewise");
+eq(dn.zipName({ edited: true }), "fingertip_wrap_edited.zip", "a hand-edited board gets _edited");
+dn.setSource("fingertip_wrap_edited.zip");
+eq(dn.zipName({ edited: true }), "fingertip_wrap_edited.zip",
+   "a reopened _edited design is not named _edited_edited");
+eq(dn.zipName({ edited: false }), "fingertip_wrap_edited.zip", "and keeps its name unedited");
+dn.setSource("fingertip_wrap.stl");
+
 // ---- sanitising --------------------------------------------------------------
 dn.setSource("My Sensor (v2).STL");
 eq(dn.downloadName("", "zip"), "My_Sensor_v2.zip", "spaces and punctuation collapse to _");

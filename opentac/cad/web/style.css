@@ -63,6 +63,21 @@ button.linklike:hover:not(:disabled) { color: var(--text); border-color: var(--l
 .health--ok { background: #123; color: #6fd08a; }
 .health--down { background: #311; color: #e88; }
 
+/* Hosted site only: the sleeping server is starting (app.js, server status). */
+.server-notice {
+  padding: 6px 18px;
+  border-bottom: 1px solid #5a5520;
+  background: #2a2a14;
+  color: #d8d38a;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.server-notice[hidden] { display: none; }
+.server-notice--late { border-bottom-color: #5a2a2a; background: #2a1616; color: #e8a0a0; }
+
+/* Room above the result when Generate scrolls it into view. */
+.generate-panel { scroll-margin-top: 10px; }
+
 .app-view[hidden] { display: none; }
 
 /* No align-items: start — the default `stretch` lets the controls panel run

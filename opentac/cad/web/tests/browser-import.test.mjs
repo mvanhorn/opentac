@@ -279,7 +279,7 @@ try {
     return {
       info: info.textContent.trim(),
       status: document.getElementById("gen-status").textContent.trim(),
-      taxelsShown: /Sensing spots/.test(document.getElementById("stats").textContent),
+      taxelsShown: /Taxels/.test(document.getElementById("stats").textContent),
       stats: document.getElementById("stats").textContent.replace(/\\s+/g," ").slice(0, 200),
       hasSvg: !!document.querySelector("#pcb-preview svg"),
       svgTaxels: document.querySelectorAll("#pcb-preview svg rect.pixel").length,

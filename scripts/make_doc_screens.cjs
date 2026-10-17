@@ -88,12 +88,12 @@ async function shots() {
     // 1. The start screen: the robot gallery (first row) and the ways to start.
     let p = await page(browser);
     await landing(p);
-    const head = await byText(p, "h3.landing-modes__label", "real robot part");
+    const head = await byText(p, "h3.landing-modes__label", "robot part");
     await p.evaluate((e) => e.scrollIntoView(), head);
     await sleep(2500);                                    // thumbnails load as they come into view
     const cards = (await p.$$("#landing-stl-examples > *")).slice(0, 4);
     await clip(p, [head, ...cards], "cad_robot_gallery.webp", 12);
-    const ways = await byText(p, "h3.landing-modes__label", "Choose how to start");
+    const ways = await byText(p, "h3.landing-modes__label", "Other ways to start");
     await clip(p, [ways, ".landing-modes"], "cad_ways_to_start.webp", 12);
     await p.close();
 
