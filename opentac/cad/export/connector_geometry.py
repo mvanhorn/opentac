@@ -130,6 +130,86 @@ def connector_open_edge_endpoints(layout, outline_xy, params, connector_dir):
     return ranked[:2]
 
 
+def connector_opening(layout, outline_xy, params, connector_dir, shift_mm=0.0):
+    """The connector's open edge (A, B), the unit direction from it into the tab,
+    and how deep the tab runs past it; None without a connector footprint.
+    `shift_mm` moves the connector that far along that direction (the export's
+    synthetic tail extension moves it main.AUTO_TAIL_EXTENSION_MM out)."""
+    model = connector_geometries(layout, outline_xy, params, connector_dir)
+    open_pts = connector_open_edge_endpoints(layout, outline_xy, params, connector_dir) if model else None
+    if not open_pts:
+        return None
+    n = np.asarray(model["n_out"], dtype=float)
+    A, B = (np.asarray(p, dtype=float) for p in open_pts)
+    mid = 0.5 * (A + B)
+    pts = [p for a, b in model["edge_lines"] for p in (a, b)] + [p for arc in model["edge_arcs"] for p in arc]
+    depth = max(float((np.asarray(p, dtype=float) - mid) @ n) for p in pts)
+    return A + shift_mm * n, B + shift_mm * n, n, depth
+
+
+# Board narrower than this beside the connector's tab (mean width) is left to
+# stitched_outline_segments, which cuts the connector body 0.02 mm wide.
+SLIVER_MM = 0.01
+
+
+def clip_beside_tab(board, A, B, n_in, depth):
+    """`board` without the board that stands beside the connector's tab past its
+    opening A-B.
+
+    Past the opening the footprint's own Edge.Cuts draw the tab, so board there
+    wider than the tab is left standing next to the tab's side lines, which a
+    fab mills as slits: a typed tail wider than the tab, the routing canvas a
+    board keeps when follow padding is off, a shoulder padded past an enlarged
+    connector. Removed here, the board steps in to the tab along the opening
+    line and its outline ends at A and B. Only board connected to the tab past
+    the opening is touched: a separate part of the board beside the tail is
+    not the tail. Copper past the opening runs on the pad lanes, inside the
+    tab, so no wire loses its board. Returns `board` itself when there is
+    nothing to remove."""
+    if board is None or board.is_empty:
+        return board
+    A, B, n = (np.asarray(v, dtype=float) for v in (A, B, n_in))
+    width = float(np.linalg.norm(B - A))
+    if width < 1e-9:
+        return board
+    t = (B - A) / width
+    far = float(depth) + 1.0
+    minx, miny, maxx, maxy = board.bounds
+    span = float(np.hypot(maxx - minx, maxy - miny)) + width
+    tab = ShapelyPolygon([A, B, B + far * n, A + far * n])
+    sides = unary_union([ShapelyPolygon([A, A - span * t, A - span * t + far * n, A + far * n]),
+                         ShapelyPolygon([B, B + span * t, B + span * t + far * n, B + far * n])])
+    past = board.intersection(unary_union([tab, sides]))
+    cut = []
+    for part in _polygon_parts(past):
+        if part.intersection(tab).area <= 1e-6:
+            continue                       # not the tail: another part of the board
+        # what stands beside the tab, but not hair-thin slivers along its sides:
+        # overlay leaves them where the board's edge runs on a side exactly, and
+        # a tail unioned with a 1 um overlap leaves a 1 um strip. The export
+        # takes anything within 0.02 mm of the connector body away anyway
+        # (stitched_outline_segments), so they never reach Edge.Cuts.
+        cut += [q for q in _polygon_parts(part.intersection(sides))
+                if 2.0 * q.area / q.length > SLIVER_MM]
+    if not cut:
+        return board
+    clipped = board.difference(unary_union(cut))
+    if not clipped.is_valid:
+        clipped = clipped.buffer(0)
+    if len(_polygon_parts(clipped)) > len(_polygon_parts(board)):
+        return board                       # never split the board (the Edge.Cuts check reports it)
+    return clipped
+
+
+def _polygon_parts(geom):
+    """The polygons of non-negligible area in a shapely result."""
+    if geom is None or geom.is_empty:
+        return []
+    if geom.geom_type == "Polygon":
+        return [geom] if geom.area > 1e-6 else []
+    return [p for g in getattr(geom, "geoms", []) for p in _polygon_parts(g)]
+
+
 def drop_tiny_edges(ring, keep=(), tol=0.002):
     """A closed ring without its near-zero-length edges.
 
@@ -176,7 +256,8 @@ def stitched_outline_segments(layout, outline_xy, params, connector_dir):
     That only meets the footprint cleanly while the board is no wider than the
     connector's tab past the open edge: board beside the tab is left standing
     next to the footprint's tab-side lines, which a fab then mills as slits
-    (follow_padding.tail_wire_hold keeps the tail to the tab;
+    (follow_padding.tail_wire_hold keeps the tail's wires from growing it;
+    clip_beside_tab, run where the board is finished, removes any other;
     export/edge_cuts_check.py reports any board where it is not).
     """
     final_xy = getattr(layout, "final_outline_xy", None)

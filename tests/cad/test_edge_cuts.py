@@ -17,7 +17,7 @@ import zipfile
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Polygon
 
 from opentac.cad import main
 from opentac.cad.export.edge_cuts_check import check_edge_cuts, kicad_pcb_edge_cuts
@@ -76,12 +76,99 @@ def test_full_width_tail_ends_at_the_connector(name):
 
 
 def test_drc_reports_a_tail_padded_past_the_tab(monkeypatch):
-    # The old behaviour: post-route containment pads the tail's own wires too.
+    # The old behaviour: post-route containment pads the tail's own wires too,
+    # and nothing clips the board to the tab past the connector's opening.
     monkeypatch.setattr(main, "tail_wire_hold", lambda layout: None)
+    monkeypatch.setattr(main, "_clip_board_to_connector_tab", lambda *a, **k: False)
     resp = _generate(**FULL_WIDTH["30pin_15x15"])
     found = [d for d in resp["drc"]["details"] if d["layer"] == "Edge.Cuts"]
     assert found and resp["drc"]["violations"] >= len(found)
     assert check_edge_cuts(kicad_pcb_edge_cuts(_board_file(resp)))
+
+
+# --- other ways a board can end up wider than the tab -----------------------
+# Past the connector's opening the board is clipped to the tab
+# (connector_geometry.clip_beside_tab), wherever the board was widened.
+
+PAD = dict(outline=[[0, 0], [17.6, 0], [17.6, 34.6], [0, 34.6]], pitch_x_mm=4.2, pitch_y_mm=4.2,
+           pixel_w_mm=4.0, pixel_h_mm=4.0)
+
+
+def _export(edit_data, routes):
+    r = client.post("/export-edited", json={"edit_data": edit_data, "routes": routes})
+    assert r.status_code == 200, r.text[:300]
+    return r.json()
+
+
+def _redo(edit_data, **extra):
+    r = client.post("/redo-padding", json={"edit_data": edit_data, "routes": edit_data["routes"], **extra})
+    assert r.status_code == 200, r.text[:300]
+    return r.json()["edit_data"]
+
+
+def _assert_clean(resp, taxels=None):
+    assert check_edge_cuts(kicad_pcb_edge_cuts(_board_file(resp))) == []
+    assert resp["drc"]["violations"] == 0
+    if taxels is not None:
+        assert resp["stats"]["active_pixels"] == taxels
+
+
+@pytest.mark.parametrize("board_mode", ["expand", "fixed_keepout"])
+def test_typed_tail_wider_than_the_tab(board_mode):
+    tab = 15.5                                       # the 30-pin connector this pad gets
+    wide = _generate(**PAD, board_mode=board_mode, cable_length_mm=14.0, tail_width_mm=tab + 4)
+    assert wide["stats"]["connector_tab_tip_width_mm"] == pytest.approx(tab)
+    _assert_clean(wide)
+    # the typed width is kept up to the connector's opening, which the export
+    # puts at the pad row (cable length + CONNECTOR_BODY_ABOVE_MM)
+    ed = wide["edit_data"]
+    o = np.asarray(ed["outline"], dtype=float)
+    t = ed["layout"]["tail"]
+    mid = 0.5 * (o[0] + o[1])
+    n, th = np.asarray(t["n_out"], dtype=float), np.asarray(t["t_hat"], dtype=float)
+    board = Polygon(ed["final_outline"]).buffer(0)
+    across = lambda depth: board.intersection(LineString([mid + depth * n - 60 * th, mid + depth * n + 60 * th])).length
+    assert across(14.0 + 2.75 - 0.3) == pytest.approx(tab + 4, abs=0.01)
+    assert across(14.0 + 2.75 + 0.3) == pytest.approx(tab, abs=0.01)     # past it: the tab
+
+
+@pytest.mark.parametrize("board_mode", ["expand", "fixed_keepout"])
+def test_bigger_connector_swap(board_mode):
+    g = _generate(**PAD, board_mode=board_mode)
+    ed = _redo(g["edit_data"], connector_pos_override=40)
+    assert ed["layout"]["connector_pos"] == 40
+    _assert_clean(_export(ed, ed["routes"]), g["stats"]["active_pixels"])
+
+
+def test_bigger_connector_then_bent_tail_extension():
+    g = _generate(**PAD)
+    ed = _redo(g["edit_data"], connector_pos_override=40)
+    te = dict(ed["layout"]["tail_extension"])
+    s = np.asarray(te["path"][0], dtype=float)
+    n = np.asarray(ed["layout"]["tail"]["n_out"], dtype=float)
+    turn = np.array([n[0] - n[1], n[0] + n[1]]) / np.sqrt(2.0)          # 45 degrees
+    te.update(enabled=True, path=[s.tolist(), (s + 6 * n).tolist(), (s + 6 * n + 10 * turn).tolist()])
+    ed["layout"]["tail_extension"] = te
+    ed = _redo(ed)
+    _assert_clean(_export(ed, ed["routes"]), g["stats"]["active_pixels"])
+
+
+def test_follow_padding_off():
+    g = _generate(**PAD)
+    ed = _redo(g["edit_data"], params={"follow_main_padding": False})
+    assert ed["params"]["follow_main_padding"] is False
+    _assert_clean(_export(ed, ed["routes"]), g["stats"]["active_pixels"])
+
+
+def test_case_neck_is_not_the_connector():
+    # A tail wider than the connector steps in to the tab at its end: the case
+    # must not take the tab for the cable and seal the connector inside.
+    from opentac.cad.pipeline.case import _tail_neck
+    board = [(-20, 0), (20, 0), (20, 40), (-20, 40)]
+    tail = [(-18, 0), (-18, -14.75), (-15.25, -14.75), (-15.25, -18), (15.25, -18), (15.25, -14.75),
+            (18, -14.75), (18, 0)]
+    outline = [(-20, 0), *tail, (20, 0), (20, 40), (-20, 40)]
+    assert _tail_neck(outline, 0.0) is None
 
 
 # --- the check itself --------------------------------------------------------

@@ -204,6 +204,9 @@ def _tail_neck(final_outline_xy, cable_y: float):
     * "Narrow" cannot be a fraction of the board. An 18x18 board's tail is 62%
       of its width, so any fixed fraction that catches a big board misses a
       small one. The test is only that the tail is clearly narrower than full.
+
+    Where the board steps in to the connector's tab at the connector's opening
+    (_neck_floor), the tab past it is not looked at.
     """
     poly = Polygon(np.asarray(final_outline_xy, dtype=float)).buffer(0)
     if poly.is_empty:
@@ -226,7 +229,7 @@ def _tail_neck(final_outline_xy, cable_y: float):
         return None
 
     step = 0.25
-    ys = np.arange(cable_y, miny + step, -step)
+    ys = np.arange(cable_y, _neck_floor(poly, miny) + step, -step)
     prof = [(y,) + width(y) for y in ys]
     hold = int(round(NECK_STABLE_MM / step))
     for i in range(len(prof) - hold):
@@ -238,6 +241,26 @@ def _tail_neck(final_outline_xy, cable_y: float):
             continue
         return float(y), float(xr[0]), float(xr[1])
     return None
+
+
+def _neck_floor(poly: Polygon, miny: float) -> float:
+    """The lowest y the tail neck is looked for at: the tail's end, unless the
+    board steps in to the connector's tab at the connector's opening, which the
+    export puts CONNECTOR_BODY_BELOW_MM before the end. A tail wider than the
+    tab there (one typed wider than the connector, or the routing canvas of a
+    board without follow padding) is cut to the tab past the opening
+    (connector_geometry.clip_beside_tab), and that tab, the connector itself,
+    then read as the neck: the case sealed the connector in. Any other tail is
+    as wide as the tab before the opening as after it, and is looked at whole,
+    as it always was."""
+    y_open = miny + CONNECTOR_BODY_BELOW_MM
+    minx, _, maxx, _ = poly.bounds
+
+    def widest(y):
+        g = poly.intersection(LineString([(minx - 1.0, y), (maxx + 1.0, y)]))
+        return max((r.length for r in getattr(g, "geoms", [g]) if not r.is_empty), default=0.0)
+
+    return y_open if widest(y_open + 0.25) - widest(y_open - 0.25) > NECK_FLAT_MM else miny
 
 
 def _polygons(geom):
@@ -348,7 +371,7 @@ def _no_tail(final_outline_xy, cable_y: float) -> tuple[str, str]:
                 - max(runs, key=lambda r: r.length).bounds[0]) if runs else 0.0
 
     full = max((width(y) for y in np.linspace(cable_y + 0.5, maxy - 0.5, 25)), default=0.0)
-    below = [width(y) for y in np.arange(cable_y, miny + 0.5, -0.5)]
+    below = [width(y) for y in np.arange(cable_y, _neck_floor(poly, miny) + 0.5, -0.5)]
     narrowest = min([w for w in below if w > 0.5], default=full)
     if full > 0 and narrowest > NECK_MAX_FRAC * full:
         return "full_width", (

@@ -75,8 +75,8 @@ from opentac.cad.export.velostat import velostat_polygon, velostat_dxf, velostat
 from opentac.cad.export.gerber import generate_gerbers
 from opentac.cad.export.excellon import generate_drill_file
 from opentac.cad.export.connector_geometry import (
-    connector_edge_geometries, connector_export_dir, connector_open_edge_endpoints,
-    connector_pad_geometries,
+    clip_beside_tab, connector_edge_geometries, connector_export_dir, connector_open_edge_endpoints,
+    connector_opening, connector_pad_geometries,
 )
 from opentac.cad.export.svg_preview import generate_svg
 from opentac.cad.importers.dxf import parse_dxf_outline, DxfImportError
@@ -1135,11 +1135,13 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
         D = edge_mid - half_w * t_hat + far_dist * n_out
         shoulder = Polygon([A, B, C, D])
     else:
-        # Fanned-out route centerlines land right at the pad edge
-        # (tab_tip_width/2); DRC additionally requires trace_w/2 +
-        # board_edge_clear_mm of clearance from there to the actual cut
-        # edge, so pad the shoulder out that far too.
-        half_w = dims["tab_tip_width_mm"] / 2 + params.trace_w_mm / 2 + params.board_edge_clear_mm
+        # Exactly the new tab's width, so the board's edge runs straight into
+        # the footprint's open endpoints. Padded past it (it used to add
+        # trace_w/2 + board_edge_clear_mm, for wires thought to land at the tab
+        # edge), the shoulder ran on beside the tab and its side lines were cut
+        # as slits. The wires keep the pads they were routed to, one pad pitch
+        # or more inside the old, narrower tab.
+        half_w = dims["tab_tip_width_mm"] / 2
         if ext:
             center = np.asarray(ext["pad_row_center"], dtype=float)
             t_hat = np.asarray(ext["t_hat"], dtype=float)
@@ -1187,7 +1189,13 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
         areas = [g for g in getattr(infill, "geoms", [infill])
                  if g.geom_type == "Polygon" and not g.is_empty]
         if areas:
-            layout.board_poly = unary_union([layout.board_poly, *areas])
+            # A wedge shares its edge with the cable it rounds, and a union of
+            # shapes that only touch along an edge can keep a zero-width seam
+            # there: on fixed outlines a 1 mm slit between the cable and the
+            # fillet. Closing by 10 nm merges it (as fillet_inside_corners does).
+            eps = 1e-5
+            layout.board_poly = unary_union([layout.board_poly, *areas]).buffer(
+                eps, join_style=2).buffer(-eps, join_style=2)
             if not layout.board_poly.is_valid:
                 layout.board_poly = layout.board_poly.buffer(0)
             pieces.extend(areas)
@@ -1260,11 +1268,13 @@ def _capture_pre_follow_outline(layout: Layout) -> None:
 
 def _finish_board(layout: Layout, col_routes: list[Route], row_routes: list[Route], params: Params) -> None:
     """The routed board's final shape: the tail cut to its wires, the safety net
-    round every wire, then the board shrink-wrapped to the copper."""
+    round every wire, then the board shrink-wrapped to the copper, never wider
+    than the connector's tab past its opening."""
     narrow_routed_tail(layout, [*col_routes, *row_routes], params)
     _apply_post_route_containment(layout, col_routes, row_routes, params)
     _capture_pre_follow_outline(layout)
     apply_main_follow_padding(layout, [*col_routes, *row_routes], params)
+    _clip_board_to_connector_tab(layout, np.asarray(layout.sensor_outline_xy, dtype=float), params)
 
 
 def _auto_tail_length(layout: Layout, outline_xy: np.ndarray, col_routes: list[Route],
@@ -1592,6 +1602,30 @@ def _drop_connector_zone_edge_flags(violations, layout, outline_xy, params, conn
 AUTO_TAIL_EXTENSION_MM = 1.0
 
 
+def _clip_board_to_connector_tab(layout: Layout, outline_xy: np.ndarray, params: Params) -> bool:
+    """Take away board beside the connector's tab past its opening
+    (connector_geometry.clip_beside_tab), placed where the connector is
+    exported: at the end of a drawn tail extension, else AUTO_TAIL_EXTENSION_MM
+    further out than the tail's own pose (_outputs_with_connector_tail). Run
+    wherever a board is finished, so edit_data (the printed case's input), the
+    preview and every export file share one outline. Returns whether the board
+    changed; a board with nothing beside the tab is left exactly as it was."""
+    if layout.board_poly is None or layout.board_poly.is_empty:
+        return False
+    shift = 0.0 if tail_extension_from_layout(layout) else AUTO_TAIL_EXTENSION_MM
+    opening = connector_opening(layout, outline_xy, params, CONNECTOR_DIR, shift)
+    if opening is None:
+        return False
+    clipped = clip_beside_tab(layout.board_poly, *opening)
+    if clipped is layout.board_poly:
+        return False
+    layout.board_poly = clipped
+    final_poly = _largest_polygon(clipped)
+    if not final_poly.is_empty:
+        layout.final_outline_xy = remove_collinear_closed(np.array(final_poly.exterior.coords[:-1], dtype=float))
+    return True
+
+
 def _outputs_with_connector_tail(
     layout: Layout,
     outline_xy: np.ndarray,
@@ -1613,6 +1647,7 @@ def _outputs_with_connector_tail(
     sync_pads_to_feeds(layout, row_routes)
     ext = layout.tail.get("tail_extension") if layout.tail else None
     if ext and ext.get("enabled"):
+        _clip_board_to_connector_tab(layout, outline_xy, params)
         return _build_outputs(layout, outline_xy, col_routes, row_routes, removed,
                               params, routing_problem_pix, incomplete_nets, fill_xy)
 
@@ -1633,6 +1668,7 @@ def _outputs_with_connector_tail(
     apply_tail_extension(lay, [*cr, *rr], params, CONNECTOR_DIR)
     lay.tail.setdefault("tail_extension_resolved", {})["auto"] = True
     _apply_post_route_containment(lay, cr, rr, params)
+    _clip_board_to_connector_tab(lay, outline_xy, params)
     return _build_outputs(lay, outline_xy, cr, rr, removed,
                           params, routing_problem_pix, incomplete_nets, fill_xy)
 
@@ -2411,6 +2447,7 @@ def export_edited(req: ExportEditedRequest):
         _capture_pre_follow_outline(layout)
         apply_main_follow_padding(layout, [*col_routes, *row_routes], params)
         _apply_connector_shoulder_if_needed(layout, outline_xy, params)
+        _clip_board_to_connector_tab(layout, outline_xy, params)
         svg_text, stats, drc, zip_b64 = _outputs_with_connector_tail(
             layout, outline_xy, col_routes, row_routes, removed, params,
             fill_xy=req.edit_data.get("fill_region"))
@@ -2655,6 +2692,7 @@ def redo_padding(req: RedoPaddingRequest):
         # otherwise discard this connector-width shape edit.
         _apply_connector_shoulder_if_needed(
             layout, outline_xy, params, req.connector_pos_override)
+        _clip_board_to_connector_tab(layout, outline_xy, params)
         fill_xy = edit_data.get("fill_region")
         svg_text, stats, drc, _ = _outputs_with_connector_tail(
             layout, outline_xy, col_routes, row_routes, removed, params, fill_xy=fill_xy)
