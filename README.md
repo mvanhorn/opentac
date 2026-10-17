@@ -21,7 +21,7 @@ uv run opentac cad          # design a sensor in your browser, locally
 ```
 
 `--depth 1` leaves out the git history, most of which is old versions of the website's videos:
-`.git` is about 110 MB instead of 175 MB.
+`.git` is about 180 MB instead of 320 MB.
 
 Or double-click `Start_OpenTac.command` (macOS) or `Start_OpenTac.bat` (Windows). On Linux, run
 `bash Start_OpenTac.command`. The first run downloads what it needs, once.
