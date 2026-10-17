@@ -47,7 +47,9 @@ from opentac.cad.pipeline.route_hug import route_hug_all
 from opentac.cad.pipeline.route_4layer import INNER_LAYERS, copper_layers_of, is_feed, route_for, sync_pads_to_feeds
 from opentac.cad.pipeline.route_rows import make_row_entries_horizontal, route_rows_grid
 from opentac.cad.pipeline.tail_extension import apply_tail_extension, tail_extension_from_layout
-from opentac.cad.pipeline.follow_padding import apply_main_follow_padding, cable_without_landing, route_containment_mm
+from opentac.cad.pipeline.follow_padding import (
+    apply_main_follow_padding, cable_without_landing, route_containment_mm, tail_wire_hold,
+)
 from opentac.cad.pipeline.narrow_tail import narrow_routed_tail
 from opentac.cad.pipeline.tail_length import (
     AUTO_TAIL_MIN_MM, REASON_CASE, REASON_FIT, REASON_MIN, REASON_TYPED, fit_tail_length, round_up_length,
@@ -57,6 +59,7 @@ from opentac.cad.pipeline.validate import validate_routes
 from opentac.cad.pipeline.smooth import chamfer_layer, los_simplify_layer, taxel_copper_keepout_mm
 from opentac.cad.pipeline.drc import TaxelCopper, drc_check
 from opentac.cad.export.kicad_pcb import generate_kicad_pcb, kicad_project_files
+from opentac.cad.export.edge_cuts_check import edge_cuts_violations
 from opentac.cad.export.kicad_footprint import build_pixel_footprint_text, make_footprint_name
 from opentac.cad.export.manifest import export_manifest
 from opentac.cad.export.design import (
@@ -1398,6 +1401,9 @@ def _apply_post_route_containment(
 
     original_board = layout.board_poly
     containment = route_containment_mm(params)
+    # Wire the tail carries is held by the tail at the tail's own clearance;
+    # padding it here widened the tail past the connector's tab.
+    hold = tail_wire_hold(layout)
     additions = []
     max_outside = 0.0
     max_shortfall = 0.0
@@ -1410,7 +1416,10 @@ def _apply_post_route_containment(
         if line.is_empty:
             continue
 
-        buffered = line.buffer(containment, cap_style=2, join_style=2)
+        free = line if hold is None else line.difference(hold)
+        if free.is_empty:
+            continue
+        buffered = free.buffer(containment, cap_style=2, join_style=2)
         if not buffered.is_empty and buffered.difference(original_board).area > 1e-9:
             additions.append(buffered)
 
@@ -1659,6 +1668,10 @@ def _build_outputs(
         taxels=TaxelCopper.of(layout, removed, params))
     violations = _drop_connector_zone_edge_flags(
         violations, layout, outline_xy, params, active_connector_dir)
+    # The board outline and the connector footprint's Edge.Cuts, as exported,
+    # must close into one outline with every line on it once: a footprint line
+    # inside the board is milled as a slit, and KiCad's own DRC does not see it.
+    violations.extend(edge_cuts_violations(layout, outline_xy, params, active_connector_dir))
 
     # The manifest is built first because the back silkscreen carries it: the
     # taxel-core QR has to describe the board that is actually exported, not a

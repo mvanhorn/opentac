@@ -165,13 +165,19 @@ def stitched_outline_segments(layout, outline_xy, params, connector_dir):
     the tail; the board outline must end exactly at those two open endpoints.
     An earlier version dragged the endpoints of ONE outline edge (the "cap")
     onto the open endpoints -- but the board carries material DEEPER than the
-    open edge (the post-route containment bulge wrapping the tracks that reach
-    the pad drills, plus the base tail's connector-body allowance), and
-    dragging the deepest cap folds ~4mm segments back inward across the
-    corridor. Instead: build the connector body region (its Edge.Cuts path
-    closed along the open edge), subtract it from the board polygon so the
-    outline is cut along the open edge, drop the opening segment itself, and
-    snap the two cut vertices exactly onto the connector's open endpoints.
+    open edge (the base tail's connector-body allowance, and the landing of the
+    export's tail extension, which runs on to the pad drills), and dragging the
+    deepest cap folds ~4mm segments back inward across the corridor. Instead:
+    build the connector body region (its Edge.Cuts path closed along the open
+    edge), subtract it from the board polygon so the outline is cut along the
+    open edge, drop the opening segment itself, and snap the two cut vertices
+    exactly onto the connector's open endpoints.
+
+    That only meets the footprint cleanly while the board is no wider than the
+    connector's tab past the open edge: board beside the tab is left standing
+    next to the footprint's tab-side lines, which a fab then mills as slits
+    (follow_padding.tail_wire_hold keeps the tail to the tab;
+    export/edge_cuts_check.py reports any board where it is not).
     """
     final_xy = getattr(layout, "final_outline_xy", None)
     if final_xy is None:

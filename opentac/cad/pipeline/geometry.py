@@ -804,10 +804,51 @@ def remove_collinear(P: np.ndarray) -> np.ndarray:
     return P[keep]
 
 
+# A ring vertex the outline turns back at, by more than SPIKE_TURN_DEG, next to
+# an edge shorter than SPIKE_EDGE_MM, is the tip of a hairline spike a polygon
+# union leaves where two nearly parallel edges meet (a containment buffer along
+# a 4-layer board's edge: 0.02 mm long). Exported, it is a zero-width spike in
+# Edge.Cuts (export/edge_cuts_check.py).
+SPIKE_TURN_DEG = 170.0
+SPIKE_EDGE_MM = 0.1
+
+
+def drop_hairline_spikes(P: np.ndarray) -> np.ndarray:
+    """A closed ring without the tips of hairline spikes (see SPIKE_TURN_DEG).
+    A ring with none comes back unchanged."""
+    pts = [np.asarray(p, dtype=float) for p in P]
+    limit = math.cos(math.radians(SPIKE_TURN_DEG))
+    dropped = False
+    i = 0
+    while len(pts) > 3 and i < len(pts):
+        n = len(pts)
+        # the turn at pts[i], looking past repeated points on either side
+        j = (i - 1) % n
+        while j != i and float(np.linalg.norm(pts[i] - pts[j])) <= 1e-9:
+            j = (j - 1) % n
+        k = (i + 1) % n
+        while k != i and float(np.linalg.norm(pts[k] - pts[i])) <= 1e-9:
+            k = (k + 1) % n
+        a, b = pts[i] - pts[j], pts[k] - pts[i]
+        na, nb = float(np.linalg.norm(a)), float(np.linalg.norm(b))
+        if (j != i and k != i and min(na, nb) < SPIKE_EDGE_MM
+                and float(a @ b) < limit * na * nb):
+            # the tip and its repeats: the run strictly between j and k
+            run = {(j + 1 + m) % n for m in range((k - j - 1) % n)}
+            pts = [p for m, p in enumerate(pts) if m not in run]
+            dropped = True
+            i = max(0, min(i, len(pts)) - 1)   # the vertex before may be a tip now
+            continue
+        i += 1
+    return np.array(pts, dtype=float) if dropped else np.asarray(P)
+
+
 def remove_collinear_closed(P: np.ndarray) -> np.ndarray:
-    """Remove collinear points from a closed polygon ring without duplicating the first point."""
+    """Remove collinear points from a closed polygon ring without duplicating the
+    first point, and the tips of hairline spikes (drop_hairline_spikes)."""
     if len(P) < 3:
         return P
+    P = drop_hairline_spikes(P)
     keep = []
     n = len(P)
     for i in range(n):

@@ -261,9 +261,36 @@ def fillet_tail_junction(board, outline_xy, tail, params, piece=None):
 def route_containment_mm(params) -> float:
     """How far every wire centreline must sit inside the board edge: the
     post-route safety net (main._apply_post_route_containment) grows the board
-    wherever a wire comes closer."""
+    wherever a wire comes closer, except in the tail (tail_wire_hold)."""
     return (float(params.trace_w_mm) / 2 + float(params.board_edge_clear_mm)
             + max(0.5, float(params.routing_margin_mm) * 0.25))
+
+
+def tail_wire_hold(layout):
+    """The board the cable tail carries its own wires in: the tail piece (its
+    strip, step and landing: layout.cable_poly) and a tail extension's
+    corridor and landing, where they are board. None when there is none.
+
+    The tail is built round its wires at its own clearance, never wider than
+    the connector's tab (geometry.fit_tail_strip): the wires to the outermost
+    pads run one pad pitch (0.5 mm) from the tab's sides, which clears the
+    board edge but is less than route_containment_mm. Post-route containment
+    therefore leaves wire in here alone, as follow padding does (_tail_strip).
+    Padding it widened the tail past the tab on every board whose wires reach
+    within route_containment_mm of a tab side, down to the pad drills: the
+    connector footprint's own tab-side Edge.Cuts then lay inside the board and
+    were cut as slits."""
+    board = layout.board_poly
+    if board is None or board.is_empty:
+        return None
+    pieces = [layout.cable_poly] if layout.cable_poly is not None else []
+    if layout.tail:
+        pieces.append(_tail_extension_corridor(layout))
+    pieces = [p for p in pieces if p is not None and not p.is_empty]
+    if not pieces:
+        return None
+    hold = unary_union(pieces).intersection(board)
+    return None if hold.is_empty else hold
 
 
 def _taxel_clearance(layout, params):
