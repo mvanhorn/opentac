@@ -1,14 +1,11 @@
 name: Import OpenTac code history
-
 on:
   push:
     branches: [main]
     paths: [.github/workflows/import-code.yml]
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   import:
     runs-on: ubuntu-latest
@@ -59,7 +56,7 @@ jobs:
       - name: Publish the imported candidate branch
         working-directory: source
         env:
-          GITHUB_TOKEN: 4{{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git config credential.helper '!f() { echo username=x-access-token; echo "password=$GITHUB_TOKEN"; }; f'
           git push https://github.com/opentac/opentac.git imported:refs/heads/migration/imported-code
