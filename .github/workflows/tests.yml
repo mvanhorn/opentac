@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # demo: the design-chat tests import google-genai. sim: MuJoCo for the
+      # full-solver tests in tests/sim (physics only, no rendering, so headless is fine).
+      - run: uv sync --locked --extra demo --extra sim
+      - run: uv run pytest -q
+
+  # The hosted OpenTac-CAD backend (Render) builds from deploy/Dockerfile. Build it
+  # here too, and start it once, so a change the image cannot build or run (a file
+  # the package needs but the Dockerfile does not copy) fails CI instead of Render.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deploy/Dockerfile -t opentac-cad .
+      - run: |
+          docker run -d --name cad -p 10000:10000 opentac-cad
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:10000/health && exit 0; sleep 2; done
+          docker logs cad; exit 1
