@@ -1,0 +1,65 @@
+name: Import OpenTac code history
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/import-code.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: opentac/opentac.github.io
+          ref: dba4f9017ceb1c25389b2a56f7cd4de19db424d0
+          fetch-depth: 0
+          persist-credentials: false
+          path: source
+      - uses: astral-sh/setup-uv@v6
+      - name: Back up the original history
+        run: |
+          git -C source branch migration-baseline dba4f9017ceb1c25389b2a56f7cd4de19db424d0
+          git -C source bundle create "$GITHUB_WORKSPACE/opentac-before-split.bundle" --all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opentac-before-split
+          path: opentac-before-split.bundle
+          retention-days: 90
+      - name: Extract code history
+        working-directory: source
+        run: |
+          git checkout -B imported dba4f9017ceb1c25389b2a56f7cd4de19db424d0
+          uvx --from git-filter-repo==2.47.0 git-filter-repo --force --refs imported \
+            --path .claude/ --path .dockerignore --path .gitattributes \
+            --path .github/ISSUE_TEMPLATE/ --path .github/workflows/tests.yml \
+            --path .gitignore --path .python-version --path AGENTS.md \
+            --path CITATION.cff --path CONTRIBUTING.md \
+            --path LICENSE --path LICENSE-docs --path LICENSE-hardware --path README.md \
+            --path Start_OpenTac.bat --path Start_OpenTac.command --path deploy/ \
+            --path examples/ --path firmware/ --path hardware/ --path opentac/ \
+            --path pyproject.toml --path render.yaml --path scripts/ --path tests/ --path uv.lock
+          git ls-tree -r --name-only imported > "$GITHUB_WORKSPACE/imported-files.txt"
+          ! grep -E '^(docs/|overrides/|mkdocs.yml$|.github/workflows/pages.yml$)' "$GITHUB_WORKSPACE/imported-files.txt"
+          git bundle create "$GITHUB_WORKSPACE/opentac-code-history.bundle" imported
+          cp .git/filter-repo/commit-map "$GITHUB_WORKSPACE/commit-map.txt"
+          git rev-parse imported
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opentac-code-history
+          path: |
+            opentac-code-history.bundle
+            commit-map.txt
+            imported-files.txt
+          retention-days: 90
+      - name: Publish the imported candidate branch
+        working-directory: source
+        env:
+          GITHUB_TOKEN: 4{{ github.token }}
+        run: |
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=$GITHUB_TOKEN"; }; f'
+          git push https://github.com/opentac/opentac.git imported:refs/heads/migration/imported-code
