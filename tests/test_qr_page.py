@@ -5,6 +5,7 @@ design and compares it byte for byte with `opentac manifest from-qr`. A change
 to the manifest text, the format, or the number formatting on one side only
 shows up here.
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -13,10 +14,15 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+SITE_ROOT = Path(os.environ.get("OPENTAC_SITE_ROOT", ROOT.parent / "opentac.github.io")).resolve()
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
 def test_the_qr_page_writes_the_same_manifest_as_the_cli():
+    if not (SITE_ROOT / "docs" / "javascripts" / "qr.js").is_file():
+        if "OPENTAC_SITE_ROOT" in os.environ:
+            pytest.fail("OPENTAC_SITE_ROOT does not contain the website QR decoder")
+        pytest.skip("needs the website checkout; set OPENTAC_SITE_ROOT")
     res = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_qr_page.py")],
                          cwd=ROOT, capture_output=True, text=True)
     assert res.returncode == 0, res.stdout[-3000:] + res.stderr[-3000:]

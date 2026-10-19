@@ -49,8 +49,8 @@ dependencies = [
 [project.urls]
 Homepage = "https://opentac.github.io"
 Documentation = "https://opentac.github.io/get-started/"
-Source = "https://github.com/opentac/opentac.github.io"
-Issues = "https://github.com/opentac/opentac.github.io/issues"
+Source = "https://github.com/opentac/opentac"
+Issues = "https://github.com/opentac/opentac/issues"
 
 [project.optional-dependencies]
 # MuJoCo backend for skins with a bump sheet (opentac.sim)

@@ -25,8 +25,9 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-DATA = REPO / "docs" / "learn" / "data"
-JS = REPO / "docs" / "learn" / "js" / "xampling.js"
+SITE_ROOT = Path(os.environ.get("OPENTAC_SITE_ROOT", REPO.parent / "opentac.github.io")).resolve()
+DATA = SITE_ROOT / "docs" / "learn" / "data"
+JS = SITE_ROOT / "docs" / "learn" / "js" / "xampling.js"
 DEFAULT_SOURCES = Path.home() / "Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology"
 BUDGETS = (16, 32, 64, 128, 256, 512)
 

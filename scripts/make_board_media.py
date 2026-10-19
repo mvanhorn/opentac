@@ -30,8 +30,9 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
+SITE_ROOT = Path(os.environ.get("OPENTAC_SITE_ROOT", ROOT.parent / "opentac.github.io")).resolve()
 HW = ROOT / "hardware"
-OUT = ROOT / "docs" / "assets" / "boards"
+OUT = SITE_ROOT / "docs" / "assets" / "boards"
 PCB60 = HW / "readout_60pin" / "readout_60pin.kicad_pcb"
 TOP30 = HW / "readout_30pin" / "top" / "readout_30pin_top.kicad_pcb"
 BOT30 = HW / "readout_30pin" / "bottom" / "readout_30pin_bottom.kicad_pcb"
@@ -199,7 +200,7 @@ def still(pcb, png, rotate, zoom, tmp, pivot_cm=0.0, long_side=1600):
     k = long_side / max(img.size)
     img = img.resize((round(img.width * k), round(img.height * k)), Image.LANCZOS)
     img.save(png, optimize=True)
-    print(f"  {png.relative_to(ROOT)}  {img.width}x{img.height}")
+    print(f"  {png}  {img.width}x{img.height}")
 
 
 def spin(pcb, mp4, tilt, start, step, zoom, tmp, pivot_cm=0.0):
@@ -223,7 +224,7 @@ def spin(pcb, mp4, tilt, start, step, zoom, tmp, pivot_cm=0.0):
     run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", FPS, "-i", frames / "c%03d.png",
          "-c:v", "libx264", "-preset", "slow", "-crf", "22", "-pix_fmt", "yuv420p",
          "-movflags", "+faststart", "-an", mp4])
-    print(f"  {mp4.relative_to(ROOT)}  {w}x{h}, {n} frames, {n / FPS:.1f} s, "
+    print(f"  {mp4}  {w}x{h}, {n} frames, {n / FPS:.1f} s, "
           f"{mp4.stat().st_size / 1e6:.2f} MB")
 
 

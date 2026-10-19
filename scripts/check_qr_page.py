@@ -22,6 +22,7 @@ opens the code of that example design.
 """
 from __future__ import annotations
 
+import os
 import json
 import random
 import re
@@ -32,15 +33,16 @@ import zipfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-JS = REPO / "docs" / "javascripts" / "qr.js"
-DESIGNS = REPO / "docs" / "designs" / "files"
+SITE_ROOT = Path(os.environ.get("OPENTAC_SITE_ROOT", REPO.parent / "opentac.github.io")).resolve()
+JS = SITE_ROOT / "docs" / "javascripts" / "qr.js"
+DESIGNS = SITE_ROOT / "docs" / "designs" / "files"
 MANIFESTS = REPO / "examples" / "manifests"
 # Laid out by another tool with the column pads below the row pads, which the
 # QR format cannot state (taxel_core: cp0 == rp0 + r); see tests/readout/test_manifest.py.
 NOT_CAD = {"pinky_tip_30pin.json"}
 MUTATIONS = 40   # per design
 # Pages with example links into the decoder, marked data-design="<slug>".
-EXAMPLE_PAGES = [REPO / "docs" / "qr.md", REPO / "docs" / "use" / "qr-recovery.md"]
+EXAMPLE_PAGES = [SITE_ROOT / "docs" / "qr.md", SITE_ROOT / "docs" / "use" / "qr-recovery.md"]
 
 NODE_DRIVER = r"""
 const Q = require(process.argv[2]);

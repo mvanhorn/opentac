@@ -15,13 +15,10 @@ You need [uv](https://docs.astral.sh/uv/getting-started/installation/) (the laun
 install it).
 
 ```bash
-git clone --depth 1 https://github.com/opentac/opentac.github.io opentac
+git clone --depth 1 https://github.com/opentac/opentac opentac
 cd opentac
 uv run opentac cad          # design a sensor in your browser, locally
 ```
-
-`--depth 1` leaves out the git history, most of which is old versions of the website's videos:
-`.git` is about 180 MB instead of 320 MB.
 
 Or double-click `Start_OpenTac.command` (macOS) or `Start_OpenTac.bat` (Windows). On Linux, run
 `bash Start_OpenTac.command`. The first run downloads what it needs, once.
@@ -107,10 +104,11 @@ frames between sensors.
 | `firmware/` | readout board firmware (60-pin and 30-pin boards) |
 | `hardware/` | readout board KiCad files, fabrication files and BOMs |
 | `examples/` | small manifests, example scripts, example STL parts, and the sources of the ready-to-order designs |
-| `docs/` | the website |
 | `tests/` | the test suite (see [CONTRIBUTING.md](CONTRIBUTING.md)) |
-| `scripts/` | maintenance: regenerate the example designs and board media, preview the website locally, check the QR decoder page |
+| `scripts/` | maintenance: regenerate the example designs and board media, check the website against the package |
 | `deploy/` | the Dockerfile for the hosted OpenTac-CAD backend (Render, configured in `render.yaml`) |
+
+The website source is maintained separately in [opentac.github.io](https://github.com/opentac/opentac.github.io).
 
 ## Readout boards
 

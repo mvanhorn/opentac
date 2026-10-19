@@ -23,6 +23,7 @@ The page shows each SVG as a lazy-loaded thumbnail (31 SVGs, about 2 MB, about
 """
 from __future__ import annotations
 
+import os
 import argparse
 import base64
 import io
@@ -33,10 +34,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SITE_ROOT = Path(os.environ.get("OPENTAC_SITE_ROOT", ROOT.parent / "opentac.github.io")).resolve()
 SOURCES = ROOT / "examples" / "designs" / "sources.json"
-FILES = ROOT / "docs" / "designs" / "files"
-INDEX = ROOT / "docs" / "designs" / "designs.json"
-PAGE = ROOT / "docs" / "design" / "examples.md"
+FILES = SITE_ROOT / "docs" / "designs" / "files"
+INDEX = SITE_ROOT / "docs" / "designs" / "designs.json"
+PAGE = SITE_ROOT / "docs" / "design" / "examples.md"
 
 GROUP_ORDER = [("robot", "Robot hands and grippers"), ("legged robot", "Legged robots"),
                ("calibration", "Calibration set")]
@@ -200,7 +202,7 @@ def main() -> int:
     args = ap.parse_args()
     if args.page_only:
         write_page(json.loads(INDEX.read_text(encoding="utf-8")))
-        print(f"wrote {PAGE.relative_to(ROOT)}")
+        print(f"wrote {PAGE}")
         return 0
     specs = json.loads(SOURCES.read_text())["designs"]
     if args.only:

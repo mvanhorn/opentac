@@ -24,3 +24,5 @@ hardware/libs/3dmodels/
 
 # KiCad per-user view settings, written whenever a board is opened or plotted
 *.kicad_prl
+
+.website/

@@ -35,6 +35,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
+SITE_ROOT = Path(os.environ.get("OPENTAC_SITE_ROOT", REPO.parent / "opentac.github.io")).resolve()
 sys.path.insert(0, str(REPO))
 
 from opentac.manifest import load as load_manifest  # noqa: E402
@@ -42,7 +43,7 @@ from opentac.cad.export.kicad_footprint import pixel_geometry  # noqa: E402
 from opentac.cad.pipeline.bump_sheet import BumpParams  # noqa: E402
 
 DEFAULT_SOURCES = Path.home() / "Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology"
-OUT = REPO / "docs" / "learn" / "data"
+OUT = SITE_ROOT / "docs" / "learn" / "data"
 
 # Skins the page uses. The first three are the transfer-demo skins (recorded);
 # umi and circle add geometry for the bump studies.
@@ -338,7 +339,7 @@ def main():
     (OUT / "meta.json").write_text(json.dumps(meta, separators=(",", ":")))
 
     total = sum(f.stat().st_size for f in OUT.rglob("*.json"))
-    print(f"wrote {OUT.relative_to(REPO)}: {total / 1e6:.2f} MB")
+    print(f"wrote {OUT}: {total / 1e6:.2f} MB")
 
 
 if __name__ == "__main__":

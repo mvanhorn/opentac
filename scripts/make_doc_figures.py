@@ -18,6 +18,7 @@ scripts/make_doc_screens.cjs.
 """
 from __future__ import annotations
 
+import os
 import argparse
 import base64
 import io
@@ -33,8 +34,9 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "docs" / "assets" / "diagrams"
-TAKES = ROOT / "docs" / "learn" / "data"
+SITE_ROOT = Path(os.environ.get("OPENTAC_SITE_ROOT", ROOT.parent / "opentac.github.io")).resolve()
+OUT = SITE_ROOT / "docs" / "assets" / "diagrams"
+TAKES = SITE_ROOT / "docs" / "learn" / "data"
 FIX = ROOT / "tests" / "sim" / "fixtures"
 HW = ROOT / "hardware"
 
@@ -100,12 +102,12 @@ def save_raster(fig, path, quality=86):
     else:
         im = im.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
         im.save(path, optimize=True)
-    log(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB, {im.size[0]}x{im.size[1]})")
+    log(f"wrote {path} ({path.stat().st_size // 1024} KB, {im.size[0]}x{im.size[1]})")
 
 
 def write(path, text):
     path.write_text(text)
-    log(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB)")
+    log(f"wrote {path} ({path.stat().st_size // 1024} KB)")
 
 
 def mpl():
@@ -820,7 +822,7 @@ def fig_qr_back():
     im = on_white(im.resize((round(im.width * k), 900), Image.LANCZOS))
     path = OUT / "qr_back.jpg"
     im.save(path, quality=88, optimize=True, progressive=True)
-    log(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB, {im.size[0]}x{im.size[1]})")
+    log(f"wrote {path} ({path.stat().st_size // 1024} KB, {im.size[0]}x{im.size[1]})")
 
 
 BOARDS = {   # board file, how its 3D-model paths are written in it, label
@@ -916,7 +918,7 @@ def side_by_side(shots, path, H=760):
         d.text((x + (im.width - tw) / 2, H + 18), label, fill=INK, font=font)
         x += im.width + gap
     out.save(path, quality=80, optimize=True, progressive=True)
-    log(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB, {out.size[0]}x{out.size[1]})")
+    log(f"wrote {path} ({path.stat().st_size // 1024} KB, {out.size[0]}x{out.size[1]})")
 
 
 def fig_boot0():
@@ -938,7 +940,7 @@ def fig_boot0_30():
     im = im.resize((round(im.width * k), 760), Image.LANCZOS)
     path = OUT / "boot0_30pin.jpg"
     im.save(path, quality=80, optimize=True, progressive=True)
-    log(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB, {im.size[0]}x{im.size[1]})")
+    log(f"wrote {path} ({path.stat().st_size // 1024} KB, {im.size[0]}x{im.size[1]})")
 
 
 def fig_bus_connectors():
@@ -952,7 +954,7 @@ def fig_bus_connectors():
     im = im.resize((round(im.width * k), 760), Image.LANCZOS)
     path = OUT / "bus_connectors.jpg"
     im.save(path, quality=80, optimize=True, progressive=True)
-    log(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB, {im.size[0]}x{im.size[1]})")
+    log(f"wrote {path} ({path.stat().st_size // 1024} KB, {im.size[0]}x{im.size[1]})")
 
 
 # ------------------------------------------------------ drawn diagrams ----

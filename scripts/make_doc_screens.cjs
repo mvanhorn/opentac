@@ -1,7 +1,7 @@
 // Screenshots of OpenTac-CAD for the website's design and get-started pages.
 //
 //   uv run opentac cad --host 127.0.0.1 --port 8231 --no-browser      # in one terminal
-//   uv run --extra docs python scripts/preview_site.py --port 8217 --no-browser   # in another
+//   uv run --extra docs python ../opentac.github.io/scripts/preview_site.py --port 8217 --no-browser   # in another
 //   NODE_PATH=/path/to/node_modules node scripts/make_doc_screens.cjs
 //
 // Needs node and puppeteer-core (`npm install puppeteer-core` in any folder, and
@@ -20,7 +20,8 @@ const puppeteer = require("puppeteer-core");
 const CAD = process.env.OT_CAD || "http://127.0.0.1:8231/";
 const SITE = process.env.OT_SITE || "http://127.0.0.1:8217/";
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const OUT = path.join(__dirname, "..", "docs", "assets", "screens");
+const SITE_ROOT = process.env.OPENTAC_SITE_ROOT || path.resolve(__dirname, "..", "..", "opentac.github.io");
+const OUT = path.join(SITE_ROOT, "docs", "assets", "screens");
 const QUALITY = 82;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

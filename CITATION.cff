@@ -32,7 +32,7 @@ authors:
     given-names: "Krishna Murthy"
   - family-names: "Thakor"
     given-names: "Nitish V."
-repository-code: "https://github.com/opentac/opentac.github.io"
+repository-code: "https://github.com/opentac/opentac"
 url: "https://opentac.github.io/"
 license: MIT
 preferred-citation:

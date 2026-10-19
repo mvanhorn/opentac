@@ -21,8 +21,9 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
-DATA = REPO / "docs" / "learn" / "data"
-JS = REPO / "docs" / "learn" / "js" / "transfer.js"
+SITE_ROOT = Path(os.environ.get("OPENTAC_SITE_ROOT", REPO.parent / "opentac.github.io")).resolve()
+DATA = SITE_ROOT / "docs" / "learn" / "data"
+JS = SITE_ROOT / "docs" / "learn" / "js" / "transfer.js"
 
 NODE_DRIVER = r"""
 const T = require(process.argv[2]);

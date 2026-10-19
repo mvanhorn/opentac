@@ -46,12 +46,13 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
+SITE_ROOT = Path(os.environ.get("OPENTAC_SITE_ROOT", ROOT.parent / "opentac.github.io")).resolve()
 sys.path.insert(0, str(ROOT / "scripts"))
 from make_board_media import BOT30, PCB60, TOP30, footprints, kicad_cli  # noqa: E402
 
 SCENES = ROOT / "scripts" / "hw_anim"
 THREE = ROOT / "opentac" / "cad" / "web" / "vendor" / "three"
-OUT = ROOT / "docs" / "assets" / "boards"
+OUT = SITE_ROOT / "docs" / "assets" / "boards"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 RECORDING = (Path.home() / "Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Arduino/"
@@ -324,7 +325,7 @@ def main():
                 jpg = OUT / f"{name}.jpg"
                 Image.open(frames / "f0000.png").convert("RGB").resize((W, STILL_H), Image.LANCZOS).save(
                     jpg, quality=86, optimize=True, progressive=True)
-                print(f"  {jpg.relative_to(ROOT)}: {W}x{STILL_H}, {jpg.stat().st_size / 1e3:.0f} kB")
+                print(f"  {jpg}: {W}x{STILL_H}, {jpg.stat().st_size / 1e3:.0f} kB")
                 continue
             pre = round(IMU_XFADE * FPS) if name == "imu" else 0
             capture(name, port, frames, args.puppeteer, seconds and seconds + pre / FPS, -pre / FPS)
@@ -333,8 +334,8 @@ def main():
             n = len(list(frames.glob("f*.png")))
             jpg = OUT / f"{name}_poster.jpg"
             poster(frames, t_poster, jpg)
-            print(f"  {mp4.relative_to(ROOT)}: {n / FPS:.1f} s, {mp4.stat().st_size / 1e6:.2f} MB; "
-                  f"{jpg.relative_to(ROOT)}")
+            print(f"  {mp4}: {n / FPS:.1f} s, {mp4.stat().st_size / 1e6:.2f} MB; "
+                  f"{jpg}")
             if args.sheets:
                 args.sheets.mkdir(parents=True, exist_ok=True)
                 contact_sheet(mp4, args.sheets / f"{name}_sheet.png")

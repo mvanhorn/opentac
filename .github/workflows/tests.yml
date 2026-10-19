@@ -4,20 +4,30 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    env:
+      OPENTAC_SITE_ROOT: ${{ github.workspace }}/.website
     steps:
       - uses: actions/checkout@v4
+      - id: website
+        run: echo "revision=$(cat website-revision.txt)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: opentac/opentac.github.io
+          ref: ${{ steps.website.outputs.revision }}
+          path: .website
       - uses: astral-sh/setup-uv@v6
-      # demo: the design-chat tests import google-genai. sim: MuJoCo for the
-      # full-solver tests in tests/sim (physics only, no rendering, so headless is fine).
+      # demo: design-chat tests; sim: headless MuJoCo physics tests.
       - run: uv sync --locked --extra demo --extra sim
+      - run: test -f "$OPENTAC_SITE_ROOT/docs/javascripts/qr.js"
       - run: uv run pytest -q
+      - run: uv run python scripts/learn/check_transfer.py
 
-  # The hosted OpenTac-CAD backend (Render) builds from deploy/Dockerfile. Build it
-  # here too, and start it once, so a change the image cannot build or run (a file
-  # the package needs but the Dockerfile does not copy) fails CI instead of Render.
   docker:
     runs-on: ubuntu-latest
     steps:

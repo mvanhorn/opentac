@@ -7,7 +7,7 @@ run everything through `uv run` from the repository root. The first `uv run` cre
 from `uv.lock`.
 
 ```bash
-git clone --depth 1 https://github.com/opentac/opentac.github.io opentac
+git clone --depth 1 https://github.com/opentac/opentac opentac
 cd opentac
 uv run opentac --version
 ```
@@ -23,7 +23,6 @@ uv run opentac --version
 | `opentac/cli.py`, `opentac/view.py`, `opentac/record.py` | the `opentac` command, live viewer and recording |
 | `firmware/` | readout board firmware, with prebuilt binaries in `firmware/prebuilt/` |
 | `hardware/` | readout board KiCad projects and fabrication files |
-| `docs/` | the website (MkDocs); `mkdocs.yml` is its table of contents |
 | `.claude/skills/opentac/` | the agent skill: how to design a sensor from a description |
 | `examples/` | example manifests, scripts, STL parts and the sources of the ready-to-order designs |
 | `tests/` | the test suite: `cad/`, `readout/` (manifests and boards), `sim/` (simulation and transfer), `hardware/` (fabrication files) |
@@ -51,12 +50,19 @@ data that is not in the repository. Optional tests and what they need:
 CI (`.github/workflows/tests.yml`) installs `--extra demo --extra sim` and runs the whole suite on
 every push.
 
-To build the website as CI does, with no warnings allowed:
+The website source is in [opentac.github.io](https://github.com/opentac/opentac.github.io).
+For website integration tests or asset-generation scripts, clone it beside this repository,
+or set `OPENTAC_SITE_ROOT` to its absolute path. CI checks the revision recorded in
+`website-revision.txt`; it does not silently follow the website's latest changes.
 
 ```bash
-uv run --extra docs mkdocs build --strict -d /tmp/opentac-site
-uv run --extra docs python scripts/preview_site.py    # the site, with OpenTac-CAD at /cad/
+git clone https://github.com/opentac/opentac.github.io ../opentac.github.io
+uv run --extra docs python ../opentac.github.io/scripts/preview_site.py
 ```
+
+The QR integration test is skipped when no website checkout is available. CI always
+provides one and runs both the QR and transfer consistency checks. The xampling
+checker still needs the external lab sources described in its own docstring.
 
 ## Commit messages
 
