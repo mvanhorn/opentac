@@ -1,0 +1,61 @@
+name: Verify and publish code split
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/finish-code.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: bootstrap
+      - uses: actions/checkout@v4
+        with:
+          ref: migration/imported-code
+          fetch-depth: 0
+          path: code
+      - uses: actions/checkout@v4
+        with:
+          repository: opentac/opentac.github.io
+          ref: dba4f9017ceb1c25389b2a56f7cd4de19db424d0
+          path: opentac.github.io
+      - uses: astral-sh/setup-uv@v6
+      - name: Apply only migration changes
+        run: |
+          python bootstrap/migrate_code.py code
+          cp bootstrap/.github/workflows/tests.yml code/.github/workflows/tests.yml
+          printf '\n.website/\n' >> code/.gitignore
+          git -C code diff --exit-code -- opentac firmware hardware examples .claude uv.lock Start_OpenTac.bat Start_OpenTac.command deploy render.yaml
+          git -C code diff --stat
+      - name: Verify the existing tests and website integration
+        working-directory: code
+        env:
+          OPENTAC_SITE_ROOT: ${{ github.workspace }}/opentac.github.io
+        run: |
+          uv sync --locked --extra demo --extra sim --extra docs
+          uv run pytest -q
+          uv run python scripts/learn/check_transfer.py
+          node --test opentac/cad/web/tests/design-import.test.mjs opentac/cad/web/tests/design-name.test.mjs opentac/cad/web/tests/tail-guard.test.mjs
+          uv build
+      - name: Build and start the hosted backend
+        working-directory: code
+        run: |
+          docker build -f deploy/Dockerfile -t opentac-cad .
+          docker run -d --name cad -p 10000:10000 opentac-cad
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:10000/health && exit 0; sleep 2; done
+          docker logs cad; exit 1
+      - name: Commit and publish verified code
+        working-directory: code
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Split: move website references and integration tooling to separate checkouts'
+          git push origin HEAD:refs/heads/migration/verified-code
+          git push origin "$GITHUB_SHA:refs/heads/migration/bootstrap"
+          git push --force-with-lease="refs/heads/main:$GITHUB_SHA" origin HEAD:refs/heads/main
+          git rev-parse HEAD >> "$GITHUB_STEP_SUMMARY"
