@@ -15,6 +15,7 @@ from opentac.cad.export.connector_geometry import (
 )
 from opentac.cad.export.silk_label import label_strokes, silk_label
 from opentac.cad.export.silk_backmark import backmark
+from opentac.cad.export.coverlay import connector_mask_opening, taxel_opening_for
 
 
 def _coord(v_mm: float) -> int:
@@ -126,7 +127,8 @@ def generate_gerbers(
     # Edge.Cuts — board outline + connector body
     files["board-Edge_Cuts.gm1"] = _generate_edge_cuts(layout, outline_xy, params, connector_dir)
 
-    # Mask openings over pixel pads and connector pads
+    # Mask openings: one per taxel on top, one across the connector's fingers
+    # on the bottom (export/coverlay.py), as the KiCad board draws them.
     files["board-F_Mask.gts"] = _generate_mask(
         "F.Mask", layout, active_pix, Pxy, g, params, connector_pads, include_pixels=True)
     files["board-B_Mask.gbs"] = _generate_mask(
@@ -370,11 +372,10 @@ def _flash_connector_pads(lines, am, connector_pads, layer_name):
 
 
 def _flash_connector_mask(lines, am, connector_pads, layer_name):
-    for pad in connector_pads:
-        layers = pad["layers"]
-        if "*.Mask" not in layers and layer_name not in layers:
-            continue
-        _draw_connector_pad(lines, am, pad)
+    """One opening across every connector pad that opens this mask layer."""
+    corners = connector_mask_opening(connector_pads, layer_name)
+    if corners:
+        _draw_region_polygon(lines, corners)
 
 
 def _local_to_world(lx, ly, t_hat, n_out, pad1_world):
@@ -511,17 +512,21 @@ def _generate_edge_cuts(layout, outline_xy, params, connector_dir=""):
 
 
 def _generate_mask(layer_name, layout, active_pix, Pxy, g, params, connector_pads, include_pixels):
-    """Generate solder mask openings."""
+    """Generate solder mask openings: one rectangle per taxel (include_pixels)
+    and one across the connector pads that open this layer."""
     lines = []
     _write_header(lines, layer_name)
     am = ApertureManager()
-    pw = params.pixel_w_mm
-    ph = params.pixel_h_mm
-    mask_ap = am.rect(pw, ph)
+    if include_pixels and active_pix:
+        opening = taxel_opening_for(params, Pxy[active_pix])
+        mask_ap = am.rect(2 * opening.half_w, 2 * opening.half_h)
+    else:
+        # Nothing is flashed; a current aperture before the regions, as
+        # KiCad writes too, for readers that want one.
+        mask_ap = am.circle(0.0)
     lines.extend(am.definitions())
     lines.append(f"D{mask_ap}*")
-
-    if include_pixels:
+    if include_pixels and active_pix:
         for k in active_pix:
             _flash(lines, Pxy[k, 0], Pxy[k, 1])
 

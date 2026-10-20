@@ -217,7 +217,9 @@ The tail's contacts are on the **bottom** copper (the readout boards' Molex
 505110 is a bottom-contact connector for 0.3 mm FPC). The export opens solder
 mask on the bottom only there, and its drawing layer says where the polyimide
 stiffener goes: on the top (taxel side), 0.3 mm total. Tell the user this when
-they order.
+they order. On the top the mask has one opening per taxel, at least 0.3 mm
+apart (JLCPCB's coverlay minimum); on a dense board the openings are trimmed
+slightly into the electrodes and `stats["mask_note"]` says so.
 
 ## Split nets (concave shapes)
 

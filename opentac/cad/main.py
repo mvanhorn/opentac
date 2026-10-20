@@ -61,6 +61,7 @@ from opentac.cad.pipeline.drc import TaxelCopper, drc_check
 from opentac.cad.export.kicad_pcb import generate_kicad_pcb, kicad_project_files
 from opentac.cad.export.edge_cuts_check import edge_cuts_violations
 from opentac.cad.export.kicad_footprint import build_pixel_footprint_text, make_footprint_name
+from opentac.cad.export.coverlay import taxel_opening_for
 from opentac.cad.export.manifest import export_manifest
 from opentac.cad.export.design import (
     params_to_dict, design_file, zip_with_design, DESIGN_SCHEMA, PIPELINE_VERSION,
@@ -1720,6 +1721,12 @@ def _build_outputs(
         layout, outline_xy, col_routes, row_routes, removed, params,
         active_connector_dir, manifest_json=manifest_json)
 
+    # Every taxel's one top mask opening, as the board and Gerbers draw it
+    # (export/coverlay.py); a dense board's is trimmed into the electrodes.
+    active_idx = sorted(set(range(len(layout.placements_xy))) - set(removed))
+    opening = taxel_opening_for(
+        params, layout.placements_xy[active_idx] if active_idx else None)
+
     fp_name = make_footprint_name(
         "tactile_pixel", params.pixel_w_mm, params.pixel_h_mm,
         params.trace_w_mm, params.gap_mm, params.center_clear_mm,
@@ -1727,7 +1734,8 @@ def _build_outputs(
     fp_text, _ = build_pixel_footprint_text(
         fp_name, params.pixel_w_mm, params.pixel_h_mm,
         params.trace_w_mm, params.gap_mm, params.center_clear_mm,
-        params.edge_clear_mm, params.via_drill_mm, params.via_dia_mm)
+        params.edge_clear_mm, params.via_drill_mm, params.via_dia_mm,
+        opening=opening)
 
     gerber_files, drill_text, gerber_source = _manufacturing_files_from_kicad(
         pcb_text, copper_layers_of(params, row_routes))
@@ -1860,6 +1868,11 @@ def _build_outputs(
         "row_routes_left": int(layout.routing.get("row_routes_left", 0)),
         "row_routes_right": int(layout.routing.get("row_routes_right", 0)),
         "back_qr": _back_qr_stats(manifest_json),
+        # The coverlay (solder mask) openings: one per taxel, at least 0.3 mm
+        # apart. mask_note is "" unless the openings had to be trimmed into
+        # the electrodes; the result panel shows it.
+        "coverlay": opening.stats(),
+        "mask_note": opening.note,
     }
     drc = {
         "violations": len(violations) + len(incomplete_nets),

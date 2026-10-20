@@ -3,6 +3,7 @@
 import math
 import re
 from opentac.cad.pipeline.types import PixelGeometry
+from opentac.cad.export.coverlay import COVERLAY_MARGIN_MM, TaxelOpening, copper_half_extent
 
 
 def fmt(v: float) -> str:
@@ -96,11 +97,37 @@ def make_footprint_name(prefix, w, h, tracew, gap, center_clear, edge_clear, via
     )
 
 
+def lone_taxel_opening(w, h, edge_clear) -> TaxelOpening:
+    """The mask opening of a taxel with no neighbours: the electrode copper
+    plus COVERLAY_MARGIN_MM all round (a board's own comes from
+    coverlay.taxel_opening, which knows the pitch)."""
+    hx, hy = copper_half_extent(w, h, edge_clear)
+    m = COVERLAY_MARGIN_MM
+    return TaxelOpening(margin_x=m, margin_y=m, half_w=round(hx + m, 6), half_h=round(hy + m, 6))
+
+
+def mask_opening_line(opening: TaxelOpening, indent: str = "  ") -> str:
+    """The taxel's one F.Mask opening, a filled rectangle in the footprint.
+    The electrode pads and the via carry no mask layer (export/coverlay.py)."""
+    x1, y1, x2, y2 = opening.rect()
+    return (f'{indent}(fp_rect (start {fmt(x1)} {fmt(y1)}) (end {fmt(x2)} {fmt(y2)}) '
+            f'(stroke (width 0) (type solid)) (fill solid) (layer "F.Mask"))')
+
+
+# The taxel's one mask opening exposes both electrodes (two nets) by design.
+PIXEL_ATTR = '(attr smd allow_soldermask_bridges)'
+
+
 def build_pixel_footprint_text(
-    name, w, h, tracew, gap, center_clear, edge_clear, via_drill, via_dia
+    name, w, h, tracew, gap, center_clear, edge_clear, via_drill, via_dia, opening=None
 ) -> tuple[str, int]:
-    """Build KiCad footprint S-expression text. Returns (text, total_slots)."""
+    """Build KiCad footprint S-expression text. Returns (text, total_slots).
+
+    `opening` is the board's coverlay.TaxelOpening; without one the footprint
+    gets lone_taxel_opening()."""
     g = pixel_geometry(w, h, tracew, gap, center_clear, edge_clear, via_dia)
+    if opening is None:
+        opening = lone_taxel_opening(w, h, edge_clear)
 
     x1 = -w / 2
     y1 = -h / 2
@@ -133,20 +160,21 @@ def build_pixel_footprint_text(
 
     def pad_custom(padnum, atx, aty, primitives):
         header = (f'(pad "{padnum}" smd custom (at {fmt(atx)} {fmt(aty)}) (size 0.05 0.05) '
-                  f'(layers "F.Cu" "F.Mask") (options (clearance outline) (anchor circle)) (primitives\n')
+                  f'(layers "F.Cu") (options (clearance outline) (anchor circle)) (primitives\n')
         body = '\n'.join(f'  {p}' for p in primitives)
         return header + body + '\n))'
 
     def pad_via(padnum, x, y, drill, dia):
         return (f'(pad "{padnum}" thru_hole circle (at {fmt(x)} {fmt(y)}) '
-                f'(size {fmt(dia)} {fmt(dia)}) (drill {fmt(drill)}) (layers "*.Cu" "*.Mask"))')
+                f'(size {fmt(dia)} {fmt(dia)}) (drill {fmt(drill)}) (layers "*.Cu"))')
 
     lines = [
         f'(footprint "{name}"',
         '  (layer "F.Cu")',
-        '  (attr smd)',
+        f'  {PIXEL_ATTR}',
         f'  (fp_rect (start {fmt(x1)} {fmt(y1)}) (end {fmt(x2)} {fmt(y2)}) '
         f'(stroke (width 0.1) (type default)) (fill no) (layer "User.2"))',
+        mask_opening_line(opening),
         f'  {pad_custom(1, g.xL, g.ymid, prim1)}',
         f'  {pad_custom(2, g.xR, g.ymid, prim2)}',
         f'  {pad_via(1, g.via_x, g.via_y, via_drill, via_dia)}',

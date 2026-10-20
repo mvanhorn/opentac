@@ -18,6 +18,7 @@ from scipy.spatial import cKDTree
 from shapely.geometry import LineString, MultiLineString, Point, Polygon
 
 from opentac.cad.main import generate, GenerateRequest
+from opentac.cad.export.coverlay import taxel_opening
 from opentac.cad.export.kicad_footprint import build_pixel_footprint_text, make_footprint_name
 from opentac.cad.pipeline.bump_sheet import bump_centers_from_taxels
 
@@ -83,7 +84,8 @@ def test_manifest_carries_the_real_board():
         for a, b in extra:
             assert abs(a[1] - b[1]) < 0.002, f"{tag}: edge_cuts closes diagonally {a} -> {b}"
 
-        # 2. the footprint block rebuilds the exported .kicad_mod exactly
+        # 2. the footprint block rebuilds the exported .kicad_mod exactly (its
+        #    mask opening follows from the taxel size and the pitch)
         fp = man.get("footprint")
         assert fp, f"{tag}: manifest has no footprint parameters"
         mod_name = [n for n in z.namelist() if n.endswith(".kicad_mod")][0]
@@ -92,7 +94,8 @@ def test_manifest_carries_the_real_board():
                                 fp["gap"], fp["center_clear"], fp["edge_clear"],
                                 fp["via_drill"], fp["via_dia"]),
             man["w"], man["h"], fp["trace_w"], fp["gap"], fp["center_clear"],
-            fp["edge_clear"], fp["via_drill"], fp["via_dia"])
+            fp["edge_clear"], fp["via_drill"], fp["via_dia"],
+            opening=taxel_opening(man["w"], man["h"], fp["edge_clear"], man["px"], man["py"]))
         assert rebuilt.strip() == z.read(mod_name).decode().strip(), \
             f"{tag}: footprint params do not rebuild the exported footprint"
 

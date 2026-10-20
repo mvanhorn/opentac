@@ -8,7 +8,8 @@ import numpy as np
 from opentac.cad.pipeline.types import Layout, Route, Params
 from opentac.cad.pipeline.geometry import contiguous_runs
 from opentac.cad.pipeline.tail_extension import tail_extension_from_layout
-from opentac.cad.export.kicad_footprint import pixel_geometry, fmt
+from opentac.cad.export.kicad_footprint import PIXEL_ATTR, mask_opening_line, pixel_geometry, fmt
+from opentac.cad.export.coverlay import connector_mask_opening, copper_layers_only, taxel_opening_for
 from opentac.cad.export.connector_geometry import connector_export_dir, connector_geometries, stitched_outline_segments
 from opentac.cad.export.silk_label import silk_label
 from opentac.cad.export.silk_backmark import backmark
@@ -85,6 +86,8 @@ def generate_kicad_pcb(
     # Pixel geometry
     g = pixel_geometry(pixel_w, pixel_h, trace_w, params.gap_mm,
                        params.center_clear_mm, params.edge_clear_mm, via_dia)
+    # One top mask opening per taxel, the same for all (export/coverlay.py).
+    opening = taxel_opening_for(params, Pxy[active_pix] if active_pix else None)
 
     lines = []
 
@@ -188,7 +191,7 @@ def generate_kicad_pcb(
         ref = f"PX{pix_num:04d}"
         lines.append(_pixel_footprint(cx, -cy, ref, g, pixel_w, pixel_h, trace_w,
                                        via_drill, via_dia, row_net_id, row_net,
-                                       col_net_id, col_net))
+                                       col_net_id, col_net, opening))
 
     # Column route segments (F.Cu)
     for route in col_routes:
@@ -325,8 +328,11 @@ def _segment(p1, p2, width, layer, net_id):
 
 
 def _pixel_footprint(kx, ky, ref, g, pixel_w, pixel_h, trace_w,
-                      via_drill, via_dia, row_net_id, row_net, col_net_id, col_net):
-    """Generate inline pixel footprint."""
+                      via_drill, via_dia, row_net_id, row_net, col_net_id, col_net, opening):
+    """Generate inline pixel footprint.
+
+    No pad carries a mask layer: the taxel's one F.Mask opening is the filled
+    rectangle `opening`, so the via is covered on the bottom."""
     x1 = -pixel_w / 2
     y1 = -pixel_h / 2
     x2 = pixel_w / 2
@@ -342,14 +348,15 @@ def _pixel_footprint(kx, ky, ref, g, pixel_w, pixel_h, trace_w,
                  f'(effects (font (size 1 1) (thickness 0.15))))')
     lines.append(f'    (fp_text value "tactile_pixel" (at 0 2.6 0) (layer "User.2") hide '
                  f'(effects (font (size 1 1) (thickness 0.15))))')
-    lines.append('    (attr smd)')
+    lines.append(f'    {PIXEL_ATTR}')
     lines.append(f'    (fp_rect (start {fmt(x1)} {fmt(y1)}) (end {fmt(x2)} {fmt(y2)}) '
                  f'(stroke (width 0.1) (type default)) (fill no) (layer "User.2"))')
+    lines.append(mask_opening_line(opening, indent="    "))
 
     # Pad 1 (row net)
     lines.append(f'    (pad "1" smd custom (net {row_net_id} "{row_net}") '
                  f'(at {fmt(g.xL)} {fmt(g.ymid)}) (size 0.05 0.05) '
-                 f'(layers "F.Cu" "F.Mask") (options (clearance outline) (anchor circle)) (primitives')
+                 f'(layers "F.Cu") (options (clearance outline) (anchor circle)) (primitives')
     lines.append(f'    (gr_poly (pts (xy -0.02 -0.02) (xy 0.02 -0.02) '
                  f'(xy 0.02 0.02) (xy -0.02 0.02)) (width 0) (fill yes))')
     lines.append(f'    (gr_line (start 0 {fmt(g.spine_y_lo - g.ymid)}) '
@@ -365,7 +372,7 @@ def _pixel_footprint(kx, ky, ref, g, pixel_w, pixel_h, trace_w,
     # Pad 2 (col net)
     lines.append(f'    (pad "2" smd custom (net {col_net_id} "{col_net}") '
                  f'(at {fmt(g.xR)} {fmt(g.ymid)}) (size 0.05 0.05) '
-                 f'(layers "F.Cu" "F.Mask") (options (clearance outline) (anchor circle)) (primitives')
+                 f'(layers "F.Cu") (options (clearance outline) (anchor circle)) (primitives')
     lines.append(f'    (gr_poly (pts (xy -0.02 -0.02) (xy 0.02 -0.02) '
                  f'(xy 0.02 0.02) (xy -0.02 0.02)) (width 0) (fill yes))')
     lines.append(f'    (gr_line (start 0 {fmt(g.spine_y_lo - g.ymid)}) '
@@ -382,7 +389,7 @@ def _pixel_footprint(kx, ky, ref, g, pixel_w, pixel_h, trace_w,
     lines.append(f'    (pad "1" thru_hole circle (net {row_net_id} "{row_net}") '
                  f'(at {fmt(g.via_x)} {fmt(g.via_y)}) '
                  f'(size {fmt(via_dia)} {fmt(via_dia)}) (drill {fmt(via_drill)}) '
-                 f'(layers "*.Cu" "*.Mask"))')
+                 f'(layers "*.Cu"))')
 
     lines.append('  )')
     return '\n'.join(lines)
@@ -401,13 +408,15 @@ def _connector_custom_pad_line(pad, pad_num, net_text, drill):
         corner_pts.append(f'(xy {fmt(p[0])} {fmt(p[1])})')
 
     drill_text = f' (drill {fmt(drill)})' if drill else ''
-    # The pad's own layers from the connector footprint: contacts are on the
-    # BOTTOM copper (Molex 505110 is bottom-contact), so the mask opens on
-    # B.Mask only and the top stays covered under the stiffener.
+    # The pad's own copper layers from the connector footprint: contacts are
+    # on the BOTTOM copper (Molex 505110 is bottom-contact). Its mask opening
+    # is not the pad's own: one B.Mask opening spans the whole finger row
+    # (_build_connector_resolved), and the top stays covered under the
+    # stiffener.
     if pad.get("layers"):
-        layers = " ".join(f'"{name}"' for name in pad["layers"])
+        layers = " ".join(f'"{name}"' for name in copper_layers_only(pad["layers"]))
     else:
-        layers = '"*.Cu" "B.Mask"' if drill else '"F.Cu" "F.Mask"'
+        layers = '"*.Cu"' if drill else '"F.Cu"'
     kind = pad.get("kind") or ('thru_hole' if drill else 'smd')
 
     return (f'    (pad "{pad_num}" {kind} custom{net_text} '
@@ -439,7 +448,8 @@ def _build_connector_resolved(layout, outline_xy, params, conn_dir, pad_to_net, 
                  f'(effects (font (size 1 1) (thickness 0.15))))')
     lines.append(f'    (property "Value" "{conn_pos}_pos_0.5mm_FPC" (at 0 1.2 0) '
                  f'(layer "F.Fab") hide (effects (font (size 1 1) (thickness 0.15))))')
-    lines.append('    (attr smd)')
+    # The fingers share one mask opening, so it exposes every finger's net.
+    lines.append('    (attr smd allow_soldermask_bridges)')
 
     # Every pad is emitted as a custom polygon anchored at its own
     # already-resolved world-space drill/pad center (pad["drill_center"] /
@@ -463,6 +473,16 @@ def _build_connector_resolved(layout, outline_xy, params, conn_dir, pad_to_net, 
             net_text = f' (net {net_map[net_name]} "{net_name}")'
         drill = pad.get("drill")
         lines.append(_connector_custom_pad_line(pad, pad_num, net_text, drill))
+
+    # One mask opening across the gold fingers instead of one per finger:
+    # 0.3 mm fingers at 0.5 mm pitch left 0.2 mm of coverlay between
+    # openings, under JLCPCB's 0.3 mm minimum (export/coverlay.py).
+    for layer in ("F.Mask", "B.Mask"):
+        corners = connector_mask_opening(model["pads"], layer)
+        if corners:
+            pts = " ".join(f'(xy {fmt(p[0])} {fmt(p[1])})' for p in map(_kicad_xy, corners))
+            lines.append(f'    (fp_poly (pts {pts}) (stroke (width 0) (type solid)) '
+                         f'(fill solid) (layer "{layer}"))')
 
     for p1, p2 in model["edge_lines"]:
         a = _kicad_xy(p1)

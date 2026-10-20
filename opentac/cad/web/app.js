@@ -2168,6 +2168,9 @@ function renderStats(stats, drc) {
   if (stats.connector_export_warning) {
     summary.push(["Connector warning", stats.connector_export_warning]);
   }
+  if (stats.mask_note) {
+    summary.push(["Solder mask", stats.mask_note]);
+  }
   if (stats.routing_warning_nets > 0 || stats.routing_problem_pixels > 0) {
     summary.push(["Routing warnings", `${stats.routing_warning_nets || 0} nets / ${stats.routing_problem_pixels || 0} taxels`]);
   }
