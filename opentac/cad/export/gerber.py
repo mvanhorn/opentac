@@ -1,4 +1,18 @@
-"""Direct Gerber RS-274X file generation."""
+"""Direct Gerber RS-274X file generation.
+
+The pure-Python fallback for when kicad-cli is not installed -- the hosted
+service, a plain Python image -- so it has to draw exactly what KiCad plots
+from export/kicad_pcb.py's board, layer for layer.
+
+Coordinates: everything here is in the board frame (mm, Y up), and that frame
+IS the Gerber frame, written as is. KiCad's board space is Y down, which is why
+kicad_pcb.py negates Y on the way in; its plotter negates it back on the way
+out, so a KiCad Gerber carries board coordinates unchanged. (Negating Y here as
+well mirrored every layer: a board ordered from these files came out as the
+mirror image of the design.) The one other frame is a taxel footprint's own,
+pixel_geometry(), which is KiCad's Y-down footprint frame -- see
+_taxel_point().
+"""
 
 import os
 import re
@@ -65,15 +79,32 @@ class ApertureManager:
         return self._defs
 
 
+def _xy(x, y):
+    """A board-frame point as a Gerber coordinate word. The only place a
+    coordinate is written: the board frame is the Gerber frame (module doc)."""
+    return f"X{_coord(x)}Y{_coord(y)}"
+
+
+def _taxel_point(cx, cy, lx, ly):
+    """A taxel footprint's local point (pixel_geometry, KiCad's Y-down
+    footprint frame) in the board frame, for the taxel centred at (cx, cy).
+
+    KiCad places the footprint at (cx, -cy) in its own space and plots that
+    back with Y negated, so local (lx, ly) lands at (cx + lx, cy - ly) -- the
+    same mapping the router uses for the via (route_inner.py, inner_hug.py).
+    """
+    return cx + lx, cy - ly
+
+
 def _draw_line(lines, x1, y1, x2, y2):
     """Draw a line segment (D01 interpolation)."""
-    lines.append(f"X{_coord(x1)}Y{_coord(-y1)}D02*")
-    lines.append(f"X{_coord(x2)}Y{_coord(-y2)}D01*")
+    lines.append(f"{_xy(x1, y1)}D02*")
+    lines.append(f"{_xy(x2, y2)}D01*")
 
 
 def _flash(lines, x, y):
     """Flash aperture at position."""
-    lines.append(f"X{_coord(x)}Y{_coord(-y)}D03*")
+    lines.append(f"{_xy(x, y)}D03*")
 
 
 def generate_gerbers(
@@ -164,45 +195,20 @@ def _generate_copper_layer(layer_name, routes, layout, active_pix, Pxy, g, param
 
     am = ApertureManager()
     trace_ap = am.circle(params.trace_w_mm)
-
-    # Pixel pads — draw interdigitated fingers
-    for k in active_pix:
-        cx, cy = Pxy[k]
-        if is_front:
-            # Pad 2 (col net) — right spine + odd fingers
-            _draw_pixel_pad(lines, am, cx, cy, g, params.trace_w_mm, pad_num=2)
-            # Pad 1 (row net) — left spine + even fingers
-            _draw_pixel_pad(lines, am, cx, cy, g, params.trace_w_mm, pad_num=1)
-        else:
-            # Via pad on B.Cu
-            via_ap = am.circle(params.via_dia_mm)
-            lines.extend(am.definitions()[-1:])  # ensure def written
-            lines.append(f"D{via_ap}*")
-            _flash(lines, cx + g.via_x, cy + g.via_y)
-
-    # Write all aperture definitions at top
-    header_lines = []
-    _write_header(header_lines, layer_name)
-    header_lines.extend(am.definitions())
-    lines = header_lines + lines[len([l for l in lines if l.startswith("G04") or l.startswith("%")])+1:]
-
-    # Rebuild properly
-    lines = []
-    _write_header(lines, layer_name)
+    via_ap = am.circle(params.via_dia_mm)
     lines.extend(am.definitions())
 
-    # Draw pixel pads
-    trace_ap = am.circle(params.trace_w_mm)
-    lines.append(f"D{trace_ap}*")
+    # Taxel electrodes (top only): both combs, spines and fingers.
+    if is_front:
+        lines.append(f"D{trace_ap}*")
+        for k in active_pix:
+            _draw_pixel_copper(lines, Pxy[k][0], Pxy[k][1], g)
 
+    # The row via is a through-hole pad on every copper layer ("*.Cu" in the
+    # footprint), so its annular ring is plotted on top as well as below.
+    lines.append(f"D{via_ap}*")
     for k in active_pix:
-        cx, cy = Pxy[k]
-        if is_front:
-            _draw_pixel_copper(lines, cx, cy, g, params.trace_w_mm)
-        else:
-            via_ap = am.circle(params.via_dia_mm)
-            lines.append(f"D{via_ap}*")
-            _flash(lines, cx + g.via_x, cy + g.via_y)
+        _flash(lines, *_taxel_point(Pxy[k][0], Pxy[k][1], g.via_x, g.via_y))
 
     # Connector pad copper, including through-hole rectangular terminals.
     # Use rectangular flashes instead of filled regions; region polygons can
@@ -258,27 +264,26 @@ def _generate_copper_layer(layer_name, routes, layout, active_pix, Pxy, g, param
     return '\n'.join(lines)
 
 
-def _draw_pixel_copper(lines, cx, cy, g, trace_w):
-    """Draw all copper primitives for one pixel at world position (cx, cy)."""
-    # Left spine (pad 1)
-    _draw_line(lines, cx + g.xL, cy + g.spine_y_lo, cx + g.xL, cy + g.spine_y_hi)
-    # Right spine (pad 2)
-    _draw_line(lines, cx + g.xR, cy + g.spine_y_lo, cx + g.xR, cy + g.spine_y_hi)
-    # Fingers
+def _draw_pixel_copper(lines, cx, cy, g):
+    """Draw both electrode combs of the taxel centred at (cx, cy).
+
+    pixel_geometry() is in the footprint's Y-down frame, so every point goes
+    through _taxel_point: drawn with a plain +y the combs came out flipped
+    within each taxel, and on an even finger count the row and column fingers
+    swapped places relative to KiCad's plot.
+    """
+    def seg(lx1, ly1, lx2, ly2):
+        _draw_line(lines, *_taxel_point(cx, cy, lx1, ly1), *_taxel_point(cx, cy, lx2, ly2))
+
+    # Left spine (pad 1, row net) and right spine (pad 2, column net)
+    seg(g.xL, g.spine_y_lo, g.xL, g.spine_y_hi)
+    seg(g.xR, g.spine_y_lo, g.xR, g.spine_y_hi)
     for i in range(g.total_slots):
         fy = g.y0 + i * g.pitch
         if i % 2 == 0:
-            # Pad 1 finger (left -> right)
-            _draw_line(lines, cx + g.xL, cy + fy, cx + g.x_end_left_max, cy + fy)
+            seg(g.xL, fy, g.x_end_left_max, fy)       # pad 1 finger, left -> right
         else:
-            # Pad 2 finger (right -> left)
-            _draw_line(lines, cx + g.xR, cy + fy, cx + g.col_end_x[i], cy + fy)
-
-
-def _draw_pixel_pad(lines, am, cx, cy, g, trace_w, pad_num):
-    """Draw copper for one pad of a pixel."""
-    pass  # covered by _draw_pixel_copper
-
+            seg(g.xR, fy, g.col_end_x[i], fy)         # pad 2 finger, right -> left
 
 
 def _append_new_aperture_defs(lines, am, before_count):
@@ -349,10 +354,10 @@ def _draw_region_polygon(lines, points):
     if len(pts) < 3:
         return
     lines.append("G36*")
-    lines.append(f"X{_coord(pts[0][0])}Y{_coord(-pts[0][1])}D02*")
+    lines.append(f"{_xy(*pts[0])}D02*")
     for p in pts[1:]:
-        lines.append(f"X{_coord(p[0])}Y{_coord(-p[1])}D01*")
-    lines.append(f"X{_coord(pts[0][0])}Y{_coord(-pts[0][1])}D01*")
+        lines.append(f"{_xy(*p)}D01*")
+    lines.append(f"{_xy(*pts[0])}D01*")
     lines.append("G37*")
 
 
@@ -449,7 +454,10 @@ def _generate_edge_cuts(layout, outline_xy, params, connector_dir=""):
     lines = []
     _write_header(lines, "Edge.Cuts")
     am = ApertureManager()
-    edge_ap = am.circle(0.05)
+    # The stroke widths the KiCad board draws these with (kicad_pcb.py: the
+    # board's gr_line edges, the connector footprint's fp_line/fp_arc).
+    edge_ap = am.circle(0.15)
+    connector_ap = am.circle(0.05)
     lines.extend(am.definitions())
     lines.append(f"D{edge_ap}*")
 
@@ -500,6 +508,7 @@ def _generate_edge_cuts(layout, outline_xy, params, connector_dir=""):
         _draw_line(lines, B[0], B[1], C[0], C[1])
 
     connector_edges = connector_edge_geometries(layout, outline_xy, params, connector_dir)
+    lines.append(f"D{connector_ap}*")
     for p1_edge, p2_edge in connector_edges["lines"]:
         _draw_line(lines, p1_edge[0], p1_edge[1], p2_edge[0], p2_edge[1])
     for start, mid, end in connector_edges["arcs"]:

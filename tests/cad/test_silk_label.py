@@ -62,8 +62,9 @@ def _silk_segments(gerber_text):
         m = re.match(r"X(-?\d+)Y(-?\d+)D0([12])\*", line.strip())
         if not m:
             continue
-        # The writer emits absolute coordinates in 4.6 format and negates Y.
-        p = (int(m.group(1)) / 1e6, -int(m.group(2)) / 1e6)
+        # The writer emits absolute coordinates in 4.6 format, in the board
+        # frame (Y up) -- the frame KiCad plots in, so no sign to undo.
+        p = (int(m.group(1)) / 1e6, int(m.group(2)) / 1e6)
         if m.group(3) == "1" and pen is not None:
             segs.append((pen, p))
         pen = p

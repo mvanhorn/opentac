@@ -1,4 +1,8 @@
-"""Excellon drill file generation for vias."""
+"""Excellon drill file generation for vias.
+
+Coordinates are the board frame (mm, Y up) written as is, the frame KiCad's
+drill writer and every Gerber in the same export use (see export/gerber.py).
+"""
 
 import numpy as np
 from opentac.cad.pipeline.types import Layout, Params
@@ -22,7 +26,8 @@ def generate_drill_file(
 
     holes: list[tuple[float, float, float]] = []
     for k in active_pix:
-        holes.append((params.via_drill_mm, Pxy[k, 0] + g.via_x, Pxy[k, 1] + g.via_y))
+        # pixel_geometry is the footprint's Y-down frame: local y goes in negated
+        holes.append((params.via_drill_mm, Pxy[k, 0] + g.via_x, Pxy[k, 1] - g.via_y))
 
     if outline_xy is not None and connector_dir:
         for pad in connector_pad_geometries(layout, np.asarray(outline_xy, dtype=float), params, connector_dir):
@@ -46,7 +51,7 @@ def generate_drill_file(
     for idx, dia in enumerate(sorted(tools), start=1):
         lines.append(f"T{idx}")
         for x, y in tools[dia]:
-            lines.append(f"X{x:.4f}Y{-y:.4f}")
+            lines.append(f"X{x:.4f}Y{y:.4f}")
 
     lines.append("M30")
     return '\n'.join(lines)
