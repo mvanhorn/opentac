@@ -46,7 +46,6 @@ data that is not in the repository. Optional tests and what they need:
 | the firmware's config parser, in `tests/readout/test_config.py` | a C++ compiler (`c++`) | skipped |
 | `tests/sim/test_paper_numbers.py` (9) | `OPENTAC_PAPER_RESULTS=/path/to/results_pose.json`, the paper's scored hand-press rows (29 MB, not in the repository) | skipped |
 | the published example designs in `tests/sim/test_bump_core.py` (1) | the website checkout: `OPENTAC_SITE_ROOT`, or `../opentac.github.io` | skipped |
-| the full lab-manifest sweeps in `tests/readout/` (2) | `OPENTAC_STM_TEST=/path/to/stm_test`: a folder of 30 sensor manifests and the reference config tool, not in the repository | skipped; four of those manifests are in `tests/readout/fixtures/stm_test/` and always run |
 
 CI (`.github/workflows/tests.yml`) installs `--extra demo --extra sim` and runs the whole suite on
 every push.
