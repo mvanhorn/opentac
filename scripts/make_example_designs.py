@@ -5,7 +5,7 @@
 
 Reads examples/designs/sources.json (the 31 sensors fabricated for the paper),
 generates each one for an OpenTac readout board with the current pipeline, and
-writes, for the site:
+writes into the website checkout ($OPENTAC_SITE_ROOT, default ../opentac.github.io):
 
     docs/designs/files/<slug>.zip   the export: KiCad, Gerbers, manifest, design, PDFs
     docs/designs/files/<slug>.svg   the board preview
@@ -73,8 +73,8 @@ def generate_fitting(spec: dict, params: dict):
 def build(spec: dict) -> dict:
     """Generate one design and add its printed case, as OpenTac-CAD's Download ZIP does.
 
-    The designs were fabricated before the printed case existed, with a 12 mm cable
-    tail. They are generated with the automatic tail length (no cable_length_mm),
+    The fabricated designs have a 12 mm cable tail, which the printed case does not
+    allow for. They are generated with the automatic tail length (no cable_length_mm),
     which is long enough for the narrow tail and for the printed case to leave the
     connector clear; a design whose case still warns about the cable, or has a part
     that is not a closed solid, is reported instead of written.
