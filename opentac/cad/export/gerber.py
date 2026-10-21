@@ -5,11 +5,10 @@ service, a plain Python image -- so it has to draw exactly what KiCad plots
 from export/kicad_pcb.py's board, layer for layer.
 
 Coordinates: everything here is in the board frame (mm, Y up), and that frame
-IS the Gerber frame, written as is. KiCad's board space is Y down, which is why
+is the Gerber frame, written as is. KiCad's board space is Y down, which is why
 kicad_pcb.py negates Y on the way in; its plotter negates it back on the way
-out, so a KiCad Gerber carries board coordinates unchanged. (Negating Y here as
-well mirrored every layer: a board ordered from these files came out as the
-mirror image of the design.) The one other frame is a taxel footprint's own,
+out, so a KiCad Gerber carries board coordinates unchanged. Do not negate Y
+here: that mirrors every layer. The one other frame is a taxel footprint's own,
 pixel_geometry(), which is KiCad's Y-down footprint frame -- see
 _taxel_point().
 """
@@ -211,8 +210,7 @@ def _generate_copper_layer(layer_name, routes, layout, active_pix, Pxy, g, param
         _flash(lines, *_taxel_point(Pxy[k][0], Pxy[k][1], g.via_x, g.via_y))
 
     # Connector pad copper, including through-hole rectangular terminals.
-    # Use rectangular flashes instead of filled regions; region polygons can
-    # produce viewer-dependent wedge fills around the pinout.
+    # Each connector pad is drawn as its exact footprint rectangle, as a region.
     _flash_connector_pads(lines, am, connector_pads or [], layer_name)
 
     # Route traces
@@ -268,9 +266,9 @@ def _draw_pixel_copper(lines, cx, cy, g):
     """Draw both electrode combs of the taxel centred at (cx, cy).
 
     pixel_geometry() is in the footprint's Y-down frame, so every point goes
-    through _taxel_point: drawn with a plain +y the combs came out flipped
-    within each taxel, and on an even finger count the row and column fingers
-    swapped places relative to KiCad's plot.
+    through _taxel_point: drawn with a plain +y the combs are flipped within
+    each taxel, and on an even finger count the row and column fingers swap
+    places relative to KiCad's plot.
     """
     def seg(lx1, ly1, lx2, ly2):
         _draw_line(lines, *_taxel_point(cx, cy, lx1, ly1), *_taxel_point(cx, cy, lx2, ly2))
@@ -284,69 +282,6 @@ def _draw_pixel_copper(lines, cx, cy, g):
             seg(g.xL, fy, g.x_end_left_max, fy)       # pad 1 finger, left -> right
         else:
             seg(g.xR, fy, g.col_end_x[i], fy)         # pad 2 finger, right -> left
-
-
-def _append_new_aperture_defs(lines, am, before_count):
-    for definition in am.definitions()[before_count:]:
-        lines.append(definition)
-
-
-def _connector_pad_bbox(pad):
-    corners = np.asarray(pad["corners"], dtype=float)
-    min_xy = corners.min(axis=0)
-    max_xy = corners.max(axis=0)
-    center = (min_xy + max_xy) / 2.0
-    width = max(max_xy[0] - min_xy[0], 0.001)
-    height = max(max_xy[1] - min_xy[1], 0.001)
-    return center, width, height
-
-
-def _pad_axes(pad):
-    corners = np.asarray(pad["corners"], dtype=float)
-    center = np.asarray(pad["center"], dtype=float)
-    e_x = corners[1] - corners[0]
-    e_y = corners[2] - corners[1]
-    len_x = float(np.linalg.norm(e_x))
-    len_y = float(np.linalg.norm(e_y))
-    if len_x < 1e-9 or len_y < 1e-9:
-        return center, None, 0.0, 0.0
-    if len_x >= len_y:
-        return center, e_x / len_x, len_x, len_y
-    return center, e_y / len_y, len_y, len_x
-
-
-def _is_axis_aligned_pad(pad):
-    corners = np.asarray(pad["corners"], dtype=float)
-    for edge in (corners[1] - corners[0], corners[2] - corners[1]):
-        norm = float(np.linalg.norm(edge))
-        if norm < 1e-9:
-            return False
-        unit = np.abs(edge / norm)
-        if max(unit[0], unit[1]) < 0.999:
-            return False
-    return True
-
-
-def _flash_rect(lines, am, center, width, height):
-    before = len(am.definitions())
-    aperture = am.rect(width, height)
-    _append_new_aperture_defs(lines, am, before)
-    lines.append(f"D{aperture}*")
-    _flash(lines, center[0], center[1])
-
-
-def _draw_stroked_pad(lines, am, pad):
-    center, axis, length, width = _pad_axes(pad)
-    if axis is None:
-        return
-    before = len(am.definitions())
-    aperture = am.circle(max(width, 0.001))
-    _append_new_aperture_defs(lines, am, before)
-    lines.append(f"D{aperture}*")
-    draw_len = max(length - width, 0.001)
-    p1 = center - 0.5 * draw_len * axis
-    p2 = center + 0.5 * draw_len * axis
-    _draw_line(lines, p1[0], p1[1], p2[0], p2[1])
 
 
 def _draw_region_polygon(lines, points):
@@ -381,17 +316,6 @@ def _flash_connector_mask(lines, am, connector_pads, layer_name):
     corners = connector_mask_opening(connector_pads, layer_name)
     if corners:
         _draw_region_polygon(lines, corners)
-
-
-def _local_to_world(lx, ly, t_hat, n_out, pad1_world):
-    """Transform footprint-local coordinate to world (Y-up) coordinate.
-
-    Accounts for X-negation, KiCad rotation, and Y-down → Y-up mapping.
-    Formula: world = pad1_world + lx * t_hat - ly * n_out
-    """
-    wx = pad1_world[0] + lx * t_hat[0] - ly * n_out[0]
-    wy = pad1_world[1] + lx * t_hat[1] - ly * n_out[1]
-    return wx, wy
 
 
 def _arc_to_segments(start, mid, end, n_segs=16):
@@ -482,8 +406,8 @@ def _generate_edge_cuts(layout, outline_xy, params, connector_dir=""):
 
     # Board outline with cable cutout. Whenever a final board polygon
     # exists, export it stitched to the connector's open edge (all board
-    # modes) — see export/kicad_pcb.py's matching branch for the fixed-mode
-    # Edge.Cuts gap this closes. Legacy branch only when no final outline.
+    # modes), as export/kicad_pcb.py's matching branch does. The fallback
+    # below (drawn outline plus tail walls) runs only without a final outline.
     if layout.final_outline_xy is not None:
         outline_segments = stitched_outline_segments(layout, outline_xy, params, connector_dir)
         if outline_segments is None:
@@ -550,8 +474,8 @@ def _generate_front_silk(layout, outline_xy, params, connector_dir):
 
     KiCad would render this text for us, but only on the kicad-cli path --
     which needs KiCad installed, and the hosted deployment is a plain Python
-    image. This is the path every hosted export actually takes, so the label
-    has to be real geometry here or it does not exist on most boards.
+    image. Every hosted export takes this path, so the label has to be real
+    geometry here or the board carries no label.
 
     One round aperture, one pen width: silkscreen is screen-printed, and a
     single consistent stroke is what survives it.

@@ -2,26 +2,26 @@
 
 manifest.json describes the whole board — outline, cut boundary, design recipe,
 and `pixels`, an enumeration carrying one [x, y, row, col] row per taxel. That
-enumeration is most of the file's bulk (6-17 KB), and it is the only part of the
+enumeration is most of the file's bulk, and it is the only part of the
 manifest that is geometrically usable: manifest.py's own readme warns that
 `ox`/`oy`/`px`/`py` are pad-scan order, not geometry, so `ox + ci*px` does not
 reproduce positions.
 
-This module states the same taxel facts PARAMETRICALLY instead of by
+This module states the same taxel facts parametrically instead of by
 enumeration — origin, pitch, the pad-order permutation, and a bitmask — which
-fits in 14-88 bytes. That is small enough to print as a QR code on the back
-silkscreen, so a sensor that has been separated from its files still says what
-it is.
+typically fits in under 100 bytes. That is small enough to print as a QR code
+on the back silkscreen, so a sensor that has been separated from its files
+still says what it is.
 
 It is strictly derived from the manifest and therefore carries no information
 the manifest lacks. It is in fact slightly lossier: coordinates quantize to
-0.01 mm here versus the manifest's 0.0001 mm. Measured reconstruction error
-across all 24 boards in this repo is <= 0.005 mm, half a quantization step.
+0.01 mm here versus the manifest's 0.0001 mm. On the example designs the
+reconstruction error is at most 0.005 mm, half a quantization step.
 It also drops `outline`, `edge_cuts`, `design` and `shear` entirely. If you
 have the manifest, use the manifest; this exists for the case where all you
 have is the physical sensor.
 
-What it does carry is everything needed to READ a sensor: grid dimensions, the
+What it does carry is everything needed to read a sensor: grid dimensions, the
 active-taxel mask, exact taxel centres, the taxel footprint, and the connector
 pad numbers for every row and column net.
 """
@@ -30,8 +30,8 @@ import json
 import math
 import re
 
-# The footprint is default on all 24 boards in this repo, so a single flag
-# usually replaces the whole block. Values are mm.
+# Most boards use the default footprint, so a single flag usually replaces
+# the whole block. Values are mm.
 FP_DEFAULT = {
     "trace_w": 0.2, "gap": 0.2, "center_clear": 0.2,
     "edge_clear": 0.1, "via_drill": 0.15, "via_dia": 0.35,
@@ -77,9 +77,8 @@ class BitWriter:
         """Unsigned varint: 1 continuation bit + 7 payload bits per group.
 
         Used for anything whose range is set by the user rather than by this
-        format. Pitch was a 10-bit field once, which capped it at 10.23 mm and
-        raised on a 22.4 mm board -- a silent format limit that only showed up
-        as a failed export.
+        format. A fixed-width field would impose a hidden limit (10 bits caps
+        a pitch at 10.23 mm) that surfaces only as a failed export.
         """
         v = int(value)
         if v < 0:
@@ -183,23 +182,23 @@ def _bitwidth(n):
 def analyze(manifest):
     """Recover the latent grid structure the manifest states by enumeration.
 
-    The manifest gives per-taxel [x, y, row, col]. Every board in this repo has
-    exactly one y per row index and one x per col index, and the distinct
-    y-values always form an arithmetic sequence — so the grid IS parametric,
-    the manifest just does not say so.
+    The manifest gives per-taxel [x, y, row, col]. The format relies on the
+    taxels lying on a regular grid: exactly one y per row index and one x per
+    col index, with the distinct y-values on a lattice of uniform pitch. The
+    grid is then parametric; the manifest just does not say so.
 
     Two wrinkles this has to handle:
 
-    1. Row index is PAD order, not geometric order (split_row_pin_order
+    1. Row index is pad order, not geometric order (split_row_pin_order
        reverses the bottom half), so the pad->geometry permutation has to be
        stored. It is implicit in `pixels`; recovering it is the sort below.
 
-    2. Columns can SKIP lattice positions. On `gecko` the limbs sit 12.0 mm
-       from the body, which is exactly 5 x the 2.4 mm pitch — the pitch is
-       uniform, but five column slots are empty and the manifest's col index
-       is compacted over occupied columns only. Assuming `x0 + col*pitch`
-       there is wrong by 8 mm. An occupancy bitmap over the true lattice
-       fixes it for 3 bytes, and only 1 of 24 boards needs it.
+    2. Columns can skip lattice positions. When parts of a board are separated
+       by a whole number of pitches (limbs set apart from a body, say), the
+       pitch is uniform but some column slots are empty, and the manifest's
+       col index is compacted over occupied columns only, so `x0 + col*pitch`
+       places the far columns wrongly. An occupancy bitmap over the true
+       lattice fixes it for a few bytes, and only such boards need it.
     """
     row_y, col_x = {}, {}
     for x, y, ri, ci in manifest["pixels"]:
@@ -221,8 +220,8 @@ def analyze(manifest):
     rank = {i: ys.index(row_y[i]) for i in row_y}
     perm = [rank.get(i, 0) for i in range(manifest["r"])]
 
-    # manifest col index -> index into xs. Verified identity on every board
-    # here, but checked rather than assumed.
+    # manifest col index -> index into xs. Expected to be the identity, but
+    # checked rather than assumed.
     col_map = [sorted(col_x).index(i) for i in sorted(col_x)]
     assert col_map == list(range(len(col_map))), "column indices are not in geometric order"
 
@@ -262,7 +261,7 @@ def encode(manifest, pad_pitch_05=True):
     w.u(1 if fp_default else 0, 1)
     w.u(1 if sparse_x else 0, 1)
     w.u(1 if sparse_y else 0, 1)
-    w.u(0, 1)                            # reserved: was the anchor-holes flag, always 0
+    w.u(0, 1)                            # reserved, always 0
     w.u(1 if pad_pitch_05 else 0, 1)     # which FPC connector mates
     if not (0 < r < 64 and 0 < c < 64):
         raise TaxelCoreError("grid %dx%d exceeds the 63x63 this format encodes" % (r, c))
@@ -279,7 +278,7 @@ def encode(manifest, pad_pitch_05=True):
         w.varint(round((g["h"] - g["pitch_y"]) * Q))
     w.varint(round(g["x0"] * Q))
     w.varint(round(g["y0"] * Q))
-    w.u(g["rp0"], 6)                     # cp0 == rp0 + r on every board, so it is derived
+    w.u(g["rp0"], 6)                     # cp0 is not stored: the format takes cp0 == rp0 + r
 
     if not fp_default:
         for k in FP_KEYS:
@@ -354,7 +353,7 @@ def decode(data):
     fp_default = b.u(1)
     sparse_x = b.u(1)
     sparse_y = b.u(1)
-    b.u(1)                               # reserved (anchor-holes flag in early boards)
+    b.u(1)                               # reserved, ignored
     pad_pitch_05 = b.u(1)
     r = b.u(6)
     c = b.u(6)
@@ -448,7 +447,7 @@ def taxels(core):
 # Why 41 and not RFC 9285's base45: the density is set by needing N**3 >= 65536
 # to pack two bytes into three characters, which holds all the way down to 41.
 # QR's alphanumeric charset has 45 characters, so there are exactly four to
-# spend -- and exactly four of them fail SILENTLY, turning a payload into a
+# spend -- and exactly four of them fail silently, turning a payload into a
 # different valid payload rather than an error:
 #
 #     ' '   trimmed by scanners and clipboards
@@ -456,8 +455,8 @@ def taxels(core):
 #     '+'   decoded back as a space by URL parsers
 #     '*'   expanded by a shell if the CLI arg is left unquoted
 #
-# Dropping all four costs nothing: same characters per byte, same QR versions,
-# measured. The remaining punctuation fails loudly if it fails at all -- a
+# Dropping all four costs nothing: same characters per byte, same QR versions.
+# The remaining punctuation fails loudly if it fails at all -- a
 # leading '-' looks like an option flag, ':' is an illegal Windows filename
 # character -- and the CRC-8 catches whatever still gets through.
 # --------------------------------------------------------------------------
@@ -503,12 +502,13 @@ def b41decode(text):
 # the printed link
 #
 # The QR prints a link rather than the bare payload, so a phone camera opens a
-# page that decodes it (opentac.github.io/qr/, docs/javascripts/qr.js) instead
-# of showing a string that has to be carried to a computer.
+# page that decodes it (opentac.github.io/qr/; the decoder is
+# docs/javascripts/qr.js in the OpenTac website repository) instead of showing
+# a string that has to be carried to a computer.
 #
 # QR alphanumeric mode has no '#' or '?', and one character outside it puts the
 # whole code in byte mode, which is far bigger. So the payload rides in the URL
-# PATH, and every character of the link is in alphanumeric mode. That is also
+# path, and every character of the link is in alphanumeric mode. That is also
 # why the scheme and host are uppercase; browsers fold both.
 #
 # Every '/' in the payload is printed as '*'. '*' is in alphanumeric mode and
@@ -517,7 +517,8 @@ def b41decode(text):
 # '*' is not in base41, so the swap is unambiguous in both directions.
 #
 # The path does not exist on the site: GitHub Pages answers it with 404.html,
-# which sends /q/<payload> (any case) on to /qr/#<payload> (overrides/404.html).
+# which sends /q/<payload> (any case) on to /qr/#<payload> (overrides/404.html
+# in the OpenTac website repository).
 # --------------------------------------------------------------------------
 
 LINK_PREFIX = "HTTPS://OPENTAC.GITHUB.IO/Q/"
@@ -537,8 +538,9 @@ def payload_from_text(text):
     """The bare base41 payload from whatever a scanner or a person hands over.
 
     That is either the link (any case, with or without https://, '*' or '/')
-    or the bare payload that boards printed before the link -- and boards too
-    small for it -- carry. Whitespace is dropped anywhere; base41 has none.
+    or the bare payload that boards too small for the link, and boards printed
+    before the link format, carry. Whitespace is dropped anywhere; base41 has
+    none.
     """
     text = "".join(str(text).split()).upper()
     m = _LINK.match(text)
@@ -567,7 +569,7 @@ def to_manifest(core):
     Shaped to drop into anything that already reads manifest.json rather than
     into a new format nobody consumes. Every key the taxel core carries is
     written with the same meaning export_manifest() gives it -- including the
-    `ox`/`oy`/`px`/`py` block, which is PAD-SCAN order there and so is rebuilt
+    `ox`/`oy`/`px`/`py` block, which is pad-scan order there and so is rebuilt
     in pad order here, negative `py` and all, rather than in the geometric
     order this module stores internally.
 
@@ -577,7 +579,7 @@ def to_manifest(core):
     `shear` (the bump grouping).
     """
     tx = taxels(core)
-    # oy is the y of PAD row 0, which the permutation decides
+    # oy is the y of pad row 0, which the permutation decides
     oy = core["y0"] - core["ky"][core["perm"][0]] * core["pitch_y"]
 
     return {
@@ -629,7 +631,7 @@ def manifest_from_scan(payload):
     and case folded up, because base41 is uppercase and phone scanners
     sometimes hand back a trimmed or lowercased string.
     """
-    # base41 contains no whitespace at all, so trimming is now safe as well as
+    # base41 contains no whitespace at all, so trimming is safe as well as
     # convenient -- which is the point of dropping ' ' from the alphabet.
     text = payload_from_text(payload)
     if not text:
@@ -652,8 +654,8 @@ def payload_from_image(path):
     """Read the back-mark QR out of a photograph. Returns the payload text.
 
     Optional by design: OpenCV is ~60 MB and the hosted image builds Gerbers
-    without it, so it is not a backend dependency. Someone at a bench with a
-    photo has it or can pip install it; the server never needs to.
+    without it, so it is not a server dependency. A user reading a board from
+    a photo can install it with pip; the server never needs it.
 
     The board is photographed from the back, where the artwork is printed the
     right way round, so the image is tried as-is first. It is tried mirrored

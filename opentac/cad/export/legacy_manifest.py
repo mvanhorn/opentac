@@ -1,16 +1,16 @@
-"""Recovering a design from a manifest written before the design block existed.
+"""Recovering a design from a manifest that carries no design block.
 
 Boards exported before 2026-09-04 carry a v3 manifest: outline, edge_cuts,
 taxel centres, the taxel footprint and the scan matrix. That describes the
-board that was MADE and nothing about how to make it, so it cannot be
+board that was made and nothing about how to make it, so it cannot be
 re-generated -- and for an already-fabricated board, it should not be.
 
-Re-generating was tried and rejected. On a stored 41x41mm calibration square
-the taxel centres came back bit-exact, but the cut boundary did not: 452
-stored points against 492 fresh ones, because the outline stitching has
-changed since. A case built from the regenerated board would fit a board that
-is very slightly not the one on the bench. The stored `edge_cuts` IS the
-boundary that was manufactured, so the recovery below uses it directly and
+Re-generating is not used. Even where the taxel centres come back unchanged,
+the current outline stitching differs from the one that wrote the manifest,
+so a regenerated cut boundary does not match the stored one point for point.
+A case built from the regenerated board would fit a board that is very
+slightly not the one on the bench. The stored `edge_cuts` is the boundary
+that was manufactured, so the recovery below uses it directly and
 regenerates nothing.
 
 What that buys and what it costs:
@@ -24,9 +24,6 @@ What that buys and what it costs:
           faking them by re-routing would produce copper that does not match
           the board the user is holding. The caller is told this rather than
           handed a plausible-looking board.
-
-Measured over 29 real fabricated designs: bump sheet 29/29, case 29/29
-(24 directly, the other 5 after the ring cleanup below).
 """
 
 import numpy as np
@@ -35,9 +32,8 @@ from shapely.geometry import Point, Polygon
 from opentac.cad.pipeline.types import Params
 
 # The stored ring can carry sub-micron segments that the case builder's mesh
-# boolean chokes on ("Not all meshes are volumes!"): measured on the 20x20
-# p2.0 calibration square, whose 452-point boundary has a 0.000985mm segment.
-# Simplifying at 1um drops it to 401 points and the case builds watertight.
+# boolean rejects ("Not all meshes are volumes!"). Simplifying at 1um removes
+# them, and the case then builds watertight.
 #
 # 1um is three orders of magnitude below PCB fab tolerance (~100um), so this
 # cannot move a manufactured edge in any way that matters -- and the result is
@@ -83,14 +79,14 @@ def _clean_ring(points):
         ring = np.asarray(simple.exterior.coords[:-1], dtype=float)
         if len(ring) < 4:
             return [[float(x), float(y)] for x, y in raw], None
-        # Deviation, measured BOTH ways: no stored vertex may sit far from the
+        # Deviation, measured both ways: no stored vertex may sit far from the
         # new boundary and no new vertex far from the stored one. One way alone
         # would miss a simplification that cuts a corner off entirely.
         #
         # Vertex-to-curve distances rather than shapely's hausdorff_distance:
-        # that returned NaN on some of these real boundaries, and NaN fails
-        # every `>` comparison, so the guard below would have waved the cleanup
-        # through without ever checking it.
+        # that can return NaN on such boundaries, and NaN fails every `>`
+        # comparison, so the guard below would accept the cleanup without
+        # checking it.
         dev = max(_max_vertex_distance(raw, simple.exterior),
                   _max_vertex_distance(ring, poly.exterior))
         if not np.isfinite(dev) or dev > RING_MAX_DEVIATION_MM:
@@ -108,7 +104,7 @@ def _clean_ring(points):
 def _pitch(values, fallback):
     """Taxel pitch along one axis, from the taxel centres themselves.
 
-    NOT from the manifest's px/py: those are indexed by pad order, which is
+    Not from the manifest's px/py: those are indexed by pad order, which is
     deliberately not geometric order, so py can even be negative. The manifest
     says so in its own _readme. The centres are the authority.
     """
@@ -142,7 +138,7 @@ def is_legacy_manifest(data: dict) -> bool:
 def recover(manifest: dict) -> tuple[dict, list[str]]:
     """Build a geometry-only edit_data from a v3 manifest. Returns (edit_data, notes).
 
-    The result is deliberately NOT a full edit_data: it has no nets, no pads
+    The result is deliberately not a full edit_data: it has no nets, no pads
     and no routes, so /export-edited and the route editor cannot run on it.
     /case and /bump-sheet can, which is the point.
     """
@@ -203,7 +199,7 @@ def recover(manifest: dict) -> tuple[dict, list[str]]:
         # Required by the route editor even with no routes to edit: load()
         # resets the tail draft, which converts mm to SVG through this box.
         "preview": _preview_box(final_outline),
-        # The manifest lists ACTIVE taxels only -- a taxel the router dropped
+        # The manifest lists active taxels only -- a taxel the router dropped
         # never appears -- so nothing here is removed.
         "removed_pix": [],
         "layout": {
@@ -221,8 +217,8 @@ def geometry_svg(edit_data: dict) -> str:
 
     Deliberately shows no traces. The routing is not in the file, and drawing
     a plausible guess over a fabricated board would be worse than drawing
-    nothing -- the whole reason this path exists is that the stored board and
-    a re-routed one are not the same board. Class names match
+    nothing -- this path exists because the stored board and a re-routed one
+    are not the same board. Class names match
     export/svg_preview.py so it inherits the app's visual language.
     """
     board = np.asarray(edit_data["final_outline"], dtype=float)

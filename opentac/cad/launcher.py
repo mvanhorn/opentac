@@ -6,7 +6,7 @@ through uv. It is deliberately tiny: pick a free port, start the same FastAPI ap
 the hosted site runs, and open the browser once /health answers. Closing the
 window stops the server.
 
-The hosted demo runs the same thing: opentac cad --host 0.0.0.0 --port 10000 --no-browser
+The hosted server runs the same command: opentac cad --host 0.0.0.0 --port 10000 --no-browser
 """
 
 import socket

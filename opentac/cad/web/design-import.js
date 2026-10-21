@@ -5,14 +5,14 @@
 // contains. A loose design.json or manifest.json works too, for anyone who
 // already unzipped.
 //
-// Two records can be in there (backend/export/design.py writes both), and
-// they mean different things:
+// Two records can be in there (export/design.py writes both), and they mean
+// different things:
 //
-//   design.json    the SAVE FILE — the editor's own state. Restored through
+//   design.json    the save file — the editor's own state. Restored through
 //                  /export-edited, so the board comes back exactly as it was
 //                  downloaded, hand-dragged routes and all, with nothing
 //                  re-routed. Only valid against the pipeline that wrote it.
-//   manifest.json  the RECIPE — the inputs. Re-generated from scratch on
+//   manifest.json  the recipe — the inputs. Re-generated from scratch on
 //                  today's pipeline. Survives a version change; loses hand
 //                  edits.
 //
@@ -47,11 +47,11 @@ async function inflateRaw(bytes) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-// `wanted` is a PREFERENCE ORDER, not a set: the whole directory is indexed
-// first and then resolved against that order. Returning the first archive
-// entry that happened to match instead handed back manifest.json every time,
-// because design.json is appended last — so an exact restore silently
-// degraded into a re-generate and any hand-edited routes were lost.
+// `wanted` is a preference order, not a set: the whole directory is indexed
+// first and then resolved against that order. design.json is appended last,
+// so returning the first matching entry would always give manifest.json,
+// silently turning an exact restore into a re-generate that loses hand-edited
+// routes.
 export async function readZipEntry(buffer, wanted) {
   const view = new DataView(buffer);
   const bytes = new Uint8Array(buffer);
@@ -86,7 +86,7 @@ export async function readZipEntry(buffer, wanted) {
   for (const name of wanted) {
     const e = index.get(name);
     if (!e) continue;
-    // The central directory's name/extra lengths are NOT the local header's —
+    // The central directory's name/extra lengths are not the local header's —
     // the local one carries its own, and they differ in practice. Read them
     // from the local header or the data slice starts in the wrong place.
     if (view.getUint32(e.localOffset, true) !== 0x04034b50) {

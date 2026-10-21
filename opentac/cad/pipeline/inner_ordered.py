@@ -8,7 +8,7 @@ has a lane variable at each via row below its source and at changes in the
 connector channel. Domains certify via clearance, the source stub and a
 rectangular corridor between levels. Adjacent wires reserve disjoint spans.
 
-A gap with K horizontal tracks divides the GLOBAL wire order into blocks of
+A gap with K horizontal tracks divides the global wire order into blocks of
 K. Cross-height inequalities keep neighbouring blocks' vertical legs apart;
 each block needs at most K tracks, regardless of how far its wires move.
 Blocks are never renumbered as rows enter. With no tracks, x cannot change.
@@ -24,7 +24,8 @@ columns and complete side strips, and nest adjacent-group U paths by height.
 The caller checks all complete, quantized paths, stubs, vias and the allowed
 region independently before accepting a bundle. A failed certificate means
 this construction failed, not that the board is physically unroutable; the
-old sweep remains a checked fallback while this mode is experimental.
+sweep (inner_engine.py) remains a checked fallback. Selected with
+OT_INNER_WIRE=ordered (route_inner.py).
 """
 from bisect import bisect_left
 from collections import deque

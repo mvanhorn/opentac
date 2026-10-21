@@ -1,4 +1,5 @@
-"""Inner-layer wiring for 4-layer boards: the straight-line model (PROTOTYPE).
+"""Inner-layer wiring for 4-layer boards: the straight-line model, selected
+with OT_INNER_WIRE=lines or lines-only (route_inner.py).
 
 Same job and the same sweep as inner_engine.py (rows top down, wires keep
 their left-to-right order, every row's choices made jointly and exactly),
@@ -7,20 +8,20 @@ columns joined by sideways steps on tracks between via rows, so a bundle
 crossing the field diagonally comes out as a staircase. Here a wire runs on
 straight lines:
 
-  VERTICAL  down a lane between two via columns;
-  DIAGONAL  along the via lattice's diagonal, one via column per via row:
+  vertical  down a lane between two via columns;
+  diagonal  along the via lattice's diagonal, one via column per via row:
             the steepest line on which several wires fit side by side
             (flatter lattice lines hold one wire per channel and splay a
             bundle; a 2.08 x 2.0 mm grid takes 7 wires per lane, 4 per
             diagonal channel, 1 per knight's line).
 
 Going down from one via row to the next, a wire keeps its line or switches
-to the neighbouring kind, and the BEND sits where the two lines meet --
+to the neighbouring kind, and the bend sits where the two lines meet --
 anywhere in the gap, so a bundle turning together nests its bends by
 itself and a wire right beside a via can still turn towards it. Two more
-moves complete the set: a JOG (vertical, a 45-degree shift, vertical, inside
+moves complete the set: a jog (vertical, a 45-degree shift, vertical, inside
 one gap; the wire in front of the move jogs higher, so a bundle can shift
-over together) and the START of a new wire from its via (45 degrees into a
+over together) and the start of a new wire from its via (45 degrees into a
 lane, or one straight line at any angle to its first crossing).
 
 Each move is checked exactly (segments `a` from other nets' vias, inside
@@ -392,8 +393,8 @@ def sweep_escapes(rows, G, exit_y, exit_ok, pad_xs, B0=0.5, w=1.0):
     places all their moves through the gap below, jointly: the wires
     passing on, the rows starting at r (from one of their vias) and the
     wires that leave (F ends under them: straight down). Wires head for
-    their pads in order, as in the old sweep: a move costs B0 per bend plus
-    w * how far its next crossing is from the wire's pad.
+    their pads in order, as in inner_engine's sweep: a move costs B0 per
+    bend plus w * how far its next crossing is from the wire's pad.
 
     The funnel (computed bottom up) is the set of lanes from which a wire
     going straight down, jogging as it needs, still reaches an exit; a wire

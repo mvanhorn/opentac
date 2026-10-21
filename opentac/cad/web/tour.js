@@ -168,9 +168,9 @@ function positionStep() {
     return;
   }
   target.classList.add("tour-highlight");
-  // Instant, not smooth: an animated scroll wouldn't have finished by the
-  // time the rAF below re-measures getBoundingClientRect(), which raced and
-  // mispositioned the card/spotlight against a still-scrolling target.
+  // Instant, not smooth: an animated scroll would not have finished by the
+  // time the rAF below re-measures getBoundingClientRect(), so the card and
+  // spotlight would be positioned against a still-scrolling target.
   target.scrollIntoView({ behavior: "auto", block: "center" });
   requestAnimationFrame(() => {
     const rect = target.getBoundingClientRect();

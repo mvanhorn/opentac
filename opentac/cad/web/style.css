@@ -386,12 +386,12 @@ details.advanced .params { margin-top: 8px; }
 .tour-card p { margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.5; }
 .tour-card__actions { align-items: center; margin-top: 0; }
 .tour-card__spacer { flex: 1; }
-/* Purely a JS bookkeeping marker (which elements to un-highlight on step
-   change) — the visible highlight itself is the .tour-spotlight cutout, not
-   this class, so it deliberately carries no z-index. Elevating the target
-   element's z-index to "poke through" the dim overlay would put it in the
-   same root stacking context as .tour-overlay and let it cover the tour
-   card/buttons — a real bug caught via end-to-end testing. */
+/* .tour-highlight is purely a JS bookkeeping marker (which elements to
+   un-highlight on step change) — the visible highlight itself is the
+   .tour-spotlight cutout, not this class, so it deliberately has no rule and
+   no z-index. Elevating the target element's z-index to "poke through" the
+   dim overlay would put it in the same root stacking context as .tour-overlay
+   and let it cover the tour card and its buttons. */
 
 .panel {
   background: var(--panel);
@@ -399,10 +399,10 @@ details.advanced .params { margin-top: 8px; }
   border-radius: 8px;
 }
 
-/* Stretched by the grid to the row's full height (see .layout). The old
-   viewport-height cap is gone: it made the panel scroll inside itself and
-   end well above the preview column's bottom edge. overflow-y stays for the
-   case where this column is the taller one. */
+/* Stretched by the grid to the row's full height (see .layout). There is no
+   viewport-height cap: one would make the panel scroll inside itself and end
+   well above the preview column's bottom edge. overflow-y covers the case
+   where this column is the taller one. */
 .controls { padding: 4px 14px 14px; overflow-y: auto; }
 
 .group { padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -574,23 +574,6 @@ button.mode-button.active {
   margin-top: 8px;
 }
 .stl-patch-controls[hidden] { display: none; }
-.dev-example-row[hidden] { display: none; }
-.dev-example-row label {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  color: var(--muted);
-  gap: 3px;
-  flex: 1;
-}
-.dev-example-row select {
-  font: inherit;
-  padding: 5px 7px;
-  border-radius: 5px;
-  border: 1px solid var(--line);
-  background: #0c1116;
-  color: var(--text);
-}
 .stl-patch-controls .hint { flex: 1 1 100%; margin: 0; }
 .stl-patch-controls .check-field {
   display: flex;
@@ -623,12 +606,12 @@ button.mode-button.active {
 /* Workflow order top to bottom: Board Outline, Generate, PCB Preview.
    Flex rather than grid-template-rows, so the panel that should absorb spare
    height says so itself (.view--grow) rather than it depending on sibling
-   position — panels here get added and reordered. */
+   position, so panels can be added and reordered freely. */
 .views { display: flex; flex-direction: column; gap: 14px; min-height: calc(100vh - 90px); }
 .view { display: flex; flex-direction: column; padding: 12px 14px; min-height: 0; }
-/* min-height keeps the 420px floor the old minmax(420px, 1fr) track gave the
-   preview — .pcb-preview itself is min-height:0 so it would otherwise collapse.
-   MUST stay below .view: same specificity, so .view's own `min-height: 0` wins
+/* min-height gives the preview a 420px floor — .pcb-preview itself is
+   min-height:0 so it would otherwise collapse.
+   Must stay below .view: same specificity, so .view's own `min-height: 0` wins
    on order if this rule comes first, and with flex-basis 0 the panel then
    collapses to nothing instead of holding its floor. */
 .view--grow { flex: 1 1 0; min-height: clamp(420px, 58vh, 760px); }
@@ -832,10 +815,11 @@ dl.bump-stats dd { margin: 0; color: var(--text); }
   display: flex; align-items: center; justify-content: center; padding: 8px;
 }
 /* Fit the whole board to the panel, both axes. The generated SVG carries an
-   intrinsic width/height (800x770-ish) alongside its viewBox, so constraining
-   width alone let `height: auto` render it at full height inside a shorter
-   panel: it overflowed, got centre-cropped by the flex centering, and looked
-   zoomed in — with Reset View powerless, since the viewBox was never wrong.
+   intrinsic width/height (about 800x770) alongside its viewBox, so
+   constraining width alone would let `height: auto` render it at full height
+   inside a shorter panel: it would overflow, be centre-cropped by the flex
+   centering and look zoomed in, with Reset View powerless since the viewBox
+   itself is correct.
    Capping both axes with auto sizing keeps the aspect ratio and scales to
    whichever constraint binds. Zoomed-in states still scroll via .pcb-preview's
    own overflow. */
@@ -879,9 +863,9 @@ dl.bump-stats dd { margin: 0; color: var(--text); }
   flex: 1; min-height: 240px; position: relative; border-radius: 6px; overflow: hidden;
   background: #0c1116; border: 1px solid var(--line);
 }
-/* Sized in vh so it grows with the window instead of staying at a fixed 240px,
-   which was too small to pick faces in. Capped so it can't push the parameters
-   below it off-screen on a tall display, and floored for short ones. */
+/* Sized in vh so it grows with the window: a fixed small height is too small
+   to pick faces in. Capped so it cannot push the parameters below it
+   off-screen on a tall display, and floored for short ones. */
 .stl-container--sidebar {
   height: clamp(320px, 58vh, 680px);
   margin-top: 8px;
@@ -951,7 +935,7 @@ dl.bump-stats dd { margin: 0; color: var(--text); }
 
 
 /* Two-piece case panel. Reuses the bump-panel styling; only the top-piece
-   chooser and the preview selector are new. */
+   chooser and the preview selector have rules of their own. */
 .case-top-choice {
   border: 1px solid var(--line, #ddd);
   border-radius: 6px;

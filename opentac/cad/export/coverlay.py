@@ -3,10 +3,10 @@
 On a flex board the solder mask is a polyimide coverlay film with openings cut
 where copper is exposed. JLCPCB's coverlay process needs at least
 COVERLAY_WEB_MM of film between two openings, and suggests openings
-COVERLAY_MARGIN_MM larger than the copper they expose. Per-pad openings broke
-the first rule twice: a taxel's electrode fingers are the electrode gap
-(0.2 mm) apart, and the connector's gold fingers are 0.3 mm wide at 0.5 mm
-pitch, so the film between openings was 0.2 mm.
+COVERLAY_MARGIN_MM larger than the copper they expose. Per-pad openings would
+break the first rule in two places: a taxel's electrode fingers are the
+electrode gap (0.2 mm) apart, and the connector's gold fingers are 0.3 mm wide
+at 0.5 mm pitch, so the film between openings would be 0.2 mm.
 
 The export therefore opens:
 
@@ -22,9 +22,9 @@ The export therefore opens:
   gap) gives m < 0: the opening stops |m| inside the electrodes' outer edge,
   and the export says so (TaxelOpening.note). The wiring between taxels stays
   covered.
-- on the bottom, one opening across the connector's gold fingers, the same
-  extent the per-finger openings had. Nothing else: the row vias are covered on
-  the bottom.
+- on the bottom, one opening across the connector's gold fingers, from the
+  first finger's outer edge to the last's. Nothing else: the row vias are
+  covered on the bottom.
 
 kicad_pcb.py / kicad_footprint.py draw these as filled shapes on F.Mask and
 B.Mask (the pads themselves carry no mask layer), and gerber.py, the

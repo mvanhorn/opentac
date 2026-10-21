@@ -64,9 +64,9 @@ def _check_taxels(col_routes: list[Route], taxels: TaxelCopper, need: float) -> 
     """F.Cu wires against the taxels' combs: a column wire passing a taxel
     must clear its copper like any other copper (on F.Cu both electrodes are
     combs, so grazing one shorts a column to a row). A wire's own column's
-    taxels are skipped — it lands on them by design. Measured: route
-    smoothing let a column cut a taxel's corner at 0.025-0.05 mm that the
-    wire-to-wire check never saw; only KiCad did."""
+    taxels are skipped — it lands on them by design. Without this check, a
+    smoothed column wire can cut a taxel's corner closer than the clearance,
+    which the wire-to-wire check does not see."""
     from shapely.strtree import STRtree
     if not taxels.items or not col_routes:
         return []
@@ -106,8 +106,8 @@ def _check_layer(routes: list[Route], G: float, layer_name: str) -> list[DrcViol
     Exact-result bounding-box prefilters at the track and segment level: a
     pair whose boxes are separated by >= G cannot come within G, so skipping
     it changes nothing. Without them this loop is O(tracks^2 * segments^2)
-    in pure Python and dominated fixed-mode generates (profiled: 25s of a
-    48s request went to the attempt-scoring calls into this function).
+    in pure Python and dominates fixed-mode generates, which call it to score
+    every routing attempt.
     """
     violations = []
     N = len(routes)
@@ -172,13 +172,11 @@ def _check_board_edge(
     that stretch's worst point. Distance is the centerline's distance to the
     edge, negative when the centerline is outside the board.
 
-    This used to sample points along each segment, skip every sample outside
-    the board, and keep one result per segment. Copper that left the board was
-    then never measured, and a harmless near-miss at the connector end of a
-    long segment stood in for the real fault further along it — which
-    _drop_connector_zone_edge_flags then discarded. A column wire running
-    straight through the eight preset's waist, 0.25mm outside the outline,
-    reported DRC 0 that way.
+    Measuring whole stretches, rather than sampling points and keeping one
+    result per segment, means copper outside the board is always measured,
+    and a harmless near-miss at the connector end of a long segment (which
+    main._drop_connector_zone_edge_flags discards) cannot stand in for a real
+    fault further along it.
     """
     violations = []
     outline_poly = board_poly if board_poly is not None else Polygon(outline_xy)

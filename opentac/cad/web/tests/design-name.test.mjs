@@ -1,4 +1,4 @@
-// Tests for design-name.js. Run with:  node frontend/tests/design-name.test.mjs
+// Tests for design-name.js. Run with:  node opentac/cad/web/tests/design-name.test.mjs
 //
 // The module touches `window` and `document` at import time (it binds the input
 // field and listens for the mode-change event), so stub just enough of both for
@@ -91,7 +91,7 @@ const typed = dn.downloadName("", "zip");
 dn.clearSource();                       // no-op path: source already cleared
 eq(dn.downloadName("", "zip"), typed, "clearSource does not discard a typed name mid-design");
 
-// A NEW source is a new design, so it does take over.
+// A new source is a new design, so it does take over.
 dn.setSource("other_part.stl");
 eq(dn.downloadName("", "zip"), "other_part.zip", "loading a new source resets the name");
 eq(input.value, "other_part", "and the field follows");

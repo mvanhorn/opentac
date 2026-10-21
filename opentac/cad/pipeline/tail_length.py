@@ -1,8 +1,8 @@
 """Automatic cable tail length (Params.cable_length_auto).
 
-A tail of a fixed 12 mm was too short for most sensors: the printed case, which
-wraps the board and lets the tail out through a slot, swallowed part of the
-connector body or left it no flex to plug in with (23 of the 31 example designs).
+A fixed 12 mm tail is too short for most sensors: the printed case, which wraps
+the board and lets the tail out through a slot, would swallow part of the
+connector body or leave it no flex to plug in with.
 
 The board is laid out and routed with the minimum tail, AUTO_TAIL_MIN_MM, so the
 taxels and wires are exactly those of a 12 mm board. Only then is the tail made
@@ -129,8 +129,8 @@ def stretch_routed_tail(layout, routes, params, extra_mm: float) -> None:
     uses: link tracks between split runs start in the sensor field) gets a
     straight run of `extra_mm` from its moved pad back to where its pad was, so
     the rest of the wire is untouched. The runs are as far apart as the pads,
-    in the tail beyond the old pad row where no other copper is, so they keep
-    every clearance the pads themselves keep."""
+    in the stretch of tail the pads moved through, where no other copper is, so
+    they keep every clearance the pads themselves keep."""
     if extra_mm <= 1e-9:
         return
     geom = _move_pads(layout, routes, params, extra_mm)
@@ -168,8 +168,8 @@ def trim_routed_tail(layout, routes, params, cut_mm: float) -> None:
 
     The connector, its landing and its pad row move `cut_mm` back along the
     tail, every pad wire's end sliding back along its own straight run into its
-    pad. The board loses the old tail (and whatever was grown around the wires
-    in it) and gets the routed tail at the new length."""
+    pad. The board loses the tail it had (and whatever was grown around the
+    wires in it) and gets the routed tail at the new length."""
     if cut_mm <= 1e-9:
         return
     if cut_mm > tail_trim_room(layout, routes) + 1e-9:
@@ -179,7 +179,7 @@ def trim_routed_tail(layout, routes, params, cut_mm: float) -> None:
     geom = _move_pads(layout, routes, params, -cut_mm)
     cable = _routed_tail(geom)
     layout.cable_poly = cable
-    # everything past the cable edge across the old tail and a little beside it
+    # everything past the cable edge across the replaced tail and a little beside it
     # (the containment grown round its outermost wires)
     mid, t_hat, n_out = geom["mid"], geom["t_hat"], geom["n_out"]
     half = wide / 2.0 + 2.0

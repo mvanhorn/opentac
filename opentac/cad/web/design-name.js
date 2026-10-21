@@ -1,9 +1,8 @@
 // One place that decides what a downloaded file is called.
 //
-// Every download used to be a hardcoded constant -- tactile_pcb.zip,
-// case_top.stl, bump_sheet.stl -- so two designs in a row landed in Downloads as
-// "tactile_pcb.zip" and "tactile_pcb (1).zip", and a folder of them told you
-// nothing about which was which.
+// With fixed names (tactile_pcb.zip, case_top.stl, bump_sheet.stl), two designs
+// in a row would land in Downloads as "tactile_pcb.zip" and
+// "tactile_pcb (1).zip", and a folder of them would not identify which was which.
 //
 // The name comes from the best source available, in this order:
 //
@@ -101,7 +100,7 @@ export function clearSource() {
  *
  * The label is stroked into the Gerbers at generate time, so a name typed
  * afterwards changes the ZIP's filename but not the copper. Rather than
- * silently shipping a board whose silkscreen disagrees with its filename, the
+ * silently producing a board whose silkscreen disagrees with its filename, the
  * field says so and points at the fix (regenerate).
  */
 export function markPrinted(stem) {
@@ -138,9 +137,8 @@ export function downloadName(part, ext) {
  *   zipName({ edited: true })   -> fingertip_wrap_edited.zip
  *
  * "edited" means the board was changed by hand in the PCB preview after
- * Generate or Open, so the ZIP is not the one Generate made. It used to be added
- * to every download, edited or not. A name that already ends in _edited (a ZIP
- * reopened and edited again) does not get a second one.
+ * Generate or Open, so the ZIP is not the one Generate made. A name that already
+ * ends in _edited (a ZIP reopened and edited again) does not get a second one.
  */
 export function zipName({ edited = false } = {}) {
   const plain = downloadName("", "zip");
@@ -153,8 +151,8 @@ export function zipName({ edited = false } = {}) {
 function syncInput() {
   if (!inputEl) return;
   // Only overwrite what is on screen while the user has not taken it over.
-  // Clobbering a name someone just typed because an unrelated regenerate fired
-  // is the one behaviour that would make this feature annoying.
+  // Otherwise an unrelated regenerate would overwrite a name the user just
+  // typed.
   if (!userStem) inputEl.value = derivedStem();
   inputEl.placeholder = derivedStem();
   syncHint();
@@ -172,7 +170,7 @@ export function bindInput(el) {
   });
   el.addEventListener("blur", () => {
     // Show what will actually be used, including any sanitising, so the name in
-    // the box is never a lie about the name on disk.
+    // the box always matches the name on disk.
     el.value = designStem();
   });
 }

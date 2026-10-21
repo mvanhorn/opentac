@@ -70,8 +70,9 @@ def generate_svg(
     # Background
     lines.append(f'<rect x="0" y="0" width="{width:.2f}" height="{height:.2f}" fill="white"/>')
 
-    # Board outline. Expanded preserve mode shows the final board edge and the
-    # original sensor outline separately so users can see the added route area.
+    # Board outline. When a routing margin was added around the drawn outline
+    # (routing_margin_applied_mm > 0), the final board edge and the drawn
+    # sensor outline are both shown, with the added routing area shaded.
     final_outline = layout.final_outline_xy if layout.final_outline_xy is not None else outline_xy
     if layout.routing_margin_applied_mm > 0:
         final_pts_fill = ' '.join(f'{tx(x):.3f},{ty(y):.3f}' for x, y in final_outline)

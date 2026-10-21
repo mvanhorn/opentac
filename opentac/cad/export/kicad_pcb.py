@@ -1,7 +1,5 @@
 """KiCad .kicad_pcb board export."""
 
-import os
-import re
 import uuid
 import numpy as np
 
@@ -32,9 +30,8 @@ def generate_kicad_pcb(
     """Generate complete KiCad .kicad_pcb file content as string.
 
     `manifest_json` is what export_manifest() produced for this same board. It
-    is optional so every existing caller and test keeps working; when it is
-    supplied the back silkscreen carries the taxel-core QR and the registration
-    grid (see export/silk_backmark.py).
+    is optional; when it is supplied the back silkscreen carries the taxel-core
+    QR and the registration grid (see export/silk_backmark.py).
     """
     from opentac.cad.pipeline.geometry import tail_geometry
 
@@ -146,16 +143,14 @@ def generate_kicad_pcb(
         lines.append(conn_text)
 
     # Board outline (Edge.Cuts). Whenever the layout carries a final board
-    # polygon, export THAT, stitched to the connector's open edge — for
-    # every board mode. Fixed mode used to fall through to the legacy
-    # hand-stitched branch below, whose tail walls stop at cable_length
-    # while the connector outline starts at the pad row
-    # (CONNECTOR_BODY_ABOVE_MM deeper): a 2.75mm open gap per side in the
-    # exported Edge.Cuts, gerber-confirmed on the fingertip wrap band. The
-    # final outline already reaches the full connector-body envelope
+    # polygon, export that, stitched to the connector's open edge, in every
+    # board mode. The final outline reaches the full connector-body envelope
     # (tail_geometry's total_length), so the stitched cut lands exactly on
-    # the connector's open endpoints, same as expand mode always did. The
-    # legacy branch remains only for layouts with no final outline at all.
+    # the connector's open endpoints. The hand-stitched fallback below is not
+    # used when a final outline exists: its tail walls stop at cable_length
+    # while the connector outline starts at the pad row
+    # (CONNECTOR_BODY_ABOVE_MM deeper), which leaves an open gap on each side
+    # of the Edge.Cuts. It runs only for layouts with no final outline.
     if layout.final_outline_xy is not None:
         outline_segments = stitched_outline_segments(layout, outline_xy, params, connector_dir)
         if outline_segments is None:
@@ -409,7 +404,7 @@ def _connector_custom_pad_line(pad, pad_num, net_text, drill):
 
     drill_text = f' (drill {fmt(drill)})' if drill else ''
     # The pad's own copper layers from the connector footprint: contacts are
-    # on the BOTTOM copper (Molex 505110 is bottom-contact). Its mask opening
+    # on the bottom copper (Molex 505110 is bottom-contact). Its mask opening
     # is not the pad's own: one B.Mask opening spans the whole finger row
     # (_build_connector_resolved), and the top stays covered under the
     # stiffener.
@@ -455,16 +450,13 @@ def _build_connector_resolved(layout, outline_xy, params, conn_dir, pad_to_net, 
     # already-resolved world-space drill/pad center (pad["drill_center"] /
     # pad["center"], both computed via connector_geometry.local_to_world —
     # the same reference transform the Gerber exporter uses directly).
-    # A native KiCad "(at x y rot)" + local drill (offset ox oy) shortcut
-    # used to be emitted here for axis-aligned tails, on the theory that
-    # local_to_world's rotation could be reproduced by a plain KiCad pad
-    # rotation. That relies on exactly matching KiCad's own pad-rotation
-    # handedness convention, which isn't independently verified anywhere in
-    # this codebase — asymmetric features (like this connector family's
-    # off-center drill offset, "(offset 0 -1.5)") are exactly what would
-    # silently come out mirrored if that assumption were ever wrong. Always
-    # emitting the resolved-coordinate custom polygon instead removes that
-    # risk entirely by construction, matching the Gerber path byte-for-byte.
+    # A native KiCad "(at x y rot)" pad with a local drill (offset ox oy) is
+    # not used, even for axis-aligned tails: it would rely on KiCad's own
+    # pad-rotation handedness matching local_to_world, which nothing in this
+    # codebase verifies, and asymmetric features (like this connector family's
+    # off-center drill offset, "(offset 0 -1.5)") would silently come out
+    # mirrored if it did not. The resolved-coordinate custom polygon removes
+    # that risk by construction and matches the Gerber path exactly.
     for pad in sorted(model["pads"], key=lambda p: p["pad_num"]):
         pad_num = int(pad["pad_num"])
         net_name = pad_to_net.get(pad_num, pad_to_net.get(str(pad_num)))
@@ -537,78 +529,6 @@ def _build_connector_resolved(layout, outline_xy, params, conn_dir, pad_to_net, 
     return '\n'.join(lines)
 
 
-def _build_connector(conn_dir, conn_pos, conn_at, conn_rot, pad_to_net, net_map, reverse_pad_order=False):
-    """Load the exact connector footprint and place it at the tail end."""
-    mod_file = os.path.join(conn_dir, f"{conn_pos}_pos_0.5mm_FPC.kicad_mod")
-    if not os.path.exists(mod_file):
-        return None
-
-    with open(mod_file, 'r') as f:
-        text = f.read()
-
-    src_lines = text.strip().split('\n')
-    while src_lines and not src_lines[-1].strip():
-        src_lines.pop()
-
-    out = []
-    out.append(f'  (footprint "{conn_pos}_pos_0.5mm_FPC"')
-
-    added_instance = False
-    in_pad = False
-    pad_paren_depth = 0
-
-    for li in range(1, len(src_lines)):
-        L = src_lines[li]
-        L_trim = L.strip()
-
-        if li == len(src_lines) - 1 and L_trim == ')':
-            continue
-
-        if not added_instance and '(layer "F.Cu")' in L_trim:
-            out.append(L)
-            out.append(f'  \t(tstamp "{make_uuid()}")')
-            out.append(f'  \t(at {fmt(conn_at[0])} {fmt(conn_at[1])} {fmt(conn_rot)})')
-            added_instance = True
-            continue
-
-        if '(property "Reference"' in L_trim:
-            L = L.replace('"REF**"', '"J1"')
-
-        # Detect pad opening
-        pad_match = re.search(r'^\(pad "(\d+)"', L_trim)
-        if pad_match:
-            in_pad = True
-            pad_paren_depth = L_trim.count('(') - L_trim.count(')')
-
-            pad_num = int(pad_match.group(1))
-            logical_pad_num = int(conn_pos) + 1 - pad_num if reverse_pad_order else pad_num
-            if logical_pad_num in pad_to_net:
-                net_name = pad_to_net[logical_pad_num]
-                if net_name in net_map:
-                    net_id = net_map[net_name]
-                    L = re.sub(
-                        r'(\(pad "\d+"\s+\w+\s+\w+)',
-                        rf'\1\n\t  (net {net_id} "{net_name}")',
-                        L, count=1
-                    )
-
-        if in_pad and not pad_match:
-            pad_paren_depth += L_trim.count('(') - L_trim.count(')')
-            if reverse_pad_order:
-                L = re.sub(r'\(offset\s+0\s+-1\.5\)', '(offset 0 1.5)', L)
-
-            if pad_paren_depth <= 0:
-                in_pad = False
-
-        if not L_trim:
-            continue
-
-        out.append(f'  {L}')
-
-    out.append('  )')
-    return '\n'.join(out)
-
-
 def kicad_project_files(params) -> dict[str, str]:
     """board.kicad_pro and board.kicad_dru for the exported board.
 
@@ -663,8 +583,8 @@ def kicad_project_files(params) -> dict[str, str]:
         # Inside a taxel the row and column electrodes are the design's
         # electrode gap apart (finger to finger) and center_clear apart (finger
         # tip to the other spine or the row via); either can be tighter than the
-        # routing clearance (the calibration set goes down to 0.1 mm). Everything
-        # else keeps the net class's routing clearance.
+        # routing clearance. Everything else keeps the net class's routing
+        # clearance.
         "# A taxel's two electrodes: the electrode gap between fingers, the\n"
         "# centre clearance at the finger tips.\n"
         "(rule \"Taxel electrode gap\"\n"

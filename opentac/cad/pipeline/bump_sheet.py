@@ -78,10 +78,9 @@ class BumpSheetResult:
 # Outlines that came from an STL unfold carry duplicate/zero-length edges, and
 # buffering them keeps those. Extruding such a polygon yields degenerate
 # triangles and a mesh that is not a closed volume — which makes the whole
-# boolean union bail out. Measured on the Yubi finger pad: min edge length
-# 0.000000mm over 1038 points, extrude -> is_volume False; simplifying at 1um
-# (well under any printer's resolution) fixes it and more than halves the
-# triangle count. Every polygon is passed through this before extrusion.
+# boolean union bail out. Simplifying at 1um (well under any printer's
+# resolution) removes those edges and gives a closed volume. Every polygon is
+# passed through this before extrusion.
 CLEAN_TOL_MM = 1e-3
 
 
@@ -116,7 +115,7 @@ def sensor_body_polygon(final_outline_xy, cable_y: float) -> Polygon:
     """The manufactured board with the cable tail cut off.
 
     The tail carries no taxels and the user does not want it covered, so the
-    sheet stops at the cable edge. Clipping the FINAL outline (not the drawn
+    sheet stops at the cable edge. Clipping the final outline (not the drawn
     one) matters: the board that exists is the grown one, and its sensor-side
     boundary is what the skirt has to wrap.
     """
@@ -125,15 +124,15 @@ def sensor_body_polygon(final_outline_xy, cable_y: float) -> Polygon:
 
 
 def bump_centers_from_taxels(placements_xy, active_idx, pitch_x, pitch_y):
-    """One bump per 2x2 block that contains ANY taxel.
+    """One bump per 2x2 block that contains any taxel.
 
     A block the board outline cut short still gets a full-size bump, placed
     where the complete block would have been. Part of that bump then overhangs
     the space the missing taxels would have occupied, which is intended: the
-    taxels that ARE present still sit under bump material and still see the
+    taxels that are present still sit under bump material and still see the
     asymmetric load when it tips, so they keep resolving shear. Dropping the
-    bump instead left whole strips along every irregular edge reading pressure
-    only — on the Yubi pad that was 16 of 26 blocks.
+    bump instead would leave whole strips along every irregular edge reading
+    pressure only.
 
     Row/column indices are derived from position rather than taken from the
     layout's net ordering: pad order is deliberately not geometric order (the
@@ -156,7 +155,7 @@ def bump_centers_from_taxels(placements_xy, active_idx, pitch_x, pitch_y):
 
     centers, partial = [], 0
     for (gr, gc), n in sorted(counts.items()):
-        # The block's LATTICE centre, not the mean of whichever taxels happen
+        # The block's lattice centre, not the mean of whichever taxels happen
         # to be present: averaging would drag a partial block's bump sideways
         # onto its surviving taxels, so it would no longer straddle them and
         # could not tip against them. It also keeps every centre exactly on one
@@ -171,28 +170,17 @@ def bump_centers_from_taxels(placements_xy, active_idx, pitch_x, pitch_y):
 def bump_index_per_point(points_xy, centers, pitch_x, pitch_y):
     """Which bump each point sits under: an index into `centers`, or -1.
 
-    The rule is the TILE, not raw distance. A bump owns the 2x2 box around its
-    centre — literally the `box(cx +- pitch_x, cy +- pitch_y)` that
-    `_slit_geometry` cuts its tile from — so a taxel is under a bump exactly
-    when it falls inside that box, and where two tiles overlap the nearer
-    centre wins. They do overlap on the "paired" anchor lattice, whose
-    inter-block gap is deliberately narrower than the tile.
+    The rule is the tile, not raw distance. A bump owns the 2x2 box around its
+    centre — the `box(cx +- pitch_x, cy +- pitch_y)` that `_slit_geometry`
+    cuts its tile from — so a point is under a bump exactly when it falls
+    inside that box, and where two tiles overlap the nearer centre wins. -1 is
+    returned for a point outside every tile.
 
-    -1 happens only when the centres come from ANCHOR CUTOUTS, and then it is
-    routine rather than exotic. 2x2 blocks cannot pair an odd number of taxel
-    lines; here that leftover line gets no cutout (`_pair_midpoints` emits
-    midpoints of pairs only) and so no bump. Measured exact over eight boards:
-    `bumpless = (cols odd ? rows : 0) + (rows odd ? cols : 0) - (both odd ? 1
-    : 0)`. A cutout dropped for hanging over the board edge orphans its block
-    the same way.
-
-    Centres derived from the taxel grid never orphan anything: an odd line
-    forms its own partial block there and keeps a full-size bump, which is
-    invariant 2 of this module. The anchor path not honouring it is a known
-    gap — see NOTES.md, "Manifest `shear` block".
-
-    Either way those taxels read pressure alone, and nothing downstream could
-    tell them apart from the taxels that do resolve shear. This is what says so.
+    With centres from `bump_centers_from_taxels`, every taxel they were
+    derived from lies inside its own block's tile: an odd line of taxels forms
+    its own partial block and keeps a full-size bump. A point mapped to -1
+    reads pressure only, and the index is what lets a consumer tell it apart
+    from the taxels that resolve shear.
     """
     pts = np.asarray(points_xy, dtype=float).reshape(-1, 2)
     C = np.asarray(centers, dtype=float).reshape(-1, 2)
@@ -200,9 +188,8 @@ def bump_index_per_point(points_xy, centers, pitch_x, pitch_y):
         return [-1] * len(pts)
     dx = pts[:, None, 0] - C[None, :, 0]
     dy = pts[:, None, 1] - C[None, :, 1]
-    # 1e-6 so a taxel sitting exactly on a tile edge (which the uniform
-    # lattice puts it nowhere near, but the paired one can) is not rejected by
-    # float noise.
+    # 1e-6 so a point sitting exactly on a tile edge is not rejected by float
+    # noise.
     inside = (np.abs(dx) <= pitch_x + 1e-6) & (np.abs(dy) <= pitch_y + 1e-6)
     d2 = np.where(inside, dx * dx + dy * dy, np.inf)
     best = np.argmin(d2, axis=1)
@@ -210,7 +197,7 @@ def bump_index_per_point(points_xy, centers, pitch_x, pitch_y):
 
 
 def _frustum(cx, cy, z0, height, rb, rt, segments):
-    """Watertight ELLIPTICAL frustum; `rb`/`rt` are (rx, ry) at base and top.
+    """Watertight elliptical frustum; `rb`/`rt` are (rx, ry) at base and top.
 
     Elliptical rather than circular because taxels are not necessarily square:
     the bump is sized from its own 2x2 block, so a 4x2mm taxel grid gets a bump
@@ -274,20 +261,18 @@ def _slit_geometry(recess_poly, centers, pitch_x, pitch_y, p: BumpParams,
         cuts.append(box(minx - 1, y - half, maxx + 1, y + half))
     grid = unary_union(cuts).intersection(recess_poly) if cuts else None
 
-    # The OUTER edge of the tile field, not the board's edge.
+    # The outer edge of the tile field, not the board's edge.
     #
-    # Cutting at the board edge instead left every perimeter bump welded to the
-    # margin of sheet between the outermost tile and the board: measured 7.3%
-    # of an outward-facing tile edge actually cut, against 82% for edges facing
-    # another bump, so border bumps barely moved independently at all. Slitting
-    # around the tile field gives every bump the same 2x2 tile regardless of
-    # where it sits, and the leftover margin merges into the rigid frame, which
-    # is what it should be doing anyway.
+    # Cutting at the board edge instead would leave every perimeter bump welded
+    # to the margin of sheet between the outermost tile and the board, so
+    # border bumps would barely move independently. Slitting around the tile
+    # field gives every bump the same 2x2 tile regardless of where it sits, and
+    # the leftover margin merges into the rigid frame.
     #
     # Clipping the field to the recess before taking its boundary handles the
     # other case in the same expression: where the tile field runs past the
-    # board edge, the clipped boundary follows the board instead, which is the
-    # old behaviour exactly where it was the right one.
+    # board edge, the clipped boundary follows the board edge, which is correct
+    # there.
     field = unary_union([box(cx - pitch_x, cy - pitch_y, cx + pitch_x, cy + pitch_y)
                          for cx, cy in centers]).intersection(recess_poly)
     ring = field.boundary.buffer(half) if not field.is_empty else None
@@ -315,10 +300,10 @@ def _slit_geometry(recess_poly, centers, pitch_x, pitch_y, p: BumpParams,
             for dx in off_x:
                 grid_tabs.append(box(x + dx - tw, y - half - 0.1, x + dx + tw, y + half + 0.1))
 
-    # Frame tabs, walked along the REAL boundary rather than the bounding box.
-    # Placing them on the bbox only works for a rectangular board: on the Yubi
-    # pad (a long tapered outline) not one bbox tab touched the boundary, every
-    # border tile was cut free, and the sheet came apart into 11 pieces.
+    # Frame tabs, walked along the real boundary rather than the bounding box.
+    # Placing them on the bbox only works for a rectangular board: on a tapered
+    # outline the bbox tabs can miss the boundary entirely, every border tile
+    # is cut free, and the sheet comes apart.
     # Every ring of the tile field is walked, holes included, so a tile beside a
     # gap in the array is held on too.
     ring_tabs = []
@@ -336,9 +321,9 @@ def _slit_geometry(recess_poly, centers, pitch_x, pitch_y, p: BumpParams,
                                  .buffer(half, join_style=2))   # span the slit either side
 
     # Each tab group is subtracted only from the cut it belongs to. Subtracting
-    # one merged tab set from one merged slit set let a frame tab plug the END
-    # of a grid cut, which is precisely how a perimeter tile ends up still
-    # attached on the side that was supposed to be cut.
+    # one merged tab set from one merged slit set would let a frame tab plug the
+    # end of a grid cut, leaving a perimeter tile still attached on the side
+    # that was supposed to be cut.
     parts = []
     if grid is not None and not grid.is_empty:
         parts.append(grid.difference(unary_union(grid_tabs)) if grid_tabs else grid)
@@ -355,12 +340,12 @@ def build_bump_sheet(final_outline_xy, cable_y, placements_xy, active_idx,
     warnings = []
 
     body = sensor_body_polygon(final_outline_xy, cable_y)
-    # Both the pocket and the sheet stop dead at the cable edge, so the recess
-    # runs right out to it. Buffering without re-clipping wrapped a skirt wall
-    # a full skirt-width + tolerance thick across that edge — directly in the
+    # Both the pocket and the sheet stop at the cable edge, so the recess runs
+    # right out to it. Buffering without re-clipping would wrap a skirt wall a
+    # full skirt-width + tolerance thick across that edge — directly in the
     # path of the tail and connector, which have to leave the part. Ending the
-    # sheet there instead leaves the frame a U, open at the cable, and the
-    # board slides in from that side rather than having to be stretched over.
+    # sheet there leaves the frame a U, open at the cable, and the board slides
+    # in from that side rather than having to be stretched over.
     recess = _above_cable(_largest_polygon(body.buffer(p.recess_tolerance_mm)), cable_y)
     sheet_2d = _above_cable(_largest_polygon(recess.buffer(p.skirt_width_mm)), cable_y)
 
@@ -375,7 +360,7 @@ def build_bump_sheet(final_outline_xy, cable_y, placements_xy, active_idx,
     base_dia_y = p.bump_base_frac * 2.0 * pitch_y
     top_dia_x = p.bump_top_ratio * base_dia_x
     top_dia_y = p.bump_top_ratio * base_dia_y
-    # These two are user-facing now, so an unusable value has to say why rather
+    # These two are user-settable, so an unusable value has to say why rather
     # than quietly producing a sheet that looks fine and prints wrong.
     if len(centers) > 1 and p.bump_base_frac >= 1.0:
         warnings.append(
@@ -397,14 +382,14 @@ def build_bump_sheet(final_outline_xy, cable_y, placements_xy, active_idx,
 
     # Sheet layer, slit into one tile per bump.
     slits = _slit_geometry(recess, centers, pitch_x, pitch_y, p, open_edge_y=cable_y)
-    # The sheet layer is cut by SUBTRACTING solid slits from a plain slab,
+    # The sheet layer is cut by subtracting solid slits from a plain slab,
     # rather than triangulating a polygon that already has the slits as holes.
-    # That polygon has 30+ interior rings which pinch against each other and
+    # That polygon has many interior rings which pinch against each other and
     # against the outer boundary, and it extrudes to a mesh that is not a
-    # closed volume -- so the sliver filter threw away the entire sheet and
-    # left a frame with free-floating bumps (seen as "50 bumps -> 51 bodies").
-    # Extruding a simple outline and letting the boolean engine do the cutting
-    # avoids the whole class of problem.
+    # closed volume -- so the sliver filter would discard the entire sheet and
+    # leave a frame with free-floating bumps. Extruding a simple outline and
+    # letting the boolean engine do the cutting avoids the whole class of
+    # problem.
     slab = trimesh.creation.extrude_polygon(_clean(sheet_2d), height=p.sheet_thickness_mm)
     slab.apply_translation((0, 0, recess_top))
     if slits is not None and not slits.is_empty:
@@ -429,10 +414,10 @@ def build_bump_sheet(final_outline_xy, cable_y, placements_xy, active_idx,
                                 "so bumps will not be mechanically decoupled.")
     parts.append(slab)
 
-    # Each bump gets a short plug of its own base radius driven DOWN into the
+    # Each bump gets a short plug of its own base radius driven down into the
     # sheet before the frustum starts. Sitting a bump exactly on the sheet's
     # top plane makes the two solids touch over zero volume, and the boolean
-    # then keeps them apart: a 50-bump board came out as 51 separate bodies.
+    # then keeps them apart as separate bodies.
     # The plug is buried inside the sheet, so the exposed bump profile is still
     # exactly base -> top over bump_height.
     plug = min(0.3, p.sheet_thickness_mm * 0.5)
@@ -457,20 +442,19 @@ def build_bump_sheet(final_outline_xy, cable_y, placements_xy, active_idx,
     mesh.update_faces(mesh.nondegenerate_faces())
     if not mesh.is_watertight:
         # The union can leave a few single-face edges where many coplanar
-        # pieces meet — 3 out of 11097 on the Yubi pad. Filling them closes the
-        # solid with the volume unchanged to the decimal, so it is a crack in
-        # the surface, not a missing chunk. Only report if it survives.
+        # pieces meet. Filling them normally closes the solid without changing
+        # its volume (checked below), so it is a crack in the surface, not a
+        # missing chunk. Only report if it survives.
         before = float(mesh.volume)
         try:
             mesh.fill_holes()
         except Exception as exc:
             # Repair is an optimisation, never a requirement: the caller still
-            # gets a usable solid with a warning. Letting this raise turned a
-            # cosmetic crack into a failed request — trimesh reaches for
-            # networkx here, and only here, so an environment missing it broke
-            # exactly the boards that needed repair while every clean board
-            # worked. The dependency is pinned now; this keeps the next missing
-            # optional dep from taking the whole feature down with it.
+            # gets a usable solid with a warning. trimesh uses networkx here,
+            # and only here, so a missing optional dependency would otherwise
+            # fail exactly the boards that need repair while every clean board
+            # works; catching it keeps a cosmetic crack from failing the
+            # request.
             warnings.append(f"Could not repair a hairline crack ({exc}); "
                             "the solid is usable but should be inspected.")
         if not mesh.is_watertight:

@@ -1,9 +1,9 @@
 """Inner-layer rows for 4-layer boards: the hug router, inside the field.
 
-route_hug.py routes every wire OUTSIDE the sensor field: each hugs the union of
+route_hug.py routes every wire outside the sensor field: each hugs the union of
 the field and the wires laid before it, innermost first, so the wires of a
-face nest with no search. Inner-layer copper has to stay UNDER the taxels, so
-here the same walk runs INSIDE: a wire is a stretch of the boundary of the
+face nest with no search. Inner-layer copper has to stay under the taxels, so
+here the same walk runs inside: a wire is a stretch of the boundary of the
 free space — the taxel cells (inset from a fixed board's edge), less every
 foreign via's keep-out disc, less the wires already laid on the layer, less
 the terminal stubs of the rows still to come.
@@ -22,7 +22,10 @@ Everything is decided by one contour — the field's, cut at the exit: spans,
 routing order, side. Capacity is not counted anywhere. A wire is refused only
 where the free space between its two ends has pinched shut, or when its walk
 fails the independent clearance check; a refused row keeps its B.Cu hug wire
-(the caller's fallback). Selected with OT_INNER_WIRE=hug (route_inner.py).
+(the caller's fallback). Under OT_INNER_WIRE=hug (the default; route_inner.py)
+this is the last alternative: it runs only when inner_trunk.py leaves rows or
+links on B.Cu (for rows, only when the sweep does too), and route_inner keeps
+whichever result leaves the fewest on B.Cu.
 """
 
 import itertools
@@ -37,7 +40,7 @@ from opentac.cad.export.kicad_footprint import pixel_geometry
 from .route_inner import _via_keepout, taxel_cells
 from .types import Route
 
-# Polygonal buffers sit INSIDE the true circle (by the chord's sagitta), so a
+# Polygonal buffers sit inside the true circle (by the chord's sagitta), so a
 # walk along their boundary would come a few microns too close. Every
 # obstacle is inflated by this much; the checks use the exact distances.
 _M = 0.01
@@ -108,10 +111,6 @@ def _inside(sp, via, out_pt):
         if cut.geom_type == "Point":
             return LineString([tuple(via), tuple(via)])
     return cut
-
-
-def _component(free, pt):
-    return min(getattr(free, "geoms", [free]), key=lambda q: q.distance(Point(pt)))
 
 
 def _smooth(path, ok):
@@ -208,8 +207,8 @@ def _walk(free, start_pt, end_pt, choose):
 
 def route_links(layout, params, plan):
     """Returns (routes, nets_done, info) — the route_row_links_in2 contract:
-    routes go on In2.Cu; for nets_done the hug router's B.Cu link hops are no
-    longer needed (a net is done only when every one of its links is laid)."""
+    routes go on In2.Cu; nets_done need none of the hug router's B.Cu link
+    hops (a net is done only when every one of its links is laid)."""
     sp = _Space(layout, params, plan.cut_xy)
     links = []
     for net, ch in plan.chains.items():
@@ -267,7 +266,7 @@ def route_links(layout, params, plan):
     routes = [Route(net_name=d["net"], pad_num=d["pad_num"],
                     anchor_xy=np.asarray(paths[d["key"]][-1], dtype=float),
                     # the net's pad, as for hug's link hops: a route whose first
-                    # point IS its pad_xy is taken for a pad hop and extended
+                    # point is its pad_xy is taken for a pad hop and extended
                     pad_xy=np.asarray(d["pad_xy"], dtype=float),
                     polyline_xy=np.asarray(paths[d["key"]], dtype=float))
               for d in links if d["key"] in paths and d["net"] in nets_done]
@@ -303,7 +302,7 @@ def _slots(sp, xs, yb, rise):
 
     The bottom row's vias sit right above some pads, so a pad's own x is often
     not a slot: the wires fan from their pads to slots below the field. And a
-    point in the thin channel UNDER a via is not a slot either: the first wire
+    point in the thin channel under a via is not a slot either: the first wire
     to reach it takes the channel, and the next one would have to climb out
     through its neighbour's entry gap."""
     out = []
@@ -511,7 +510,7 @@ def route_feeds(layout, params, plan, layers=("In1.Cu",), preplaced=None):
             order = sorted(todo, key=lambda r: (span[r["net"]], r["net"]))
             # the wires come up into the field in peel order, left to right
             exits = cw + ccw[::-1]
-            # A tap ON the bottom edge, among the slots (a narrow stem's bottom
+            # A tap on the bottom edge, among the slots (a narrow stem's bottom
             # rows) has no place in the peel order: its wire just comes up at
             # the slot nearest its tap, and every other wire comes up clear of
             # the short stretch between that slot and that tap (crossing it

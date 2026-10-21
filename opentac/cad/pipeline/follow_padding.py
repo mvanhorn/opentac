@@ -170,8 +170,8 @@ def _cable_piece(layout, outline_xy, ext_active):
 
 def _strip_aware(tail) -> bool:
     """The tail was narrowed by the strip-over-the-pads code (it records
-    fit_offset_mm, geometry.fit_tail_strip). Designs saved before that keep the
-    padding pass they were previewed with."""
+    fit_offset_mm, geometry.fit_tail_strip). A stored narrowed tail without
+    fit_offset_mm keeps the padding pass it was previewed with."""
     return (tail or {}).get("mode") == "fit" and "fit_offset_mm" in (tail or {})
 
 
@@ -181,9 +181,10 @@ def _tail_strip(layout, outline_xy, ext_active, cable_piece):
     Its own wires are held by the strip itself (narrow_tail.wire_edge_mm from
     its edge). Wire outside it -- the fan running in below the cable edge,
     or up a sloping outline beside the strip -- is padded like any other wire:
-    the tail piece holds that wire only route_containment_mm out and cut off
-    at the old tail's side, which against the padding just past it left a
-    step, and a flare running into the step a horn."""
+    the tail piece holds that wire only route_containment_mm out and is cut
+    off at the routed (connector-width) tail's side, which against the padding
+    just past it would leave a step, and a flare running into the step a
+    horn."""
     t = layout.tail or {}
     if not _strip_aware(t) or t.get("t_hat") is None or t.get("n_out") is None:
         return cable_piece
@@ -276,10 +277,10 @@ def tail_wire_hold(layout):
     pads run one pad pitch (0.5 mm) from the tab's sides, which clears the
     board edge but is less than route_containment_mm. Post-route containment
     therefore leaves wire in here alone, as follow padding does (_tail_strip).
-    Padding it widened the tail past the tab on every board whose wires reach
-    within route_containment_mm of a tab side, down to the pad drills: the
-    connector footprint's own tab-side Edge.Cuts then lay inside the board and
-    were cut as slits."""
+    Padding it would widen the tail past the tab on every board whose wires
+    reach within route_containment_mm of a tab side, down to the pad drills:
+    the connector footprint's own tab-side Edge.Cuts would then lie inside the
+    board and be cut as slits."""
     board = layout.board_poly
     if board is None or board.is_empty:
         return None

@@ -70,8 +70,7 @@ export function createRouteEditor({
   const tailWidthInput = document.getElementById("tail-extension-width");
   const tailAddBtn = document.getElementById("tail-extension-add");
   // Preset directions, in the same on-screen sense as the preview: 0° points
-  // right, positive angles go up. (The old Vertical/Horizontal pair could only
-  // reach down and right.)
+  // right, positive angles go up.
   const tailDirButtons = [
     ["tail-extension-dir-down", -90],
     ["tail-extension-dir-up", 90],
@@ -338,12 +337,10 @@ export function createRouteEditor({
     const outer = inner + side * dims.earOut;
     // Ears sit near the connector's mechanical tip (the insertion edge,
     // away from the board — +ny, matching the label position below), not
-    // the board-facing end. Verified against the real footprint files
-    // (backend/connectors/*.kicad_mod): ears sit at local y in roughly
-    // [-2.2, -1.05] out of a [-3.25 (tip), +2.75 (open/board end)] body —
-    // i.e. between the tip and the middle, never near the open end. This
-    // was previously mirrored to the wrong (board-facing) end — reported
-    // directly against a real generated preview.
+    // the board-facing end. In the footprint files (connectors/*.kicad_mod)
+    // the ears sit at local y in roughly [-2.2, -1.05] out of a
+    // [-3.25 (tip), +2.75 (open/board end)] body — i.e. between the tip and
+    // the middle, never near the open end.
     const y1 = dims.bodyDepth / 2 - 0.8;
     const y0 = y1 - dims.earDepth;
     const c = dims.chamfer;
@@ -650,10 +647,10 @@ export function createRouteEditor({
   async function exportEdited({ download = false, renderPreview = false } = {}) {
     if (!hasEditableRoutes()) return false;
     setStatus(download
-      ? "Building edited ZIP..."
+      ? "Building edited ZIP…"
       : renderPreview
-        ? "Building tail extension preview..."
-        : "Checking edited-route DRC...");
+        ? "Building tail extension preview…"
+        : "Checking edited-route DRC…");
     const sig = boardSignature();
     const resp = await fetch(`${apiBase}/export-edited`, {
       method: "POST",
@@ -674,8 +671,8 @@ export function createRouteEditor({
       previewEl.innerHTML = data.svg;
       bindSvgViewOnly();
       renderConnectorPreview(editData?.layout?.tail_extension?.path || tailPath);
-      // The edited export rebuilt the board, so the printable template that
-      // shipped with the original generate is now for the wrong outline.
+      // The edited export rebuilt the board, so the printable template from
+      // the original Generate does not match the new outline.
       window.otcPrintPdfUpdated?.(data.stats);
       visualPreviewOnly = true;
     }
@@ -696,7 +693,7 @@ export function createRouteEditor({
 
   async function redoPadding() {
     if (!hasEditableRoutes()) return;
-    setStatus("Recalculating final board padding from current routes...");
+    setStatus("Recalculating final board padding from current routes…");
     const resp = await fetch(`${apiBase}/redo-padding`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -909,7 +906,7 @@ export function createRouteEditor({
     isEdited,
     getConnectorPos,
     // The live edit_data, including anything redo-padding or a connector swap
-    // changed. The case wraps the FINAL outline, so it has to read this
+    // changed. The case wraps the final outline, so it has to read this
     // rather than the response the board was first generated from.
     getEditData: () => editData,
   };

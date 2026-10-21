@@ -16,12 +16,11 @@ def _edge_cuts_points(layout, outline_xy, params, connector_dir):
 
     Built from `stitched_outline_segments` — the exact same call the KiCad and
     Gerber exporters use — rather than re-deriving a polygon here, because the
-    manufactured edge is NOT the drawn outline: it carries the grown board, the
+    manufactured edge is not the drawn outline: it carries the grown board, the
     cable tail and the connector-body envelope, with the connector's landing
-    zone cut away. Re-deriving "the board's physical edge" from raw outline_xy
-    is a mistake this codebase has made in four separate places (see NOTES.md,
-    "Board outline geometry"); sharing the exporter's own source keeps this
-    from becoming a fifth.
+    zone cut away. Do not re-derive "the board's physical edge" from raw
+    outline_xy; sharing the exporters' own source keeps the manifest and the
+    Gerbers in agreement.
     """
     if params is None or layout.final_outline_xy is None:
         return []
@@ -36,8 +35,8 @@ def _edge_cuts_points(layout, outline_xy, params, connector_dir):
     # Segments come as (start, end) pairs walking the boundary; emit the start
     # of each, plus the end of a segment the walk does not continue from: the
     # walk is open at the connector (the opening segment is dropped), and
-    # emitting only starts lost that corner, so the ring cut diagonally across
-    # the tail to the far side of the opening.
+    # emitting only starts would lose that corner, so the ring would cut
+    # diagonally across the tail to the far side of the opening.
     ring = []
     for i, (a, b) in enumerate(segments):
         ring.append(a)
@@ -50,26 +49,26 @@ def _edge_cuts_points(layout, outline_xy, params, connector_dir):
 def _shear_block(layout, active_pix, pixel_xy, params):
     """Which taxels share a shear bump — the grouping, not a per-taxel flag.
 
-    A flag would say almost nothing: every 2x2 block holding ANY taxel gets a
+    A flag would say almost nothing: every 2x2 block holding any taxel gets a
     full-size bump (`bump_centers_from_taxels`), so "may have a bump" is true
     of every taxel. What no consumer can
-    recover on its own is the GROUPING, and that is what shear actually needs:
+    recover on its own is the grouping, and that is what shear actually needs:
     a bump converts a sideways load into an asymmetric normal load across the
     four taxels beneath it, so the direction only exists as a differential
     within one group.
 
     It cannot be re-derived from the fields already here, either. `pixels`
-    carries row/col indices in PAD order, which is deliberately not geometric
+    carries row/col indices in pad order, which is deliberately not geometric
     order (split_row_pin_order reverses the bottom half of the rows), so
     grouping by `index // 2` pairs taxels that are nowhere near each other —
-    invariant 1 of the bump sheet, and the reason that module derives row/col
-    from position instead.
+    the reason the bump sheet derives row/col from position instead (see
+    bump_centers_from_taxels).
 
     Centres come from the taxel grid, on `params.pitch_*_mm` — the same two numbers `/bump-sheet`
     passes — never on the manifest's own `px`/`py`, which are pad-order
     derived and can be negative.
 
-    This describes the bumps' PLAN GEOMETRY only. Bump height, base fraction
+    This describes the bumps' plan geometry only. Bump height, base fraction
     and taper are not chosen until `/bump-sheet` or `/case` runs, long after
     this file is written, so recording a guess would be worse than recording
     nothing.
@@ -87,8 +86,8 @@ def _shear_block(layout, active_pix, pixel_xy, params):
         return None
 
     return {
-        # Which rule produced the centres. Always the uniform 2x2 taxel grid
-        # now; kept so readers of older manifests see the same key.
+        # Which rule produced the centres: always the uniform 2x2 taxel grid.
+        # The key is kept so readers written for older manifests still find it.
         "src": "taxel_2x2",
         "bumps": [[round(float(x), 4), round(float(y), 4)] for x, y in centers],
         "b": bump_index_per_point([[p[0], p[1]] for p in pixel_xy],
@@ -201,22 +200,19 @@ def export_manifest(
     # The mask's rows are indexed by *pad order*, because this function walks
     # sorted(layout.pad_to_net). Pad order is not geometric order:
     # split_row_pin_order (pipeline/layout.py) assigns the top half of the rows
-    # in geometric order and then the bottom half REVERSED, so the array's pads
+    # in geometric order and then the bottom half reversed, so the array's pads
     # meet the routing on the correct side. `oy + ri*py` assumes mask index and
     # geometric index are the same thing, so every row in that reversed bottom
-    # half lands at the wrong Y. Measured on a 9-row T-shape: mask rows 0-4 are
-    # correct and rows 5-8 come out exactly mirrored (true Y 8.8/13.0/17.2/21.4
-    # against a predicted 21.4/17.2/13.0/8.8).
+    # half lands at the wrong Y (the bottom half comes out mirrored).
     #
     # On a full rectangular array this is invisible if you only check the point
     # cloud — mirroring evenly spaced rows maps the set of Y values onto itself
     # — but the row *indexing* is still wrong, and as soon as the rows have
-    # different bit patterns the positions are wrong too, by up to a full pitch
-    # (4.2mm on a T-shape, 9.4mm on a disc).
+    # different bit patterns the positions are wrong too.
     #
-    # The grid fields stay exactly as they were: the MCU scans by pad, so pad
-    # order is the right order for `m`/`rp`/`cp`. `pixels` is the authority on
-    # where each one physically sits.
+    # The grid fields keep pad order: the MCU scans by pad, so pad order is the
+    # right order for `m`/`rp`/`cp`. `pixels` is the authority on where each
+    # one physically sits.
     pixel_xy = []
     for ri in range(n_rows):
         for ci in range(n_cols):
@@ -235,8 +231,8 @@ def export_manifest(
 
     # Documentation lives in the file itself, as string fields rather than
     # `//` comments: JSON has no comment syntax, and this file is meant to be
-    # re-read (by OTC to rebuild a design, and by whatever drives the MCU), so
-    # json.loads / JSON.parse must keep working on it. Unknown keys are
+    # re-read (by OpenTac-CAD to rebuild a design, and by whatever drives the
+    # MCU), so json.loads / JSON.parse must keep working on it. Unknown keys are
     # ignored by every consumer, so a "_readme" costs nothing but is visible
     # the moment someone opens the file.
     readme = [
@@ -275,26 +271,23 @@ def export_manifest(
     ]
     data = {
         "_readme": readme,
-        # 4 added the "design" block, 5 the "shear" block, 6 the "sim3d"
-        # block. All purely additive — nothing was removed or given a new
-        # meaning — so MCU code written against v3 keeps working; importers
-        # key off design.schema, not this.
-        #
-        # Note the numbering drifted from what TactileSim/INTEGRATION.md
-        # reserved: that document called the 3D block "v4" before 4 and 5 were
-        # spent on `design` and `shear`.
+        # 4 added the "design" block, 5 the "shear" block, 6 the optional
+        # "sim3d" block (written only when a caller supplies it). All are
+        # additive (no key removed or given a new meaning), so MCU code
+        # written against v3 keeps working; importers key off design.schema,
+        # not this.
         "v": 6,
         "units": "mm",
         # --- sensor drawing: outline, pixel centers, pixel size ---
         # Same coordinate frame as each other (the canonical frame
         # rotate_for_cable() produces, with the cable edge horizontal at the
-        # bottom), so they overlay directly. NOTE this frame is Y-UP; the
-        # KiCad export negates Y on the way out.
-        "outline": outline_pts,      # the shape the user DREW
+        # bottom), so they overlay directly. This frame is Y-up; the KiCad
+        # export negates Y on the way out.
+        "outline": outline_pts,      # the shape the user drew
         # The board's real cut boundary — grown board, cable tail and
         # connector envelope included, connector landing zone cut away. This,
-        # not "outline", is what gets manufactured: on a drawn 40x40mm square
-        # in grow mode the cuts are 46.6 x 62.8mm.
+        # not "outline", is what gets manufactured, and it is larger than the
+        # drawn shape.
         "edge_cuts": edge_cuts_pts,
         "pixels": pixel_xy,          # [x, y, row_index, col_index] per active pixel
         "w": round(pixel_w_mm, 2),   # pixel width  (footprint, not pitch)
@@ -315,11 +308,11 @@ def export_manifest(
         # with the drawing above rather than with the scan order below.
         **({"shear": _shear} if _shear is not None else {}),
         # Where this sensor sits on the part it was unrolled from: per-taxel
-        # 3D position, normal and tangent, plus the z-stack. Present only for
-        # a board designed on a mesh, and only when the exporter was given
-        # that mesh — a flat, hand-drawn or DXF board has no 3D placement.
+        # 3D position, normal and tangent, plus the z-stack. Optional: written
+        # only when the caller supplies `sim3d` (built from the source mesh);
+        # a flat, hand-drawn or DXF board has no 3D placement.
         **({"sim3d": sim3d} if sim3d else {}),
-        # --- matrix scanning: unchanged, the MCU reads these ---
+        # --- matrix scanning: the MCU reads these ---
         "r": n_rows,
         "c": n_cols,
         "px": round(pitch_x, 2),
@@ -332,7 +325,7 @@ def export_manifest(
     }
 
     # --- re-opening the design: every /generate input, so this file can be
-    # loaded back into OTC and edited further. Last, because everything above
+    # loaded back into OpenTac-CAD and edited further. Last, because everything above
     # describes the manufactured result and this describes how to rebuild it.
     if params is not None:
         data["design"] = design_block(layout, params, removed_pix, fill_region)

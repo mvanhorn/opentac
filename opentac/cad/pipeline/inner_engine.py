@@ -1,17 +1,20 @@
-"""Inner-layer wiring engine for 4-layer boards (PROTOTYPE).
+"""Inner-layer wiring engine for 4-layer boards: the lattice sweep.
 
-One mechanism routes every wire on an inner copper layer: a sweep over the
-via lattice, one via row at a time, top down.
+A sweep over the via lattice, one via row at a time, top down, routes the
+wires of one inner copper layer. It is the OT_INNER_WIRE=sweep model and,
+under the default "hug" model, the alternative route_inner.py tries when
+inner_trunk.py leaves rows or links on B.Cu; comb_to_pads (below) carries
+the swept wires from the field exit to the connector pads.
 
 Geometry. Every taxel has one through-hole via, so vias sit on a lattice of
-via columns X and via rows Y. A wire may run vertically only in a LANE (a
+via columns X and via rows Y. A wire may run vertically only in a lane (a
 position between two via columns, at least `a` from both) and horizontally
-only along a via row (a stub from a via to the lane beside it) or on a TRACK
+only along a via row (a stub from a via to the lane beside it) or on a track
 (a position between two via rows, at least `a` from both). Copper must stay
 inside the allowed region F (under the taxels, inside the board).
 
 Sweep. Going down, the wires that cross a via row form a left-to-right
-ORDER. Between two rows a wire may step sideways to a new lane; steps keep
+order. Between two rows a wire may step sideways to a new lane; steps keep
 the order, so the layer stays planar by construction. At each row:
 
   * wires whose region ends under them leave (escapes: towards the fan);
@@ -38,8 +41,6 @@ import math
 import numpy as np
 from shapely.geometry import LineString, MultiPoint, Polygon
 from shapely.ops import unary_union
-
-TOL = 1e-6
 
 
 def cap(width, a, lane):
@@ -165,7 +166,7 @@ def jog_tracks(jogs, heights, F):
     out = {}
     for sgn in (-1, +1):                        # leftward, rightward
         grp = [(k, x0, x1) for k, x0, x1 in jogs if (x1 - x0) * sgn > 0]
-        # the wire in front (furthest along the move) must step on a HIGHER
+        # the wire in front (furthest along the move) must step on a higher
         # track than the ones behind it: it is out of their way before they
         # step under it. So the one at the back goes first, lowest.
         grp.sort(key=lambda j: sgn * j[1])
@@ -203,7 +204,7 @@ class Gap:
         return any(any(u - 1e-6 <= lo and hi <= v + 1e-6 for u, v in iv) for iv in self.ivs)
 
     def can_step_all(self, x0, x1):
-        """the step fits on EVERY track: then any assignment of tracks works,
+        """the step fits on every track: then any assignment of tracks works,
         however many wires step together"""
         lo, hi = min(x0, x1), max(x0, x1)
         return bool(self.ivs) and all(any(u - 1e-6 <= lo and hi <= v + 1e-6 for u, v in iv) for iv in self.ivs)
@@ -555,7 +556,7 @@ def sweep_bridges(links, lat, F, via_xy, via_dx, pitch):
     leaves B to the left; going down, the two meet under the notch on a
     track and the link is done.
 
-    Pieces stacked over each other form a PETAL; a petal's wires keep to its
+    Pieces stacked over each other form a petal; a petal's wires keep to its
     own strip (halfway to the petal beside it). The order inside a petal is
     fixed by the nesting all petals must agree on: a link wraps every petal
     it skips; the narrower U goes inside; on a tie the higher row does.
@@ -609,7 +610,7 @@ def sweep_bridges(links, lat, F, via_xy, via_dx, pitch):
     # One hard rule comes from the geometry: a piece in the middle of a row's
     # chain with a single via sends both its wires (left and right) out of
     # that one via, so nothing can pass between them — every wire coming down
-    # past it must nest INSIDE its links.
+    # past it must nest inside its links.
     # Within that, the preference: a link wraps every petal it skips, the
     # narrower U goes inside, and on a tie the higher row does.
     import heapq
@@ -983,7 +984,7 @@ def comb_to_pads(items, field_poly, base, lane, cut_x, keepout=None, entry=0.0):
     # The corridor is redrawn with points at least `thin` apart from the
     # true outline (simplify): every buffered wire would otherwise copy the
     # rounded joins of the outline it rode, and the point count compounds
-    # wire after wire (17 nested wires: ~1600 points each, 2 um apart).
+    # wire after wire.
     # Simplifying may move the outline by up to `thin` either way, so every
     # offset is grown by `thin` to keep the full clearance.
     thin = 0.001
