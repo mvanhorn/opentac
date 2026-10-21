@@ -110,10 +110,6 @@ def _inside(sp, via, out_pt):
     return cut
 
 
-def _component(free, pt):
-    return min(getattr(free, "geoms", [free]), key=lambda q: q.distance(Point(pt)))
-
-
 def _smooth(path, ok):
     """line of sight: from each kept point jump as far along the path as a
     straight segment passing ok() reaches (galloping, then bisecting — every

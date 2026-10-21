@@ -753,12 +753,3 @@ def connect_loop_to_region(vertices: np.ndarray, faces: np.ndarray,
     # downstream needs per-point vertex identity once the whole chain is
     # done).
     return best[0], best[2]
-
-
-def uv_to_outline_array(uv: dict) -> np.ndarray:
-    """Convenience: stack all placed (u,v) points into an Nx2 array
-    (unordered — for the real feature, the *boundary* of the patch becomes
-    the outline; this prototype just needs the point cloud for verification).
-    """
-    keys = sorted(uv.keys())
-    return np.array([uv[k] for k in keys])

@@ -39,10 +39,6 @@ export function showView(name) {
   window.dispatchEvent(new CustomEvent("otc:view-shown", { detail: { view: target } }));
 }
 
-export function currentView() {
-  return normalizeHash();
-}
-
 window.addEventListener("hashchange", () => showView(normalizeHash()));
 
 document.getElementById("nav-home")?.addEventListener("click", () => showView("landing"));

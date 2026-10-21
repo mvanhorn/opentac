@@ -1,7 +1,5 @@
 """KiCad .kicad_pcb board export."""
 
-import os
-import re
 import uuid
 import numpy as np
 
@@ -535,78 +533,6 @@ def _build_connector_resolved(layout, outline_xy, params, conn_dir, pad_to_net, 
 
     lines.append('  )')
     return '\n'.join(lines)
-
-
-def _build_connector(conn_dir, conn_pos, conn_at, conn_rot, pad_to_net, net_map, reverse_pad_order=False):
-    """Load the exact connector footprint and place it at the tail end."""
-    mod_file = os.path.join(conn_dir, f"{conn_pos}_pos_0.5mm_FPC.kicad_mod")
-    if not os.path.exists(mod_file):
-        return None
-
-    with open(mod_file, 'r') as f:
-        text = f.read()
-
-    src_lines = text.strip().split('\n')
-    while src_lines and not src_lines[-1].strip():
-        src_lines.pop()
-
-    out = []
-    out.append(f'  (footprint "{conn_pos}_pos_0.5mm_FPC"')
-
-    added_instance = False
-    in_pad = False
-    pad_paren_depth = 0
-
-    for li in range(1, len(src_lines)):
-        L = src_lines[li]
-        L_trim = L.strip()
-
-        if li == len(src_lines) - 1 and L_trim == ')':
-            continue
-
-        if not added_instance and '(layer "F.Cu")' in L_trim:
-            out.append(L)
-            out.append(f'  \t(tstamp "{make_uuid()}")')
-            out.append(f'  \t(at {fmt(conn_at[0])} {fmt(conn_at[1])} {fmt(conn_rot)})')
-            added_instance = True
-            continue
-
-        if '(property "Reference"' in L_trim:
-            L = L.replace('"REF**"', '"J1"')
-
-        # Detect pad opening
-        pad_match = re.search(r'^\(pad "(\d+)"', L_trim)
-        if pad_match:
-            in_pad = True
-            pad_paren_depth = L_trim.count('(') - L_trim.count(')')
-
-            pad_num = int(pad_match.group(1))
-            logical_pad_num = int(conn_pos) + 1 - pad_num if reverse_pad_order else pad_num
-            if logical_pad_num in pad_to_net:
-                net_name = pad_to_net[logical_pad_num]
-                if net_name in net_map:
-                    net_id = net_map[net_name]
-                    L = re.sub(
-                        r'(\(pad "\d+"\s+\w+\s+\w+)',
-                        rf'\1\n\t  (net {net_id} "{net_name}")',
-                        L, count=1
-                    )
-
-        if in_pad and not pad_match:
-            pad_paren_depth += L_trim.count('(') - L_trim.count(')')
-            if reverse_pad_order:
-                L = re.sub(r'\(offset\s+0\s+-1\.5\)', '(offset 0 1.5)', L)
-
-            if pad_paren_depth <= 0:
-                in_pad = False
-
-        if not L_trim:
-            continue
-
-        out.append(f'  {L}')
-
-    out.append('  )')
-    return '\n'.join(out)
 
 
 def kicad_project_files(params) -> dict[str, str]:

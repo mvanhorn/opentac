@@ -175,30 +175,3 @@ def build_sim3d(*, vertices, faces, face_normals, region_face_indices,
     if warnings:
         sim3d["warnings"] = warnings
     return sim3d, emb.as_json()
-
-
-SIM_README = [
-    "The 3D placement of this sensor on its part, for simulation.",
-    "'taxels3d' is index-parallel to 'pixels': pos/normal/tangent per taxel,"
-    " in the SOURCE MESH's own frame (not the flat cable frame the 2D fields"
-    " use), in mm. 'rc' repeats each taxel's [row, col] so an image built"
-    " from these matches the one the firmware scans.",
-    "'pos' lies ON the part surface. The object contacts the SENSING surface,"
-    " which is 'stack.surface_to_bump_tip_mm' further along 'normal' - offset"
-    " it yourself so a change of film or sheet thickness does not need a"
-    " re-export.",
-    "'tangent' is the +column direction mapped onto the surface. Shear"
-    " resolved against it is directly comparable to the column index; without"
-    " it a 3D shear vector cannot be related to anything the board reports.",
-    "'fit.outline_mm' is how far the flat outline landed from the exported"
-    " board, and 'fit.worst_off_patch_mm' how far the worst taxel fell"
-    " outside the selected faces. Both should be ~0; large values mean the"
-    " placement is not trustworthy and 'warnings' will say so.",
-    "'mesh.sha256' identifies the STL this was computed against. Pair by it:"
-    " the same file re-exported with reordered vertices still hashes"
-    " differently, but the geometry here is self-contained either way.",
-    "embedding.json beside this file holds the full flat<->3D triangle map,"
-    " for re-deriving placements at a different stack height.",
-    "No stiffness, MJCF or scene is exported. Physics belongs to the"
-    " simulator; this file is geometry.",
-]

@@ -286,69 +286,6 @@ def _draw_pixel_copper(lines, cx, cy, g):
             seg(g.xR, fy, g.col_end_x[i], fy)         # pad 2 finger, right -> left
 
 
-def _append_new_aperture_defs(lines, am, before_count):
-    for definition in am.definitions()[before_count:]:
-        lines.append(definition)
-
-
-def _connector_pad_bbox(pad):
-    corners = np.asarray(pad["corners"], dtype=float)
-    min_xy = corners.min(axis=0)
-    max_xy = corners.max(axis=0)
-    center = (min_xy + max_xy) / 2.0
-    width = max(max_xy[0] - min_xy[0], 0.001)
-    height = max(max_xy[1] - min_xy[1], 0.001)
-    return center, width, height
-
-
-def _pad_axes(pad):
-    corners = np.asarray(pad["corners"], dtype=float)
-    center = np.asarray(pad["center"], dtype=float)
-    e_x = corners[1] - corners[0]
-    e_y = corners[2] - corners[1]
-    len_x = float(np.linalg.norm(e_x))
-    len_y = float(np.linalg.norm(e_y))
-    if len_x < 1e-9 or len_y < 1e-9:
-        return center, None, 0.0, 0.0
-    if len_x >= len_y:
-        return center, e_x / len_x, len_x, len_y
-    return center, e_y / len_y, len_y, len_x
-
-
-def _is_axis_aligned_pad(pad):
-    corners = np.asarray(pad["corners"], dtype=float)
-    for edge in (corners[1] - corners[0], corners[2] - corners[1]):
-        norm = float(np.linalg.norm(edge))
-        if norm < 1e-9:
-            return False
-        unit = np.abs(edge / norm)
-        if max(unit[0], unit[1]) < 0.999:
-            return False
-    return True
-
-
-def _flash_rect(lines, am, center, width, height):
-    before = len(am.definitions())
-    aperture = am.rect(width, height)
-    _append_new_aperture_defs(lines, am, before)
-    lines.append(f"D{aperture}*")
-    _flash(lines, center[0], center[1])
-
-
-def _draw_stroked_pad(lines, am, pad):
-    center, axis, length, width = _pad_axes(pad)
-    if axis is None:
-        return
-    before = len(am.definitions())
-    aperture = am.circle(max(width, 0.001))
-    _append_new_aperture_defs(lines, am, before)
-    lines.append(f"D{aperture}*")
-    draw_len = max(length - width, 0.001)
-    p1 = center - 0.5 * draw_len * axis
-    p2 = center + 0.5 * draw_len * axis
-    _draw_line(lines, p1[0], p1[1], p2[0], p2[1])
-
-
 def _draw_region_polygon(lines, points):
     pts = np.asarray(points, dtype=float)
     if len(pts) < 3:
@@ -381,17 +318,6 @@ def _flash_connector_mask(lines, am, connector_pads, layer_name):
     corners = connector_mask_opening(connector_pads, layer_name)
     if corners:
         _draw_region_polygon(lines, corners)
-
-
-def _local_to_world(lx, ly, t_hat, n_out, pad1_world):
-    """Transform footprint-local coordinate to world (Y-up) coordinate.
-
-    Accounts for X-negation, KiCad rotation, and Y-down → Y-up mapping.
-    Formula: world = pad1_world + lx * t_hat - ly * n_out
-    """
-    wx = pad1_world[0] + lx * t_hat[0] - ly * n_out[0]
-    wy = pad1_world[1] + lx * t_hat[1] - ly * n_out[1]
-    return wx, wy
 
 
 def _arc_to_segments(start, mid, end, n_segs=16):

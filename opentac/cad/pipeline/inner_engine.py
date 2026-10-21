@@ -39,8 +39,6 @@ import numpy as np
 from shapely.geometry import LineString, MultiPoint, Polygon
 from shapely.ops import unary_union
 
-TOL = 1e-6
-
 
 def cap(width, a, lane):
     """tracks (or lanes) that fit in a gap of `width` between two via lines"""

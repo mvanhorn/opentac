@@ -408,13 +408,6 @@ def layout_with_connector(
     )
 
 
-def net_counts(layout: Layout) -> tuple[int, int]:
-    """(n_row, n_col) net counts for an already-built layout."""
-    n_row = len(set(layout.row_net_per_pixel) - {""})
-    n_col = len(set(layout.col_net_per_pixel) - {""})
-    return n_row, n_col
-
-
 def max_pack_count(outline_xy: np.ndarray, params: Params, fill_xy: np.ndarray = None) -> int:
     """Pixels that would fit with no wiring keep-out at all — the baseline the
     fixed-outline mode's "dropped for wiring" figure is measured against."""

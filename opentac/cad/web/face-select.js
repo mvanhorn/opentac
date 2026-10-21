@@ -1277,22 +1277,6 @@ export function finalizeChainOutline(points) {
   };
 }
 
-// Compatibility wrapper for callers that still want the original one-face API.
-export function extractFlatFace(geometry, faceIndex, angleTolDeg = DEFAULT_ANGLE_TOL_DEG) {
-  const model = buildSurfaceModel(geometry, angleTolDeg);
-  if (faceIndex == null || faceIndex < 0 || faceIndex >= model.triRegion.length) return null;
-  const regionId = model.triRegion[faceIndex];
-  if (regionId < 0) return null;
-  const unfolded = unfoldSelectedRegions(model, new Set([regionId]), regionId);
-  const region = model.regions[regionId];
-  return {
-    ...unfolded,
-    regionCount: region.triangles.length,
-    highlightPositions: region.highlightPositions,
-    normal: region.normal.clone(),
-  };
-}
-
 function triangleEdges(vertices) {
   return [[vertices[0], vertices[1]], [vertices[1], vertices[2]], [vertices[2], vertices[0]]];
 }

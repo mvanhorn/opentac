@@ -59,10 +59,6 @@ class _Content:
         else:
             self.parts.append("[] 0 d")
 
-    def fill_color(self, rgb):
-        r, g, b = rgb
-        self.parts.append(f"{r:.3f} {g:.3f} {b:.3f} rg")
-
     def line_page(self, a, b):
         """A line positioned on the PAGE, unaffected by where the board sits.
 
@@ -161,7 +157,6 @@ def _build_pdf(pages) -> bytes:
 INK = (0.10, 0.10, 0.10)
 TAXEL = (0.25, 0.45, 0.80)
 FAINT = (0.62, 0.62, 0.62)
-ALERT = (0.75, 0.20, 0.20)
 
 
 def _segments_to_polylines(segments, tol=1e-6):
