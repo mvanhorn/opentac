@@ -1,18 +1,17 @@
 """The full MuJoCo scene for one real flat sensor: its own bumps, and a ball.
 
-Ported from TactileSim's `scripts/stage3_sim_video.py` (class SensorLattice),
-without the rendering. Every bump is an elliptical frustum at its real position
-from the manifest, on the five compliant DoFs of `mjcf.add_bump`, and a
-ball on position servos is pressed into them and twisted.
+Part of the OpenTac bump model. Every bump is an elliptical frustum at its real
+position from the manifest, on the five compliant DoFs of `mjcf.add_bump`, and
+a ball on position servos is pressed into them and twisted.
 
-Why the bumps are meshes here and the sheet never is: MuJoCo collides the
-CONVEX HULL of a mesh. A single frustum is convex, so its hull is itself. The
+The bumps are meshes here and the sheet never is, because MuJoCo collides the
+convex hull of a mesh. A single frustum is convex, so its hull is itself. The
 hull of the whole bump sheet is a featureless slab with every bump erased.
 
-Why the ball is a servoed body and not a mocap body: MuJoCo takes contact
+The ball is a servoed body and not a mocap body, because MuJoCo takes contact
 velocity from qvel, and a mocap body has no DoFs, so its velocity is always
-zero. Normal force would still work while friction never mobilised, silently
-deleting the shear channel the bumps exist for.
+zero. Normal force would still be produced while friction never mobilised,
+which would remove the shear channel the bumps exist for.
 """
 import mujoco
 import numpy as np
@@ -60,10 +59,10 @@ class SensorScene:
     def base_moments(self):
         """Same guided-cantilever reconstruction lattice.Lattice uses.
 
-        Reading the tip hinges alone reports NO shear under a flat-ish
+        Reading the tip hinges alone reports no shear under a nearly flat
         contact: MuJoCo's joint springs are diagonal, so the hinges stay near
         zero while the shear slides carry everything. The k*v*H/2 term puts
-        the missing coupling back in the READOUT, leaving the forces the
+        the missing coupling back in the readout, leaving the forces the
         solver sees untouched.
         """
         q, p, h = self.data.qpos, self.p, self.p.height
@@ -101,10 +100,11 @@ class SensorScene:
         """Ramp the ball down until the bumps carry `target_n`.
 
         Ramped, never teleported. MuJoCo resolves friction against relative
-        VELOCITY, so a position jump transmits normal force but zero shear --
-        the same trap lattice.Lattice.move_indenter exists to avoid.
-        Returns (z, total_N). CHECK THE FORCE: if the ball runs out of travel
-        (`max_mm`) before reaching the target, the total is below it.
+        velocity, so a position jump transmits normal force but zero shear,
+        as described in lattice.Lattice.move_indenter.
+        Returns (z, total_N). The caller should check the returned force: if
+        the ball runs out of travel (`max_mm`) before reaching the target, the
+        total is below it.
         """
         z = self.z0
         dz = max_mm * 1e-3 / steps

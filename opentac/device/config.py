@@ -69,7 +69,7 @@ def boards() -> dict[str, Board]:
 
 
 #: What people call each board -> the name its firmware reports. The docs say
-#: "60-pin board" and "30-pin pair"; the firmware and the CLI's older names are
+#: "60-pin board" and "30-pin pair"; the firmware and the CLI name them
 #: READOUT60 / readout60 and NODE16 / node16. READOUT32 is the earlier 70-pin board.
 ALIASES = {
     "readout60": "READOUT60", "60pin": "READOUT60", "60-pin": "READOUT60",
@@ -77,7 +77,7 @@ ALIASES = {
     "readout32": "READOUT32", "70pin": "READOUT32", "70-pin": "READOUT32",
 }
 
-#: How the docs name each board (docs/hardware.md).
+#: How the documentation names each board (https://opentac.github.io/hardware/).
 LABELS = {"READOUT60": "60-pin board", "NODE16": "30-pin pair",
           "READOUT32": "earlier 70-pin board"}
 

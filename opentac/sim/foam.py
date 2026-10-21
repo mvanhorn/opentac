@@ -17,16 +17,15 @@ Two global parameters, fitted once in the OpenTac paper on one skin
     sigma = 3.00 mm,  k = 0.00866 N/mm^3
 
 Zero-shot on three other skins, this model scored a median shape F1 of 0.73
-against a repeat-press ceiling of 0.80 (docs/sim.md).
+against a repeat-press ceiling of 0.80 (https://opentac.github.io/sim/).
 
 The returned forces are at physical scale, not renormalised to the requested
 total: load that falls outside the taxels (an indenter overhanging the edge,
 foam spreading past the outline) is not read, so the model predicts what the
-skin actually sees.
+skin sees.
 
-Ported from the lab script `opentac_indent_compare.py` (indenter_height,
-gaussian_blur, sim_taxel_forces); the numbers are unchanged, which
-tests/sim/test_foam.py checks against the original.
+tests/sim/test_foam.py checks this model against reference outputs in
+tests/sim/fixtures/foam_reference.json.
 """
 from __future__ import annotations
 
@@ -126,7 +125,7 @@ def taxel_forces(xy_mm, pitch_mm, geom, centre_mm, total_n, sigma_mm=SIGMA_MM,
     y0, y1 = np.clip(iy - half, 0, len(gy)), np.clip(iy + half + 1, 0, len(gy))
     x0, x1 = np.clip(ix - half, 0, len(gx)), np.clip(ix + half + 1, 0, len(gx))
     box = cum[y1, x1] - cum[y0, x1] - cum[y1, x0] + cum[y0, x0]
-    # Physical scale, NOT renormalised to total_n: whatever falls outside the taxels
+    # Physical scale, not renormalised to total_n: whatever falls outside the taxels
     # (the bar overhangs the skin, the foam spreads past the outline) is not read,
-    # so the model predicts the force the skin actually sees.
+    # so the model predicts the force the skin sees.
     return np.clip(box, 0, None) * cell

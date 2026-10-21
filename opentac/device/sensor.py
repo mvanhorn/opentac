@@ -30,9 +30,9 @@ from opentac.device.protocol import (ENUM_NAMES, DeviceError, parse_caps, parse_
 CHUNK_BYTES = 64        # config bytes per D line: 128 hex characters
 
 #: Session settings Sensor() applies unless told otherwise. MUX_SETTLE_US 8:
-#: untouched taxels read high at the firmware's default of 1 (README table:
-#: 62 taxels over 300 counts at 1 us, 19 at 8 us), and the force calibration
-#: was made at 8. IMU off: on one board the IMU's FIFO reads spiked the taxels
+#: untouched taxels read high at the firmware's default of 1 (on one skin with
+#: nothing touching it, 62 taxels exceeded 300 counts at 1 us and 19 at 8 us),
+#: and the force calibration was made at 8. IMU off: on one board the IMU's FIFO reads spiked the taxels
 #: read just after them; pass imu=True when you need orientation.
 DEFAULT_MUX_SETTLE_US = 8
 

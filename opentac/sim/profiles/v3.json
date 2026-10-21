@@ -18,7 +18,7 @@
  },
  "source": {
   "fitted": "2026-09-14",
-  "method": "scripts/fit_readout.py; see tactilesim/readout.py",
+  "method": "power law in taxel pressure fitted to the frame-by-frame force balance against the load cell, as described in opentac/sim/readout.py",
   "rig": "manual vertical press through a foam layer, no bump sheet, load cell under the sensor square",
   "press_dir": "press_data",
   "gaps_mm": [

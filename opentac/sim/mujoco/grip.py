@@ -1,14 +1,13 @@
-"""Stage 2 -- two bump pads on a parallel jaw, and a slip test.
+"""Two bump pads on a parallel jaw, and slip tests (part of the OpenTac bump model).
 
-The milestone this whole prototype exists to reach: does a lattice of rigid
-bumps on compliant joints actually GRIP better than a rigid pad?
+The study compares the grip of a lattice of rigid bumps on compliant joints
+with that of a rigid pad.
 
 Layout: both jaws squeeze along Z, the object is a cylinder whose axis lies
-along Y, and the pull is along Y too -- along the cylinder's own axis. That is
-deliberate. Pulled across its axis a cylinder ROLLS, and rolling is not slipping;
-the measurement would be of the rolling resistance and would look like a wildly
-compliance-dependent grip strength for the wrong reason. Pulled along its axis
-it can only slide.
+along Y, and the pull is along Y too, along the cylinder's own axis. Pulled
+across its axis, a cylinder rolls rather than slips; the measurement would then
+be of rolling resistance, which depends strongly on compliance for reasons
+unrelated to grip. Pulled along its axis, it can only slide.
 
 Gravity is off. The only tangential load is the applied pull, so the slip force
 is read directly rather than inferred against the object's weight.
@@ -37,9 +36,9 @@ def build_gripper(p: BumpParams, pad_half_mm=15.0, obj_radius_mm=12.0,
                   timestep=1e-4):
     """Two facing pads with a cylinder between them.
 
-    `bumps=False` gives the RIGID-PLATE baseline: same pads, same materials,
-    same object, no compliant elements. Without that line on the plot there is
-    nothing to compare a slip force against.
+    `bumps=False` gives the rigid-plate baseline: same pads, same materials,
+    same object, no compliant elements. A slip force is meaningful only in
+    comparison with this baseline.
     """
     if bumps:
         px, py = p.bump_pitch
@@ -86,9 +85,9 @@ def build_gripper(p: BumpParams, pad_half_mm=15.0, obj_radius_mm=12.0,
     </body>
     <!-- Offsetting the object off the lattice centre is not cosmetic.  A
          sphere centred on a square lattice sits symmetrically on exactly 4
-         bumps at EVERY pitch, so a pitch sweep silently becomes a comparison
-         of moment arms at fixed engagement rather than of engagement itself.
-         Averaging over a few offsets breaks that. -->
+         bumps at every pitch, so a pitch sweep becomes a comparison of moment
+         arms at fixed engagement rather than of engagement itself.
+         Averaging over a few offsets avoids that. -->
     <body name="obj" pos="{obj_offset_mm[0]*MM:.6f} {obj_offset_mm[1]*MM:.6f} {z_obj:.6f}">
       <!-- Tiny damping keeps the free body from drifting before the jaws meet.
            The pull is ramped slowly enough that velocity is ~0 right up to
@@ -126,7 +125,7 @@ class Gripper:
 
     # ---- readout ----------------------------------------------------------
     def pad_forces(self):
-        """Base normal force on each bump of the LOWER pad, N."""
+        """Base normal force on each bump of the lower pad, N."""
         if not self.n:
             return np.zeros(0)
         q = self.data.qpos
@@ -152,9 +151,10 @@ class Gripper:
     def close_to_force(self, target_n, tol=0.05, iters=16, steps=400):
         """Squeeze until the jaw carries `target_n`.  Safeguarded secant.
 
-        Same trap as press_to_force: force climbs faster than linearly with jaw
-        travel as more bumps engage, so an unbracketed step overshoots and
-        cannot recover.  Returns (squeeze_mm, force) -- CHECK THE FORCE.
+        As in Lattice.press_to_force, force climbs faster than linearly with
+        jaw travel as more bumps engage, so an unbracketed step overshoots and
+        cannot recover.  Returns (squeeze_mm, force); the caller should check
+        the force, which misses the target if the iterations run out.
         """
         lo, hi = 0.0, None
         d, tot = 0.05, 0.0
@@ -183,8 +183,8 @@ class Gripper:
         """Breakaway torque with friction switched off -- what the ramp reads
         from the object's own inertia and joint damping alone.
 
-        Measured, not estimated.  Any twist result must be compared against
-        this floor before it means anything.
+        Measured, not estimated.  A twist result is meaningful only above
+        this floor.
         """
         p2 = BumpParams(**{**self.p.__dict__, "mu": 1e-4})
         g = Gripper(p2, bumps=self.bumps, **self._kw)
@@ -200,33 +200,33 @@ class Gripper:
     def twist_until_slip(self, t_max=0.20, ramp_steps=30000, slip_deg=30.0):
         """Ramp a torque about the grip axis until the object breaks away.
 
-        THIS, not an axial pull, is the test that can distinguish a lattice from
-        a rigid plate.  Coulomb friction is AREA-INDEPENDENT: total slip force
-        is mu*N however the contact is distributed, so a straight pull gives the
-        same answer for both -- measured 31.0 N rigid against 28.6 N lattice,
-        both at 2*mu*N, a correct result and a useless one.
+        This test, not an axial pull, distinguishes a lattice from a rigid
+        plate.  Coulomb friction is independent of contact area: the total
+        slip force is mu*N however the contact is distributed, so a straight
+        pull gives the same result, 2*mu*N, for both.
 
         Torsional resistance is different: it is the friction force integrated
-        against its MOMENT ARM, so it depends on how far the contact is spread.
+        against its moment arm, so it depends on how far the contact is spread.
         A rigid plate on a sphere touches at a point and resists almost no
-        twist; a lattice engaging bumps across an area resists a lot.  Same
-        Coulomb model, completely different answer.
+        twist; a lattice engaging bumps across an area resists much more.  The
+        Coulomb model is the same; the result differs.
 
-        (The other real mechanism, that rubber friction falls with pressure so
-        spreading load raises effective mu, cannot be shown here at all --
-        MuJoCo's mu is a constant.  See NOTES.md.)
+        (A second mechanism, the decrease of rubber friction with pressure, by
+        which spreading the load raises the effective mu, cannot be represented
+        here: MuJoCo's mu is a constant.)
 
-        `slip_deg` is 30, not 5.  Bumps shear ELASTICALLY by hundreds of microns
+        `slip_deg` is 30, not 5.  Bumps shear elastically by hundreds of microns
         before anything breaks loose, and at a ~3mm moment arm 300um is already
         6 degrees of object rotation.  A 5 degree threshold therefore fires
         inside the elastic range for soft bumps and outside it for stiff ones,
-        which does not just add noise -- it INVERTS the ranking and makes stiff
-        bumps look like better grippers.
+        which does not merely add noise: it inverts the ranking and makes stiff
+        bumps appear to grip better.
 
         Ramp slowly.  The torque needed to inertially spin the object through
         the threshold goes as (ramp rate)^(2/3), so a slow ramp pushes that
         floor down; at these defaults it sits near 5 mN*m, well under the
-        signal.  Compare any result against that floor before believing it.
+        signal.  A result is meaningful only above that floor (see
+        inertial_floor).
         """
         yaw0 = self.obj_yaw()
         peak = 0.0
@@ -244,7 +244,7 @@ class Gripper:
     def pull_until_slip(self, f_max=40.0, ramp_steps=30000, slip_mm=1.0):
         """Ramp a pull along the cylinder's axis until the object breaks away.
 
-        Returns (slip_force_N, slipped).  Slip is declared on DISPLACEMENT, not
+        Returns (slip_force_N, slipped).  Slip is declared on displacement, not
         on velocity: the bumps shear elastically by hundreds of microns before
         anything breaks loose, and a velocity threshold picks that up as slip.
         The 1mm default sits well clear of the elastic range.

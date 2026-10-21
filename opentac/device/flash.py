@@ -3,8 +3,7 @@
 The running firmware reboots into the STM32's own USB bootloader (DFU) when it
 gets the line `B`. Then dfu-util, or STMicroelectronics' STM32CubeProgrammer,
 writes the binary from the start of flash. Both write only the pages the
-binary covers, so the skin config near the top of flash survives (checked with
-dfu-util on hardware; README 2026-09-10).
+binary covers, so the skin config near the top of flash survives.
 
 A new board has no firmware, so nothing answers `B`: it goes into the
 bootloader only if BOOT0 is held while it is plugged in, and since a board in
@@ -37,9 +36,9 @@ DFU_ID = "0483:df11"
 FLASH_START = "0x08000000"
 
 INSTALL = ("Install one: macOS `brew install dfu-util`; Ubuntu `sudo apt install dfu-util`; "
-           "Windows: STM32CubeProgrammer from st.com. See docs/use/flash.md.")
+           "Windows: STM32CubeProgrammer from st.com. See https://opentac.github.io/use/flash/.")
 
-#: Lets a logged-in Linux user open the STM32 bootloader (docs/use/flash.md, Linux).
+#: Lets a logged-in Linux user open the STM32 bootloader (https://opentac.github.io/use/flash/#on-linux).
 UDEV_RULE = 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="df11", MODE="0666"'
 UDEV_FILE = "/etc/udev/rules.d/50-opentac-dfu.rules"
 
@@ -60,7 +59,7 @@ DFU_DENIED = (
     f"On Linux, allow it with a udev rule, then unplug and replug the board:\n"
     f"  echo '{UDEV_RULE}' | sudo tee {UDEV_FILE}\n"
     f"  sudo udevadm control --reload-rules && sudo udevadm trigger\n"
-    f"(docs/use/flash.md, \"On Linux\")")
+    f"(https://opentac.github.io/use/flash/#on-linux)")
 
 CUBE_PATHS = [
     "/Applications/STMicroelectronics/STM32Cube/STM32CubeProgrammer/"
@@ -197,7 +196,7 @@ def flash(board: str | None = None, port=None, binary=None, force=False, dry_run
             if bus:
                 raise DeviceError(f"only a bus controller answers (on {bus[0]}); flash each "
                                   f"readout board over its own USB cable "
-                                  f"(docs/use/daisy-chain.md)") from None
+                                  f"(https://opentac.github.io/use/daisy-chain/)") from None
             if not (dry_run and (board or binary)):
                 raise DeviceError(NEW_BOARD_BIN if binary else NEW_BOARD) from None
             absent, reported = True, None

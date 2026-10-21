@@ -88,8 +88,7 @@ class TactileSensor:
             raise ManifestError(
                 f"manifest (v{self.v}) has no usable 'shear' block, so there is no way to know "
                 "which taxels share a bump. OpenTac-CAD added it in v5; re-export from a current "
-                "version. Without it the board may still be real, but this package cannot place "
-                "bumps on it.")
+                "version. Without it, this package cannot place bumps on the board.")
         if shear.get("b") is None:
             raise ManifestError("'shear' has bump centres but no 'b', so no taxel can be assigned to a bump.")
         self.bump_xy = np.asarray(bumps, dtype=float) * MM   # (B, 2) metres
@@ -107,7 +106,7 @@ class TactileSensor:
         if len(self.taxel_bump) != len(self.xy):
             raise ManifestError(
                 f"'shear.b' has {len(self.taxel_bump)} entries but there are {len(self.xy)} taxels; "
-                "the manifest promises they are parallel.")
+                "the manifest specifies them as index-parallel.")
         self._reject_curved(manifest)
 
         # Pitch from the spacing of taxel positions, never from px/py, which
