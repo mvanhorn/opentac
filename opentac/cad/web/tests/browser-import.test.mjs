@@ -230,7 +230,7 @@ try {
   ok(recipe.boardMode === "fixed_keepout", "fixed_keepout survived the import", recipe.boardMode);
   ok(Number(recipe.cable) === 15, "cable length survived", recipe.cable);
   ok(recipe.hasSvg, "the recipe rebuilt a board");
-  ok(recipe.statsText.includes(`(taxels)${recipe.originalActive}`),
+  ok(Number((recipe.statsText.match(/Taxels(\d+)/) || [])[1]) === recipe.originalActive,
      `the rebuild has the original taxel count (${recipe.originalActive})`,
      recipe.statsText.slice(0, 120));
 
