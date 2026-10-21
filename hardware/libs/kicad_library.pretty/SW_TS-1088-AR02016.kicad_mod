@@ -24,7 +24,7 @@
   (fp_line (start -3.0 1.7) (end 3.0 1.7) (layer F.CrtYd) (width 0.05))
   (fp_line (start 3.0 1.7) (end 3.0 -1.7) (layer F.CrtYd) (width 0.05))
   (fp_line (start 3.0 -1.7) (end -3.0 -1.7) (layer F.CrtYd) (width 0.05))
-  (model "${ARIK}/3dmodels/C720477.wrl"
+  (model "${KIPRJMOD}/../libs/3dmodels/C720477.wrl"
     (offset (xyz 0 0 0))
     (scale (xyz 1 1 1))
     (rotate (xyz 0 0 0))

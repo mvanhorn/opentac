@@ -24,7 +24,7 @@
 	(fp_poly (pts (xy -0.100000 0.499999) (xy -0.100000 0.899998) (xy 0.100000 0.699999) (xy -0.100000 0.499999)) (stroke (width 0) (type solid)) (fill solid) (layer "F.SilkS"))
 	(fp_poly (pts (xy -0.849986 -0.149987) (xy -0.849986 0.100000) (xy 0.900024 0.100000) (xy 0.900024 -0.149987) (xy -0.849986 -0.149987)) (stroke (width 0) (type solid)) (fill solid) (layer "F.SilkS"))
 	(fp_poly (pts (xy -0.149987 -0.149987) (xy -0.149987 -0.950011) (xy 0.150012 -0.950011) (xy 0.150012 -0.100000) (xy -0.149987 -0.100000) (xy -0.149987 -0.149987)) (stroke (width 0) (type solid)) (fill solid) (layer "F.SilkS"))
-	(model "C:/Users/Arik/OneDrive - Johns Hopkins/KiCAD Library/3dmodels/C5349955.wrl"
+	(model "${KIPRJMOD}/../libs/3dmodels/C5349955.wrl"
 		(offset (xyz 0.000 0.000 0.000))
 		(scale (xyz 1 1 1))
 		(rotate (xyz 0 0 0))

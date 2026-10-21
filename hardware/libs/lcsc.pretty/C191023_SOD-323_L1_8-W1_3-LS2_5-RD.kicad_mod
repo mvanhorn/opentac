@@ -24,7 +24,7 @@
 	(fp_line (start -0.82 -0.65) (end 0.88 -0.65) (layer F.CrtYd) (width 0.05))
 	(fp_poly (pts (xy -0.775005 0.802538) (xy -0.775005 0.450139) (xy -1.079779 0.450139) (xy -1.079779 0.802538) (xy -0.775005 0.802538)) (stroke (width 0) (type solid)) (fill solid) (layer "F.SilkS"))
 	(fp_poly (pts (xy -0.775005 -0.802310) (xy -0.775005 -0.449885) (xy -1.079779 -0.449885) (xy -1.079779 -0.802310) (xy -0.775005 -0.802310)) (stroke (width 0) (type solid)) (fill solid) (layer "F.SilkS"))
-	(model "C:/Users/Arik/OneDrive - Johns Hopkins/KiCAD Library/3dmodels/C191023.wrl"
+	(model "${KIPRJMOD}/../libs/3dmodels/C191023.wrl"
 		(offset (xyz 0.000 0.000 0.000))
 		(scale (xyz 1 1 1))
 		(rotate (xyz 0 0 0))

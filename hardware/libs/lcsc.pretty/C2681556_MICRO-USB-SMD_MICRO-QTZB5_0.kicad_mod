@@ -37,7 +37,7 @@
 	(fp_line (start 3.60 -1.53) (end 3.60 3.67) (layer F.CrtYd) (width 0.05))
 	(fp_line (start 3.60 3.67) (end -3.60 3.67) (layer F.CrtYd) (width 0.05))
 	(fp_line (start -3.60 3.67) (end -3.60 -1.53) (layer F.CrtYd) (width 0.05))
-	(model "C:/Users/Arik/OneDrive - Johns Hopkins/KiCAD Library/3dmodels/C2681556.wrl"
+	(model "${KIPRJMOD}/../libs/3dmodels/C2681556.wrl"
 		(offset (xyz 0.000 0.000 0.000))
 		(scale (xyz 1 1 1))
 		(rotate (xyz 0 0 0))
