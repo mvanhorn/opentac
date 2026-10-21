@@ -81,7 +81,6 @@ Note on UMI: the original Universal Manipulation Interface publishes its
 gripper CAD on Onshape rather than as STLs in a git repo, so these come from
 the actuated-UMI project, which reuses UMI's soft gripper finger. The
 `soft_gripper_finger` part is the UMI contact surface itself; the two jaws are
-from the actuated variant. If you have the original UMI STLs, drop them in and
-they take precedence. The actuated-UMI repository also carries UMI's MIT
+from the actuated variant. The actuated-UMI repository also carries UMI's MIT
 license (Columbia Artificial Intelligence and Robotics Lab) in its
 LICENSE_THIRD_PARTY file.
