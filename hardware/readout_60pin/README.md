@@ -3,7 +3,7 @@
 Reads one OpenTac sensor of up to **30 rows x 30 columns**. This is the
 "I2C gain switch" version: the gain is set in firmware, with no jumpers.
 
-![60-pin readout board](../../docs/assets/boards/readout60.png)
+![60-pin readout board](https://opentac.github.io/assets/boards/readout60.png)
 
 | | |
 |---|---|
@@ -18,7 +18,7 @@ Reads one OpenTac sensor of up to **30 rows x 30 columns**. This is the
 
 - `readout_60pin.kicad_pro`, `.kicad_sch`, `.kicad_pcb`: the KiCad 10 project.
   Footprints, symbols and 3D models it uses are in [`../libs`](../libs).
-- `production/`: the JLCPCB fabrication files for the version that was ordered (exported 2026-10-15).
+- `production/`: the JLCPCB fabrication files exported from this design on 2026-10-15.
   - `stm-i2c-60-switch.zip`: Gerbers and drill files
   - `stm-i2c-60-switch_bom.csv`: bill of materials, JLCPCB format (LCSC part numbers)
   - `stm-i2c-60-switch_positions.csv`: pick-and-place positions

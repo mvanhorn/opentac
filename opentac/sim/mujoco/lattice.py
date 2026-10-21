@@ -1,4 +1,8 @@
-"""Run indentation sweeps and read per-bump base forces."""
+"""Indentation sweeps on a regular bump lattice, read as per-bump base forces.
+
+Part of the OpenTac bump model: the regular-lattice study the model was
+validated with.
+"""
 
 import numpy as np
 import mujoco
@@ -19,7 +23,7 @@ class Lattice:
         self.model = mujoco.MjModel.from_xml_string(xml)
         self.data = mujoco.MjData(self.model)
         self.n = len(self.positions)
-        # DoF addresses for each bump's three joints, resolved once.
+        # DoF addresses for each bump's five joints, resolved once.
         self.dof = []
         for i in range(self.n):
             self.dof.append(tuple(
@@ -38,7 +42,7 @@ class Lattice:
     def base_forces(self):
         """Normal force at each bump's base, in newtons, positive = compressed.
 
-        Read from the JOINT deflection, not from contacts.  Two reasons: it is
+        Read from the joint deflection, not from contacts.  Two reasons: it is
         exactly the quantity the Velostat under that bump would see, and it is
         one number per bump regardless of how many contact points MuJoCo
         happened to generate on the bump's top face.
@@ -60,14 +64,14 @@ class Lattice:
         real beam couples lateral translation to base moment through an
         off-diagonal -6EI/H^2 term and MuJoCo joint springs are diagonal only.
         Under a flat object the hinges stay near zero while the shear joints
-        carry everything, so reading the hinges alone reports NO shear -- the
-        exact false negative Stage 0 hit.  A guided cantilever displaced by v
-        puts a moment k*v*H/2 into its base, so that term is added back here.
+        carry everything, so reading the hinges alone would report no shear.
+        A guided cantilever displaced by v puts a moment k*v*H/2 into its base,
+        so that term is added back here.
 
-        Putting the coupling in the READOUT rather than the dynamics keeps the
+        Putting the coupling in the readout rather than the dynamics keeps the
         forces the solver sees correct while making the sensed quantity right.
-        A one-off single-bump FEM fit of the full 2x2 stiffness would let this
-        move into the dynamics properly.
+        A single-bump FEM fit of the full 2x2 stiffness would allow the
+        coupling to move into the dynamics.
         """
         q, p, h = self.data.qpos, self.p, self.p.height
         out = []
@@ -82,11 +86,10 @@ class Lattice:
         """Normal force on each of the 4 taxels under every bump, N.
 
         Shape (n_bumps, 2, 2), indexed [bump][iy][ix] with ix/iy in {0,1} for
-        the -/+ side.  This is the whole point of the bump sheet: statically
-        distribute one bump's base wrench over its own 2x2 taxel block, so a
-        sideways load shows up as a DIFFERENCE across four normal readings.
-        Stage 4 turns these into Velostat conductances and a matrix scan; the
-        mechanics prototype already produces them.
+        the -/+ side.  This is the purpose of the bump sheet: one bump's base
+        wrench is distributed statically over its own 2x2 taxel block, so a
+        sideways load shows up as a difference across four normal readings.
+        opentac.sim.readout turns such forces into ADC counts.
         """
         fz = self.base_forces()
         m = self.base_moments()
@@ -115,18 +118,17 @@ class Lattice:
         return -(CLEARANCE + self.data.qpos[self.iq[2]]) * 1e3
 
     def move_indenter(self, target, steps=2000):
-        """Drive the indenter to `target` (x, y, z) CONTINUOUSLY, one small
+        """Drive the indenter to `target` (x, y, z) continuously, one small
         increment per solver step.
 
-        Never teleport it.  MuJoCo resolves friction at the velocity level: it
-        opposes relative tangential VELOCITY at the contact, and a jump in
-        mocap_pos is a position change with no velocity attached.  Teleporting
-        the indenter sideways therefore transmits exactly zero shear -- the
-        contact simply re-forms at the new spot.  Stage 0 measured a tip moment
-        of 0.005 mN*m against an expected 11 mN*m, a dead shear channel that
-        would have looked like "bumps do not transmit shear" rather than a
-        driving bug.  Normal force is unaffected (penetration is positional),
-        which is exactly what makes this easy to miss.
+        The indenter is never teleported.  MuJoCo resolves friction at the
+        velocity level: it opposes relative tangential velocity at the contact,
+        and a jump in mocap_pos is a position change with no velocity attached.
+        Teleporting the indenter sideways therefore transmits exactly zero
+        shear; the contact simply re-forms at the new spot, and the result
+        would read as bumps that do not transmit shear.  Normal force is
+        unaffected (penetration is positional), which makes the error easy to
+        miss.
         """
         start = np.array(self.data.ctrl[:3], dtype=float)
         target = np.asarray(target, dtype=float)
@@ -145,24 +147,24 @@ class Lattice:
                        steps=500, settle_steps=300):
         """Press until the lattice carries `target_n` newtons.
 
-        Returns (depth_mm, total_N).  CHECK THE RETURNED FORCE -- on a hard
-        config this can run out of iterations, and a silently unconverged point
-        is indistinguishable from a real result in a summary table.
+        Returns (depth_mm, total_N).  The caller should check the returned
+        force: on a hard configuration this can run out of iterations, and an
+        unconverged point is indistinguishable from a real result in a summary
+        table.
 
-        Comparing lattices at equal DEPTH is meaningless: at fixed depth the
+        Comparing lattices at equal depth is meaningless: at fixed depth the
         object's surface alone decides which bumps it reaches, so every
         stiffness engages an identical set and the sweep comes out flat.
-        Conformance is a question about equal LOAD -- a softer bump compresses
+        Conformance is a question about equal load: a softer bump compresses
         further under the same force, letting the object descend onto its
-        neighbours.  The first Stage 1 swept depth and "found" that stiffness
-        has no effect, which was an artefact of the protocol.
+        neighbours.  A depth sweep would therefore show no effect of stiffness
+        as an artefact of the protocol.
 
-        SAFEGUARDED secant, not plain secant.  Force rises much faster than
-        linearly with depth as new bumps engage -- on a tilted plate each new
-        column that lands adds stiffness -- so an unbracketed secant step
-        overshoots and cannot recover.  Plain secant reported 25/25 bumps
-        engaged at a "10 N" load whose peak single-bump force was 75 N.  Any
-        step falling outside the known bracket falls back to bisection.
+        Safeguarded secant, not plain secant.  Force rises much faster than
+        linearly with depth as new bumps engage (on a tilted plate each new
+        column that lands adds stiffness), so an unbracketed secant step
+        overshoots and cannot recover.  Any step falling outside the known
+        bracket falls back to bisection.
         """
         lo, hi = 0.0, None          # lo: force < target, hi: force > target
         d, tot = guess_mm, 0.0
@@ -192,7 +194,7 @@ class Lattice:
     def indent_sweep(self, depths_mm, settle_steps=400):
         """Press to each depth in turn, recording forces once settled.
 
-        Depth is measured from FIRST TOUCH (indenter lowest point level with the
+        Depth is measured from first touch (indenter lowest point level with the
         undeformed bump tops), so 0.0 is the just-touching configuration.
         """
         out = []
@@ -211,8 +213,8 @@ class Lattice:
 
 
 def contact_force_total(lat: Lattice):
-    """Sum of contact normal forces on the indenter -- an independent check that
-    the joint-deflection readout above is not quietly wrong."""
+    """Sum of contact normal forces on the indenter, an independent check of
+    the joint-deflection readout above."""
     ind_geom = mujoco.mj_name2id(lat.model, mujoco.mjtObj.mjOBJ_GEOM, "ind")
     total = np.zeros(3)
     buf = np.zeros(6)

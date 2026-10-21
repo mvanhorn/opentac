@@ -5,7 +5,7 @@
 
 Everything else in this package ends in newtons per taxel. A real board streams
 12-bit counts, and the map between the two is set by the piezoresistive layer,
-which is a per-build choice -- so the readout is a PROFILE the user picks, not
+which is a per-build choice -- so the readout is a profile the user picks, not
 a constant:
 
     from opentac.sim import Readout
@@ -14,12 +14,12 @@ a constant:
     counts = r.counts(forces_n, pitch_m)        # (taxels,) counts above baseline
     forces = r.forces(counts, pitch_m)          # the inverse, for a real board
 
-`pitch_m` is the taxel pitch in METRES, as (px, py) or a scalar, or any object
+`pitch_m` is the taxel pitch in metres, as (px, py) or a scalar, or any object
 with a `.pitch` in metres. The two shipped profiles were fitted from bench
 press recordings; each JSON's `source` block records how. A profile for a
 different velostat is a JSON file of the same form.
 
-THE MODEL
+The model
 ---------
     counts = min(adc_max, gain * a * p ** b),   p = F / taxel_area   (kPa)
     a      = k * taxel_area_mm2 ** s
@@ -29,9 +29,9 @@ curvature that survives normalisation.
 `a` grows with taxel area, because a bigger interdigitated taxel conducts more
 at the same pressure; `s` is fitted across the pitches that were calibrated.
 
-HOW IT WAS FITTED, AND WHY THAT WAY
------------------------------------
-The calibration press was NOT uniform: a hand press through a foam layer, no
+How the profiles were fitted
+----------------------------
+The calibration press was not uniform: a hand press through a foam layer, no
 bump sheet, and the tactile image shows it. Nor does the pattern keep its
 shape as force rises (low-force vs high-force log-patterns correlate 0-0.5), so
 per-taxel pressure cannot be read off a fixed weighting. What survives is the
@@ -39,7 +39,7 @@ force balance:
 
   a  Frame by frame, the load cell's force must equal the sum of taxel
      pressures times area. Inverting the power law per taxel gives
-     F = area * sum((c/a) ** (1/b)), which pins `a` with NO assumption about
+     F = area * sum((c/a) ** (1/b)), which fixes `a` with no assumption about
      the pressure pattern.
   b  If the model is right, that `a` is the same at every load. b is chosen
      as the exponent at which it stops trending with force. Each taxel's own
@@ -52,13 +52,13 @@ A non-parametric monotone curve fitted the same way did no better: the error
 that remains is press-to-press (the same 2 mm square varies +-30% between
 recordings), not the shape of the curve.
 
-WHAT A PROFILE DOES NOT KNOW
-----------------------------
+What a profile does not capture
+-------------------------------
 - Per-taxel gain spread. Non-uniform pressure and non-uniform velostat look
   identical to this rig, so the spread is not separable and is not modelled.
 - The bump sheet. Calibration pressed through foam onto the velostat; under a
   TPU bump the local pressure within one taxel is uneven, and with b < 1 a
-  taxel-mean pressure OVERestimates the counts.
+  taxel-mean pressure overestimates the counts.
 - Anything above `calibrated_kpa`. A sphere on a bump concentrates force far
   beyond what a flat press over a whole square reaches; `extrapolating()`
   says which taxels are outside the fit.
@@ -89,8 +89,8 @@ def available_profiles():
 def _find_profile(query):
     """A label ("v3"), a material ("Yunjia Textiles"), or its first word ("yunjia").
 
-    The labels are just what the calibration run called each sheet; the
-    material is what someone else can actually buy, so either has to work.
+    The labels are the names the calibration run gave each sheet; the
+    material is what others can buy, so both are accepted.
     """
     q = query.strip().lower()
     for label, material in available_profiles().items():
@@ -101,7 +101,7 @@ def _find_profile(query):
 
 
 def _taxel_area_mm2(pitch):
-    """Accept a TactileSensor, a (px, py) pitch in METRES, or a scalar in metres.
+    """Accept a TactileSensor, a (px, py) pitch in metres, or a scalar in metres.
 
     Metres because `TactileSensor.pitch` is SI. A pitch passed in mm would give
     an area 1e6 too large and every taxel would saturate, which looks like a
@@ -119,7 +119,7 @@ def _taxel_area_mm2(pitch):
 @dataclass(frozen=True)
 class Readout:
     name: str
-    material: str                   # what the sheet actually is; the name is a bench label
+    material: str                   # what the sheet is; the name is a bench label
     b: float                        # pressure exponent
     k: float                        # a = k * area_mm2 ** s, counts / kPa^b
     s: float                        # area exponent of the gain
@@ -196,7 +196,7 @@ class Readout:
     def forces(self, counts, pitch, gain=1.0):
         """The inverse: newtons per taxel from counts above baseline.
 
-        Taxels at `adc_max` come back as a LOWER bound -- the ADC has stopped
+        Taxels at `adc_max` come back as a lower bound -- the ADC has stopped
         saying how hard they are pressed. Taxels under 3x the noise read zero.
         """
         c = np.asarray(counts, dtype=float)
@@ -212,7 +212,7 @@ class Readout:
         return p * _taxel_area_mm2(pitch) * 1e-3
 
     def extrapolating(self, forces_n, pitch):
-        """True for taxels loaded ABOVE anything the calibration measured.
+        """True for taxels loaded above anything the calibration measured.
 
         Zero load is not extrapolation; below the fit's floor the reading is
         within noise anyway.

@@ -19,8 +19,7 @@ press for the requested total force over a bracketing interval, and splits
 each bump's base moment over its taxels by least squares.
 
 `Lattice` (lattice.py) and `Gripper` (grip.py) are the regular-lattice studies
-the model was validated with. Comments that cite NOTES.md or "Stage N" refer to
-TactileSim's research notes and scripts, which are not part of this package.
+the model was validated with.
 
 Flat sensors only: a manifest with a `sim3d` block (curved) is refused.
 """

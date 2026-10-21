@@ -1,6 +1,6 @@
 {
  "_readme": [
-  "DeviceConfig bytes (hex) built by the original stm_test/tactile_imu_fast_cfg/opentac_device.py (2026-09-29) from each manifest's file bytes in stm_test/, with its own BOARD_MAPS. The manifests are copies of four from the lab's stm_test folder, the ones the readout firmware was developed against. null = refused."
+  "Reference DeviceConfig bytes (hex) for each manifest in stm_test/ on each board, built from the manifest's file bytes. The four manifests are ones the readout firmware was developed against. null = refused."
  ],
  "manifest_32x32_HD.json": {
   "NODE16": null,

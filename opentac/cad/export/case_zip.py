@@ -6,9 +6,9 @@ Every lid fits the same bottom, so the user can print a different one later
 without coming back to the app.
 
 Built at download time by its own endpoint (/zip-with-case), never inside
-/generate. Three lids are three boolean-heavy meshes, and generate is the call
-the free-tier backend can least afford to slow down; a user who regenerates
-ten times and downloads once pays for the case once.
+/generate. Three lids are three boolean-heavy meshes, and /generate is the
+request the hosted server can least afford to slow down; a user who
+regenerates ten times and downloads once pays for the case once.
 
 Failure is soft at every level. A lid that cannot be built is left out and
 named in the README; if no lid can be built there is no bottom either, and the

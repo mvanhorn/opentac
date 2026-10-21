@@ -16,14 +16,11 @@ SUPPORTED_CONNECTOR_EXPORT_POS = {20, 30, 32, 40, 50, 60, 70, 80, 90, 100}
 def local_to_world(lx, ly, t_hat, n_out, pad1_world):
     """Transform raw connector-local coordinates to app-world coordinates.
 
-    Local +X maps to +t_hat, local +Y maps to -n_out. Confirmed against
-    custom_pcb_dev's independent (and correctly-oriented) gerber.py::
-    _local_to_world(), which uses this exact sign convention for the
-    connector body/Edge.Cuts/stiffener silkscreen. An earlier attempt to
-    "fix" a pad-orientation bug by flipping this sign was wrong — it
-    reoriented the whole connector body along with the pads (confirmed live:
-    "the entire connector got flipped"). The real pad bug is unrelated to
-    this transform's sign; see _resolve_pads() below.
+    Local +X maps to +t_hat, local +Y to -n_out; the KiCad and Gerber
+    exporters both use this convention for the connector body, Edge.Cuts and
+    stiffener silkscreen. Flipping the sign would reorient the whole connector
+    body, not only its pads. The pad drill offset is handled separately in
+    _resolve_pads().
     """
     wx = pad1_world[0] + lx * t_hat[0] - ly * n_out[0]
     wy = pad1_world[1] + lx * t_hat[1] - ly * n_out[1]
@@ -33,11 +30,11 @@ def local_to_world(lx, ly, t_hat, n_out, pad1_world):
 def connector_export_dir(layout, connector_dir: str) -> str:
     """Return connector_dir only when physical connector export is enabled.
 
-    Used to also require an enabled tail extension, which meant a board
-    exported WITHOUT drawing a custom tail silently shipped with no connector
-    footprint at all. connector_pose and the Edge.Cuts stitcher both handle
-    the no-extension case (the base tail_geometry pose), so the only real
-    requirements are a supported size and a footprint file on disk.
+    The requirements are a supported size and a footprint file on disk. A
+    custom tail extension is not required: connector_pose and the Edge.Cuts
+    stitcher both handle the no-extension case (the base tail_geometry pose),
+    so a board exported without a drawn tail still carries its connector
+    footprint.
     """
     if not connector_dir:
         return ""
@@ -243,14 +240,14 @@ def stitched_outline_segments(layout, outline_xy, params, connector_dir):
 
     The connector footprint Edge.Cuts are intentionally open on the side facing
     the tail; the board outline must end exactly at those two open endpoints.
-    An earlier version dragged the endpoints of ONE outline edge (the "cap")
-    onto the open endpoints -- but the board carries material DEEPER than the
-    open edge (the base tail's connector-body allowance, and the landing of the
+    Dragging the endpoints of one outline edge (the "cap") onto the open
+    endpoints does not work: the board carries material deeper than the open
+    edge (the base tail's connector-body allowance, and the landing of the
     export's tail extension, which runs on to the pad drills), and dragging the
-    deepest cap folds ~4mm segments back inward across the corridor. Instead:
-    build the connector body region (its Edge.Cuts path closed along the open
-    edge), subtract it from the board polygon so the outline is cut along the
-    open edge, drop the opening segment itself, and snap the two cut vertices
+    deepest cap folds segments back inward across the corridor. Instead, this
+    builds the connector body region (its Edge.Cuts path closed along the open
+    edge), subtracts it from the board polygon so the outline is cut along the
+    open edge, drops the opening segment itself, and snaps the two cut vertices
     exactly onto the connector's open endpoints.
 
     That only meets the footprint cleanly while the board is no wider than the
@@ -351,15 +348,11 @@ def _resolve_pads(text, t_hat, n_out, pad1_world):
     This connector family authors each pad's rectangle centered on its own
     "at" point (e.g. spanning local y=[-1.75, 1.75]) with the drill offset
     toward one end ("(offset 0 -1.5)") — taken literally, the pad's far
-    edge stops 1.5mm short of the connector body's actual mechanical tip
-    edge (verified directly against the same file's Edge.Cuts tip line at
-    local y=-3.25). custom_pcb_dev's proven-working _build_connector() fixes
-    this by re-centering the whole pad rectangle on the drill (its own
-    regex rewrites "(at X 0)" -> "(at X -1.5)" and zeroes the offset) so the
-    pad's far edge actually reaches the tip — reproduced here with the same
-    shift, verified to land exactly on the tip (0mm short vs. 1.5mm short
-    unshifted). The drill then sits at the pad's own (new) center, so
-    "drill_center" and "center" coincide.
+    edge stops 1.5mm short of the connector body's mechanical tip edge (the
+    same file's Edge.Cuts tip line at local y=-3.25). Each pad rectangle is
+    therefore re-centred on its drill (local y=-1.5 for this family), so the
+    pad's far edge lands exactly on the tip line. The drill then sits at the
+    pad's own centre, so "drill_center" and "center" coincide.
     """
     pads = _parse_pad_blocks(text)
     out = []

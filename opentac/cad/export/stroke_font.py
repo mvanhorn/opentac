@@ -2,7 +2,7 @@
 
 Gerber has no text primitive worth using: an aperture-based format draws
 strokes, and a fab's viewer will not render a font for you. KiCad solves this
-by shipping its own stroke font and plotting glyphs as line segments, which is
+by bundling its own stroke font and plotting glyphs as line segments, which is
 exactly what `export/gerber.py` has to do for the F.Silkscreen layer.
 
 Doing that needs a glyph table, and this is the smallest one that covers the
@@ -54,7 +54,7 @@ _GLYPHS = {
     "Y": [[(0, 10), (3, 5), (6, 10)], [(3, 5), (3, 0)]],
     "Z": [[(0, 10), (6, 10), (0, 0), (6, 0)]],
     # A slashed zero: these names mix letters and digits ("sensor_20260908"),
-    # and O/0 at 1mm on a screen-printed flex is otherwise a coin toss.
+    # and at 1mm on a screen-printed flex O and 0 are otherwise ambiguous.
     "0": [[(2, 10), (4, 10), (6, 8), (6, 2), (4, 0), (2, 0), (0, 2), (0, 8), (2, 10)],
           [(1, 2), (5, 8)]],
     "1": [[(1, 8), (3, 10), (3, 0)], [(1, 0), (5, 0)]],

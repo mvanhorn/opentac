@@ -1,13 +1,13 @@
-"""Write a real export ZIP for the frontend tests to read.
+"""Write a real export ZIP for the web page's tests to read.
 
-    python backend/tests/make_export_zip.py [out.zip]
+    python tests/cad/make_export_zip.py [out.zip]
 
-The frontend's ZIP reader is hand-written binary parsing, and the only archive
-worth testing it against is one this pipeline actually produced -- a synthetic
-one built by the test would encode whatever assumptions the reader already
-makes. Default output is frontend/tests/fixtures/export.zip, which
-design-import.test.mjs picks up automatically (and which is regenerated rather
-than committed, so it can never go stale against the exporter).
+The page's ZIP reader is hand-written binary parsing, and the archive worth
+testing it against is one this pipeline produced: a synthetic one built by the
+test would encode whatever assumptions the reader already makes. The default
+output is opentac/cad/web/tests/fixtures/export.zip, which
+design-import.test.mjs reads automatically (and which is regenerated rather
+than committed, so it cannot go stale against the exporter).
 """
 import base64
 import os
@@ -19,7 +19,7 @@ from opentac.cad.main import generate, GenerateRequest
 SQUARE = [[-20, -20], [20, -20], [20, 20], [-20, 20]]
 
 DEFAULT_OUT = os.path.join(
-    os.path.dirname(__file__), "..", "..", "frontend", "tests", "fixtures", "export.zip")
+    os.path.dirname(__file__), "..", "..", "opentac", "cad", "web", "tests", "fixtures", "export.zip")
 
 
 def main(out_path=None):

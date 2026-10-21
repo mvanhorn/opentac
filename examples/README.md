@@ -11,8 +11,8 @@ Run each from the repository root.
 | `transfer.py` | Simulates a press on one sensor and moves the reading onto a sensor with different taxels | no | `uv run python examples/transfer.py` |
 
 The three board scripts need a readout board with the OpenTac firmware
-([docs/use/flash.md](../docs/use/flash.md)) and a sensor that the board has been
-told about, once:
+([Flash the firmware](https://opentac.github.io/use/flash/)) and a sensor that the
+board has been told about, once:
 
 ```sh
 uv run opentac setup my_design.zip

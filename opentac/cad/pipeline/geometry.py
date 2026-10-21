@@ -98,7 +98,7 @@ def concave_fillet_infill(poly, radius: float, zone=None, quad_segs: int = 16):
 
 
 def inside_or_on_polygon(poly, xq: np.ndarray, yq: np.ndarray) -> np.ndarray:
-    """Check if points are inside OR on boundary of polygon (handles MultiPolygon)."""
+    """Check if points are inside or on boundary of polygon (handles MultiPolygon)."""
     n = len(xq)
     result = np.zeros(n, dtype=bool)
 
@@ -109,11 +109,11 @@ def inside_or_on_polygon(poly, xq: np.ndarray, yq: np.ndarray) -> np.ndarray:
     else:
         return result
 
-    # Vectorized but predicate-identical to the original per-point loop:
-    # shapely.contains_xy is the same GEOS contains, and the boundary
-    # tolerance keeps the strict `distance < 1e-9` comparison (NOT dwithin,
-    # whose <= differs at exactly 1e-9). Profiled: the per-point version was
-    # the packer's whole cost, and packing dominates fixed-mode carves.
+    # Vectorized, with the same predicate as a per-point test: shapely.contains_xy
+    # is the same GEOS contains, and the boundary tolerance keeps the strict
+    # `distance < 1e-9` comparison (not dwithin, whose <= differs at exactly
+    # 1e-9). This test dominates the packer's cost, and packing dominates
+    # fixed-mode carves.
     import shapely as _shapely
     xa = np.asarray(xq, dtype=float)
     ya = np.asarray(yq, dtype=float)
@@ -174,114 +174,6 @@ def make_cable_rect(p1, p2, t_hat, n_out, width_mm, length_mm) -> Polygon:
     return Polygon([A, B, C, D])
 
 
-def make_connector_ear_polys(center, t_hat, n_out, width_mm):
-    """Build clean connector side ears for the final manufacturing outline.
-
-    The ears replace raw connector-footprint Edge.Cuts fragments. Dimensions are
-    based on the existing FPC connector footprint ear style but kept simple so
-    all connector sizes share one manufacturable outer contour.
-    """
-    center = np.asarray(center, dtype=float)
-    t_hat = np.asarray(t_hat, dtype=float)
-    n_out = np.asarray(n_out, dtype=float)
-    half_w = float(width_mm) / 2
-    ear_out = 0.55
-    ear_h = 1.05
-    chamfer = 0.28
-    # Place ears near the terminal end, similar to the source FPC connector.
-    y0 = -2.55
-    y1 = y0 + ear_h
-
-    def world(tx, ny):
-        return center + tx * t_hat + ny * n_out
-
-    left_inner = -half_w
-    left_outer = left_inner - ear_out
-    right_inner = half_w
-    right_outer = right_inner + ear_out
-
-    left = Polygon([
-        world(left_inner, y0),
-        world(left_inner, y1),
-        world(left_outer + chamfer, y1),
-        world(left_outer, y1 - chamfer),
-        world(left_outer, y0 + chamfer),
-        world(left_outer + chamfer, y0),
-    ])
-    right = Polygon([
-        world(right_inner, y0),
-        world(right_outer - chamfer, y0),
-        world(right_outer, y0 + chamfer),
-        world(right_outer, y1 - chamfer),
-        world(right_outer - chamfer, y1),
-        world(right_inner, y1),
-    ])
-    return [left, right]
-
-
-def add_connector_ears_to_board(board_poly, center, t_hat, n_out, width_mm):
-    """Union connector ears into a board polygon and return a cleaned polygon."""
-    from shapely.ops import unary_union
-
-    ears = make_connector_ear_polys(center, t_hat, n_out, width_mm)
-    expanded = unary_union([board_poly, *ears])
-    if not expanded.is_valid:
-        expanded = expanded.buffer(0)
-    return expanded
-
-
-def trim_connector_front_space(board_poly, center, t_hat, n_out, width_mm, keep_mm=0.3):
-    """Remove unused board area beyond the connector terminal line.
-
-    The generated connector pads/routes end at the pad row. Keep a tiny amount
-    of board beyond that line so endpoints remain inside the manufacturable
-    outline, but trim the large empty strip from the tail end.
-    """
-    center = np.asarray(center, dtype=float)
-    t_hat = np.asarray(t_hat, dtype=float)
-    n_out = np.asarray(n_out, dtype=float)
-    minx, miny, maxx, maxy = board_poly.bounds
-    half_w = max(float(width_mm) / 2 + 1.0, float(np.hypot(maxx - minx, maxy - miny)))
-    trim_start = center + float(keep_mm) * n_out
-    trim_len = CONNECTOR_BODY_BELOW_MM + max(5.0, half_w)
-    a = trim_start - half_w * t_hat
-    b = trim_start + half_w * t_hat
-    c = b + trim_len * n_out
-    d = a + trim_len * n_out
-    trimmed = board_poly.difference(Polygon([a, b, c, d]))
-    if not trimmed.is_valid:
-        trimmed = trimmed.buffer(0)
-    return trimmed
-
-
-def trim_connector_side_space(board_poly, center, t_hat, n_out, width_mm, keep_mm=0.3, side_keep_mm=0.3):
-    """Tighten the connector-end side edges around the gold-finger zone."""
-    center = np.asarray(center, dtype=float)
-    t_hat = np.asarray(t_hat, dtype=float)
-    n_out = np.asarray(n_out, dtype=float)
-    minx, miny, maxx, maxy = board_poly.bounds
-    far = float(np.hypot(maxx - minx, maxy - miny)) + 5.0
-    half_terminal = float(width_mm) / 2 + float(side_keep_mm)
-    # Keep the side trim at the insertion edge only; routes fan out just behind
-    # this line and must remain inside the flex outline.
-    y_front = float(keep_mm)
-    y_back = 0.0
-    left_inner0 = center - half_terminal * t_hat + y_back * n_out
-    left_inner1 = center - half_terminal * t_hat + y_front * n_out
-    left_outer1 = center - far * t_hat + y_front * n_out
-    left_outer0 = center - far * t_hat + y_back * n_out
-    right_inner0 = center + half_terminal * t_hat + y_back * n_out
-    right_outer0 = center + far * t_hat + y_back * n_out
-    right_outer1 = center + far * t_hat + y_front * n_out
-    right_inner1 = center + half_terminal * t_hat + y_front * n_out
-    cut = Polygon([left_inner0, left_inner1, left_outer1, left_outer0])
-    cut = cut.union(Polygon([right_inner0, right_outer0, right_outer1, right_inner1]))
-    trimmed = board_poly.difference(cut)
-    if not trimmed.is_valid:
-        trimmed = trimmed.buffer(0)
-    return trimmed
-
-
 def connector_required_tail_width(conn_pos: int, pad_pitch_mm: float) -> float:
     """Minimum tail width needed to expose the connector edge pads."""
     return connector_dimensions(conn_pos, pad_pitch_mm)["tab_tip_width_mm"]
@@ -330,7 +222,7 @@ def fit_tail_strip(pad_to_net: dict, conn_pos: int, params, edge_mm: float) -> t
 def tail_offset_mm(tail) -> float:
     """Where a narrowed tail's strip is centred, along t_hat from the connector's
     centre line (fit_tail_strip). 0 for a tail that was not cut to its wires,
-    and for designs saved before the strip could sit off-centre."""
+    and for a stored tail without `fit_offset_mm`."""
     t = tail or {}
     if t.get("mode") != "fit":
         return 0.0
@@ -340,9 +232,9 @@ def tail_offset_mm(tail) -> float:
 # How a narrow tail widens back to the connector's tab, per side.
 #
 # The tail cut to its wires after routing (narrow_tail.narrow_routed_tail) steps
-# out to the tab right before it, as on the boards fabricated before: the cable
-# runs straight into the tab and each side turns out square, through a concave
-# fillet as round as the tail's corners where it leaves the board
+# out to the tab right before it: the cable runs straight into the tab and each
+# side turns out square, through a concave fillet as round as the tail's
+# corners where it leaves the board
 # (Params.connector_shoulder_fillet_mm, stored with the tail as step_fillet_mm),
 # then round a small convex corner (TAIL_STEP_CORNER_MM) onto the tab's edge.
 # No inside corner is sharper than the fillet, so the flex has nowhere to tear.
@@ -351,8 +243,8 @@ TAIL_STEP_ARC_STEPS = 12     # segments per quarter turn
 # A tail of a width the user typed is routed with its widening (layout.py), and
 # the router fans wires in through it to pads outside the typed width, so it
 # keeps the long half-cosine flare it was routed with: steepest 45 degrees, tangent
-# to the cable and to the landing at its ends. So do tails narrowed by the
-# designs saved before the step, so they come back as they were made.
+# to the cable and to the landing at its ends. So does a narrowed tail stored
+# without `step_fillet_mm`, so such a design reopens exactly as it was made.
 TAIL_FLARE_MAX_SLOPE = 1.0
 TAIL_FLARE_STEPS = 16
 
@@ -440,8 +332,8 @@ def tail_widening_length(narrow_w: float, wide_w: float, room: float, offset: fl
 
 def tail_step_fillet(tail) -> float | None:
     """The inside radius a stored tail's step was made with (tail_side_edges),
-    or None for a tail that flares: one of a typed width, or one narrowed by a
-    design saved before the step."""
+    or None for a tail that flares: one of a typed width, or a narrowed tail
+    stored without `step_fillet_mm`."""
     r = (tail or {}).get("step_fillet_mm")
     return None if r is None else float(r)
 
@@ -480,8 +372,9 @@ def tail_without_landing(cable_poly, mid, t_hat, n_out, width: float, connector_
     extension: the widening and landing (make_tail_poly) belong to the
     connector, so the plain strip runs on in their place to where the extension
     starts, at the pad row; the extension's corridor carries on from there
-    (extension_tail_poly), turning with the path. Run on to the old landing's
-    end, the strip stuck out past the outside of a path that turns at once.
+    (extension_tail_poly), turning with the path. Run on to the end of the
+    replaced landing, the strip would stick out past the outside of a path
+    that turns immediately.
     `landing_cover`: the board the narrowed tail kept round wires in its step
     and landing (narrow_tail.narrow_routed_tail), kept up to the pad row."""
     if cable_poly is None or width >= connector_width - 1e-6:
@@ -621,11 +514,6 @@ def connector_landing_poly(pad_row_center, t_hat, n_out, narrow_w: float, connec
     return Polygon(left + right)
 
 
-def resolve_tail_width(p1, p2, conn_pos: int, params) -> float:
-    """Resolve manual/automatic tail width."""
-    return resolve_tail(params, p1, p2, conn_pos)["width_mm"]
-
-
 def resolve_tail(params, p1, p2, conn_pos: int, fit_width: float | None = None,
                  fit_offset: float | None = None) -> dict:
     """Resolve tail dimensions.
@@ -742,10 +630,10 @@ def pt_seg_dist(p: np.ndarray, a: np.ndarray, b: np.ndarray) -> float:
     """Point-to-segment distance.
 
     Written out in scalars rather than numpy vector ops. These are 2D points and
-    this is one of the hottest functions in the router (~250k calls on a 16x16
-    board); at that size np.dot/np.linalg.norm are dominated by their own
-    per-call dispatch, and math.hypot is ~5x faster than np.linalg.norm on a
-    2-vector. Same arithmetic, same result.
+    this is one of the hottest functions in the router; for 2-vectors
+    np.dot/np.linalg.norm are dominated by their own per-call dispatch, and
+    math.hypot is several times faster than np.linalg.norm on a 2-vector. Same
+    arithmetic, same result.
     """
     ax, ay = float(a[0]), float(a[1])
     abx, aby = float(b[0]) - ax, float(b[1]) - ay
@@ -885,21 +773,21 @@ def ensure_ccw(outline_xy: np.ndarray) -> np.ndarray:
 
 
 def cable_transform(outline_xy: np.ndarray):
-    """The rigid map `rotate_for_cable` applies to POINTS, captured on its own.
+    """The rigid map `rotate_for_cable` applies to *points*, captured on its own.
 
     Split out so anything drawn in the pre-rotation frame can be carried into
-    the canonical frame *later, from a different request* — the 3D unfold's uv
-    map is produced by /unroll-mesh and needed again at export time, long after
-    the rotation was chosen inside /generate. Recovering the transform by
-    fitting the outline before and after would be the "reconstruct it later"
-    mistake `_edge_cuts_points` documents; re-running this pure function on the
+    the canonical frame *later, from a different request* — e.g. the 3D
+    unfold's uv map, produced by /unroll-mesh and used by
+    sim_pack.build_sim3d, long after the rotation was chosen inside
+    /generate. Recovering the transform by fitting the outline before and
+    after would only approximate it; re-running this pure function on the
     same outline gives the identical answer by construction.
 
     Returns (R, mid, flip). A point p maps to `s * (R @ (p - mid))`, with
     s = -1 when `flip`. The flip negates x and y together, which is a 180
     degree rotation rather than a mirror, so the whole map is rigid and
     orientation-preserving — meaning a *direction* carries through as
-    `s * (R @ v)` with no translation. See `apply_cable_transform_dir`.
+    `s * (R @ v)` with no translation.
     """
     outline_xy = ensure_ccw(np.asarray(outline_xy, dtype=float))
     p1 = outline_xy[0]
@@ -918,20 +806,9 @@ def cable_transform(outline_xy: np.ndarray):
 
 
 def apply_cable_transform(pts: np.ndarray, tf) -> np.ndarray:
-    """Carry POSITIONS through `cable_transform`'s map."""
+    """Carry *positions* through `cable_transform`'s map."""
     R, mid, flip = tf
     out = (R @ (np.asarray(pts, dtype=float) - mid).T).T
-    return -out if flip else out
-
-
-def apply_cable_transform_dir(vecs: np.ndarray, tf) -> np.ndarray:
-    """Carry DIRECTIONS through the same map — rotation only, no translation.
-
-    Tangents must go through this, not `apply_cable_transform`: subtracting
-    `mid` from a direction vector would silently turn it into a point.
-    """
-    R, _mid, flip = tf
-    out = (R @ np.asarray(vecs, dtype=float).T).T
     return -out if flip else out
 
 
@@ -939,7 +816,7 @@ def rotate_for_cable(outline_xy: np.ndarray, extra_xy: np.ndarray = None):
     """Rotate outline so edge 1->2 is horizontal at the bottom.
 
     The rest of the polygon ends up above the cable edge.
-    Ensures CCW winding first, then matches MATLAB rotateForCable().
+    Ensures CCW winding first.
 
     If extra_xy is given (e.g. a sensor-fill region drawn in the same
     coordinate frame as outline_xy), it is carried through the identical

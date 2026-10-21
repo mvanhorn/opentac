@@ -77,8 +77,8 @@ def unroll(mesh, seed_face: int, angle_tol_deg: float = 2.0,
            simplify_tol: float = 0.3) -> np.ndarray:
     """Flatten the surface containing seed_face into a 2D outline (mm).
 
-    The result is an organic, densely sampled boundary — exactly the case
-    where the cable edge rule bites. Always pass it through
+    The result is an organic, densely sampled boundary, which is exactly the
+    case the cable edge rule addresses. Always pass it through
     outline.with_flat_cable_edge() before generating.
     """
     from opentac.cad.pipeline.mesh_unroll import grow_coplanar_region, extract_outline

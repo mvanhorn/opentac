@@ -1,5 +1,6 @@
 """Cheap checks to run before a generate, so problems surface in milliseconds
-rather than after a 10-40 second route.
+rather than after a route (about 1-6 s in grow mode and 10-45 s in fixed mode
+on a laptop).
 
 Everything here is arithmetic or a line-polygon test. None of it routes.
 """
@@ -23,10 +24,10 @@ def preflight(outline, pixel_w_mm: float, pixel_h_mm: float,
 
     router only changes how the re-entrant-band check below is worded: the
     hug router joins a split row/column into one net with a link trace
-    hugging the concavity (DRC 0 on all 16 harness shapes), so the crossing
-    risk that "legacy" carries does not apply. Leave it at "hug" — that is
-    what generate_board() uses in both board modes. Pass router="legacy"
-    only when deliberately comparing against the original router.
+    hugging the concavity, so the crossing risk that "legacy" carries does
+    not apply. Leave it at "hug" — that is what generate_board() uses in both
+    board modes. Pass router="legacy" only when deliberately comparing
+    against the legacy router.
     """
     outline = np.asarray(outline, float)
     poly = Polygon(outline)
@@ -86,9 +87,8 @@ def preflight(outline, pixel_w_mm: float, pixel_h_mm: float,
                     "it and comes back. The layout stage still splits such a "
                     f"{label} into two hops, but the hug router joins them back "
                     "into one net with a link trace that hugs the concavity — "
-                    "no crossing risk. Expect it to eat some board area out of "
-                    "the notch (pocket_fill); the notch will not stay "
-                    "perfectly open.")
+                    "no crossing risk. Expect it to take some board area out "
+                    "of the notch; the notch will not stay perfectly open.")
             else:
                 warnings.append(
                     f"This outline is re-entrant along {axis} between {lo:.0f}mm "

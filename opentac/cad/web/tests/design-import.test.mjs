@@ -1,12 +1,13 @@
 // Tests for design-import.js's ZIP reader. Run with:
-//   node frontend/tests/design-import.test.mjs [path/to/export.zip]
+//   node opentac/cad/web/tests/design-import.test.mjs [path/to/export.zip]
 //
 // The reader is hand-written binary parsing, which is where a re-import is
 // most likely to break in a way nothing else catches: a wrong offset gives
 // either garbage JSON or a plausible-looking string from the middle of a
-// Gerber. It runs against a REAL export ZIP (generate one with
-// backend/tests/make_export_zip.py, or pass a path) rather than a synthetic
-// archive, so it is testing the file the user actually hands back.
+// Gerber. It runs against a real export ZIP (generate one with
+// python tests/cad/make_export_zip.py, which writes
+// opentac/cad/web/tests/fixtures/export.zip, or pass a path) rather than a
+// synthetic archive, so it tests the file the user actually hands back.
 //
 // Like design-name.test.mjs, the module touches window/document at import
 // time; stub just enough for node to load it.
@@ -33,7 +34,7 @@ function ok(cond, what) {
 
 if (!existsSync(zipPath)) {
   console.log(`SKIP design-import: no export ZIP at ${zipPath}`);
-  console.log("  build one with:  python backend/tests/make_export_zip.py");
+  console.log("  build one with:  python tests/cad/make_export_zip.py");
   process.exit(0);
 }
 

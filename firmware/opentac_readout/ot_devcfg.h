@@ -5,7 +5,7 @@
 // computer; what lands here is only: which taxels exist, how to electrically
 // reach them, their spatial scale, and which of them share a shear bump.
 //
-// The config is written once into the top of flash and read IN PLACE from
+// The config is written once into the top of flash and read in place from
 // there -- flash is memory-mapped, so there is no RAM copy and no parser
 // beyond bounds-checking a handful of fields.
 //
@@ -44,18 +44,18 @@
 // the order OpenTac writes `pixels` and `shear.b` in -- so frame sample k,
 // shear_group[k], pixels[k] and shear.b[k] all describe the same taxel.
 //
-// Logical row index is PAD order and is not geometric: OpenTac's own manifest
-// readme says so, and `pixels` confirms it -- the old example permutes rows as
+// Logical row index is pad order, not geometric order: the manifest's readme
+// says so, and a manifest's `pixels` can list its rows in an order such as
 // 0,1,2,5,4,3. So pitch alone does not place a taxel. row_geom/col_geom carry
 // the permutation, and with them
 //
 //     x = col_geom[col] * pitch_x_um     (left to right)
 //     y = row_geom[row] * pitch_y_um     (top to bottom)
 //
-// reproduces `pixels` exactly, up to the grid origin the host holds. That is
-// what future xampling needs: sampling happens in physical space, which is not
-// the space the shift register scans in. The scan stays in hardware order and
-// the two spaces are related by these two small arrays.
+// reproduces `pixels` exactly, up to the grid origin the host holds. Xampling
+// needs this: it samples in physical space, which is not the space the shift
+// register scans in. The scan stays in hardware order and the two spaces are
+// related by these two small arrays.
 
 #pragma once
 
@@ -64,7 +64,8 @@
 
 #define OTCFG_MAGIC          0x3143544FUL   // 'O','T','C','1'
 // 2: row_order/col_order are connector line codes, so either side of a taxel
-//    may be the driven one. A v1 config is rejected rather than reinterpreted.
+//    may be the driven one. A version 1 config is rejected rather than
+//    reinterpreted.
 #define OTCFG_VERSION        2
 
 #define OTCFG_MAX_ROWS       32   // logical limits; the hardware limits are
@@ -150,10 +151,9 @@ static uint32_t otCfgCrc32(const uint8_t *data, uint32_t length) {
 
 // ----- Connector line codes -------------------------------------------------
 //
-// Which side of a taxel is driven belongs to the READOUT BOARD's connector, not
-// to the skin. On the G431 32x32 readout the manifest's COLUMNS land on the
-// shift register and its ROWS on the mux -- the reverse of what the first
-// version of this firmware assumed, which left half of a 31-row skin dead.
+// Which side of a taxel is driven belongs to the readout board's connector, not
+// to the skin. On the G431 32x32 readout the manifest's columns land on the
+// shift register and its rows on the mux.
 //
 // So every logical row and column names a physical line:
 //   0..31   shift-register step (driven)
@@ -256,13 +256,13 @@ static bool otCfgParse(const uint8_t *raw, uint32_t available,
   // A duplicate row would make two logical rows share one '595 stage, and a
   // duplicate column would read one pad twice: both scan, both are wrong.
   // Duplicated geometry is the same mistake in physical space: two rows at one
-  // position would silently collapse under any future xampling.
+  // position would silently collapse under xampling.
   // No physical line can serve two logical rows/columns, across both lists.
   uint64_t seenLine = 0;
   for (uint8_t i = 0; i < (uint8_t)(rows + cols); ++i) {
     const uint8_t code = (i < rows) ? rowOrder[i] : colOrder[i - rows];
     if (code >= OTCFG_LINE_CODES) return false;
-    // ...and it must exist on THIS board: a 16x16 node has no step 20.
+    // ...and it must exist on this board: a 16x16 node has no step 20.
     if (otCfgLineIndex(code) >=
         (otCfgLineIsMux(code) ? OTCFG_MUX_CHANNELS : OTCFG_SR_STEPS)) {
       return false;
@@ -345,8 +345,6 @@ static inline bool otCfgIsActive(const OtDeviceConfig *c, uint8_t row,
   return (c->activeMask[bit >> 3] >> (bit & 7u)) & 1u;
 }
 
-// `taxel` indexes the active taxels in row-major order, i.e. it is an index
-// into the emitted frame and into the manifest's `pixels`.
 // Whether this skin has shear bumps at all. A pressure-only skin is a
 // different sensor for anything that reasons about shear -- notably xampling,
 // which samples groups -- so this is asked directly rather than inferred from
@@ -355,6 +353,8 @@ static inline bool otCfgHasShear(const OtDeviceConfig *c) {
   return c->shearCount != 0;
 }
 
+// `taxel` indexes the active taxels in row-major order, i.e. it is an index
+// into the emitted frame and into the manifest's `pixels`.
 static inline uint16_t otCfgShearGroup(const OtDeviceConfig *c,
                                        uint16_t taxel) {
   if (c->shearCount == 0 || taxel >= c->shearCount) return OTCFG_NO_SHEAR;
@@ -378,12 +378,12 @@ static inline bool otCfgTaxelLines(const OtDeviceConfig *c, uint8_t row,
 // Everything the scan loop needs, flattened at boot so the inner loop touches
 // no bitmask and no indirection.
 //
-// Organised by shift-register STEP, not by logical row: the walking 1 can only
+// Organised by shift-register step, not by logical row: the walking 1 can only
 // move forward, so the scan visits steps in order and, at each, reads every
 // active taxel with a line on that step. Each entry says which mux channel to
 // read and which frame slot the sample belongs in, and that slot is always the
-// taxel's index in `pixels` order -- so it no longer matters which side of the
-// skin the readout board happens to drive.
+// taxel's index in `pixels` order -- so it does not matter which side of the
+// skin the readout board drives.
 struct ScanPlan {
   uint8_t hwRowSteps;                      // '595 stages to clock through
   uint16_t stepStart[OTCFG_SR_STEPS + 1];  // per step, into entryMux/entryOut
@@ -449,9 +449,9 @@ static inline const uint8_t *otCfgFlashBase() {
   return (const uint8_t *)OTCFG_FLASH_ADDR;
 }
 
-// Why the last flash operation failed, so the reply can say more than "FLASH".
-// The first hardware run failed with no way to tell erase from program from
-// verify; this is what makes the next failure diagnosable from the host.
+// Why the last flash operation failed, so the reply can say more than "FLASH":
+// the stage (erase, program or verify) and the status registers make a flash
+// failure diagnosable from the host.
 #define OTCFG_FLASH_OK       0
 #define OTCFG_FLASH_ERASE    1
 #define OTCFG_FLASH_PROGRAM  2

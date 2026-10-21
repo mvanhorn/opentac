@@ -30,9 +30,8 @@ What this cannot do. Going to a finer B (4 mm -> 2 mm) invents nothing: detail
 below A's pitch is not there, and "tent" only smooths it. Saturated taxels on A
 are lower bounds, and they stay lower bounds after transfer.
 
-Ported from the lab script `opentac_transfer.py` (Layout, Transfer, cop,
-placement_cop). Layout reads an OpenTac manifest instead of a calibrated skin
-object; the arithmetic is unchanged.
+tests/sim/test_transfer.py checks this module against reference outputs in
+tests/sim/fixtures/transfer_reference.json.
 """
 from __future__ import annotations
 

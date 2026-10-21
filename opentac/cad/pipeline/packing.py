@@ -19,7 +19,7 @@ def pack_pixels_in_polygon(
     anchor:
         "top_right"  — grid anchored to the top-right corner, leaving whatever
                        slack is left over at the bottom-left for routing. The
-                       original (and default) behavior, used by grow-board mode.
+                       default, used by grow-board mode.
         "top_center" — same top anchoring, but the leftover horizontal slack is
                        split evenly left/right. Used by fixed-outline keep-out
                        mode, where the routing space is already reserved by an
@@ -28,8 +28,8 @@ def pack_pixels_in_polygon(
     phase:
         (ox, oy) lattice offset in mm, applied after anchoring — shifts every
         candidate center left/down by that amount. The default (0, 0) is the
-        original lattice; fixed+hug searches phases because which grid rows
-        survive a carved region is quantization luck worth tens of taxels.
+        unshifted lattice; fixed+hug searches phases because which grid rows
+        survive a carved region depends strongly on the lattice phase.
 
     Returns:
         placements: Mx2 array of pixel centers

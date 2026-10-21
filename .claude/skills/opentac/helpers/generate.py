@@ -13,7 +13,6 @@ import base64
 import io
 import json
 import os
-import sys
 import time
 import zipfile
 from pathlib import Path
@@ -37,13 +36,12 @@ def generate_board(outline, out_dir: str | os.PathLike, *,
     board_mode="fixed_keepout" only when the drawn outline is a hard limit
     (the board must fit an enclosure or a part with no margin).
 
-    router defaults to "hug" in both board modes, which is what the site
-    itself sends (the frontend's checkbox ships checked and is never gated on
-    board mode). "legacy" is the original router, kept only so the two can be
-    compared; it is not a mode to design in. On a concave outline the gap is
-    not subtle — measured on a C-shape under fixed_keepout, legacy returned 6
-    taxels and 25 DRC violations, 15 of them crossings, where hug returned 26
-    taxels and no crossing at all.
+    router defaults to "hug" in both board modes, which is what the web app
+    sends by default. "legacy" is a simpler row/column router, available only
+    for comparison; it is not a mode to design in. On a concave outline the
+    difference is large: on a C-shape under fixed_keepout, legacy gives 6
+    taxels and 25 DRC violations, 15 of them crossings, where hug gives 26
+    taxels and no crossing.
     """
     main = _load_backend()
     outline = np.asarray(outline, float)
@@ -113,19 +111,3 @@ def summarize(resp, elapsed: float | None = None) -> str:
     if elapsed:
         lines.append(f"({elapsed:.0f}s)")
     return " ".join(lines)
-
-
-def files_written(out_dir: str | os.PathLike) -> dict:
-    """What ended up on disk, and what each part is for."""
-    out = Path(out_dir)
-    manifest = {}
-    mf = out / "manifest.json"
-    if mf.is_file():
-        manifest = json.loads(mf.read_text())
-    return {
-        "preview.svg": "Open this first — the board as it will be built.",
-        "board.kicad_pcb": "Open in KiCad to inspect or edit.",
-        "gerber/": "Send this folder to the fab house. This is the order.",
-        "manifest.json": "Machine-readable summary of what was built.",
-        "_manifest": manifest,
-    }

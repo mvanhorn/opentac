@@ -39,7 +39,7 @@ for arg in "$@"; do
 done
 [ ${#TARGETS[@]} -eq 0 ] && TARGETS=(readout60 node16 readout32 node16_bus bus_controller)
 
-command -v arduino-cli >/dev/null || { echo "arduino-cli not found: see docs/use/flash.md"; exit 1; }
+command -v arduino-cli >/dev/null || { echo "arduino-cli not found: see https://opentac.github.io/use/flash/"; exit 1; }
 mkdir -p "$OUT"
 
 # A private sketchbook: only the libraries this firmware uses, at fixed versions.

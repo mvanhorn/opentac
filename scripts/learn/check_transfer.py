@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Check docs/learn/js/transfer.js against opentac.transfer.
+"""Check the website's docs/learn/js/transfer.js against opentac.transfer.
 
     uv run python scripts/learn/check_transfer.py
 
 Builds the transfer matrix M (A taxels -> B taxels) with the Python Transfer
-class (the package's own, opentac/transfer.py) and with the page's JS port, for every ordered pair of the three
-recorded skins and a few placements (rotation, shift), and requires them to
-agree to 1e-9. Needs node. Run build_data.py first.
+class (the package's own, opentac/transfer.py) and with the page's JS port, for
+every ordered pair of the three recorded skins and a few placements (rotation,
+shift), and requires them to agree to 1e-9. The skins are read from
+docs/learn/data/skins.json in the website checkout ($OPENTAC_SITE_ROOT, default
+../opentac.github.io). Needs node.
 """
 from __future__ import annotations
 

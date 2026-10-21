@@ -1,16 +1,15 @@
 """Gemini provider, on the google-genai SDK.
 
 Automatic function calling is deliberately disabled: the loop is run by hand
-so every call and result can be logged to the terminal and handed back to the
-UI, which is the whole point of a debugging prototype.
+so every call and result can be logged (at DEBUG) and returned to the UI.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
-import sys
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -30,21 +29,23 @@ class Turn:
 
 ToolFn = Callable[[str, dict], dict]
 
-# gemini-2.5-flash is retired for new API keys: generateContent returns 404
-# pointing here, even though the model still appears in models.list().
+logger = logging.getLogger(__name__)
+
+# gemini-2.5-flash is not served to new API keys: generateContent returns 404
+# for it, even though the model still appears in models.list().
 DEFAULT_MODEL = "gemini-3.6-flash"
 MAX_TOOL_ROUNDS = 12          # a generate is slow; a runaway loop is expensive
 
-# The free tier rate-limits per minute AND per day, and the two need opposite
-# handling. A per-minute 429 clears on its own, so it is worth waiting out. A
-# per-day 429 does not clear until midnight Pacific, so retrying it just burns
-# five minutes before failing anyway - fail fast and say what to change.
+# The Gemini free tier rate-limits per minute and per day, and the two need
+# opposite handling. A per-minute 429 clears on its own, so it is worth waiting
+# out. A per-day 429 does not clear until midnight Pacific, so retrying it only
+# delays the failure by minutes - fail fast and say what to change.
 MAX_RETRIES = 6
 BACKOFF_S = (2, 5, 12, 25, 45, 60)
 
-# Free-tier daily caps are small (20/day on gemini-3.6-flash) and one design
-# conversation can spend a dozen requests, so running out is routine. Each
-# model has its own pool, which makes switching model the quickest unblock.
+# Free-tier daily caps are small and one design conversation can use a dozen
+# requests, so running out is routine. Each model has its own pool, which
+# makes switching model the quickest remedy.
 ALTERNATIVES = ("gemini-3.5-flash", "gemini-3.5-flash-lite",
                 "gemini-3.1-flash-lite", "gemini-3-flash-preview")
 
@@ -78,8 +79,8 @@ class GeminiProvider:
         key = api_key or os.environ.get("GEMINI_API_KEY")
         if not key:
             raise RuntimeError(
-                "GEMINI_API_KEY is not set. Put it in web-prototype/.env - "
-                "see .env.example.")
+                "GEMINI_API_KEY is not set. Put it in opentac/cad/.env or set "
+                "it in the environment.")
         self.model = model or os.environ.get("OTC_MODEL") or DEFAULT_MODEL
         self.client = genai.Client(api_key=key)
         self.config = types.GenerateContentConfig(
@@ -159,8 +160,8 @@ class GeminiProvider:
                 return Turn(text=_text_of(content), tool_calls=calls_made,
                             usage=usage)
 
-            # Say the interim thought out loud - "let me preflight that first"
-            # is useful in the transcript even though the turn continues.
+            # Run every requested tool; the results go back to the model
+            # together, as one turn.
             parts = []
             for call in calls:
                 args = dict(call.args or {})
@@ -174,16 +175,16 @@ class GeminiProvider:
         _log_usage(usage)
         return Turn(
             text=(f"Stopped after {MAX_TOOL_ROUNDS} tool rounds without a "
-                  "final answer. Check the terminal log."),
+                  "final answer."),
             tool_calls=calls_made, usage=usage)
 
 
 class QuotaExhausted(RuntimeError):
-    """Today's free-tier allowance for this model is gone.
+    """Today's free-tier allowance for this model is exhausted.
 
     Carries its own remedy, because the raw 429 does not distinguish "wait a
-    moment" from "wait until tomorrow", and the difference is the whole
-    answer.
+    moment" from "wait until tomorrow", and the remedy depends on which one
+    applies.
     """
 
     def __init__(self, model: str, limit: str | None):
@@ -192,9 +193,9 @@ class QuotaExhausted(RuntimeError):
         others = ", ".join(m for m in ALTERNATIVES if m != model)
         super().__init__(
             f"Daily free-tier quota for {model} is used up{cap}. It resets at "
-            f"midnight Pacific. To keep going now, either set OTC_MODEL in "
-            f"web-prototype/.env to a model with its own separate daily pool "
-            f"({others}) and restart the server, or enable billing on the "
+            f"midnight Pacific. To keep going now, either set OTC_MODEL (in "
+            f"opentac/cad/.env or the environment) to a model with its own "
+            f"separate daily pool ({others}) and restart the server, or enable billing on the "
             f"Google Cloud project at https://aistudio.google.com/apikey for "
             f"much higher limits.")
 
@@ -236,8 +237,7 @@ def _add_usage(usage: dict, resp) -> None:
     """Accumulate one response's token counts.
 
     Each tool round resends the whole conversation, system instructions
-    included, so input tokens grow quadratically across a turn - which is the
-    number that decides what this costs to host.
+    included, so input tokens grow quadratically with the rounds in a turn.
     """
     usage["requests"] += 1
     md = getattr(resp, "usage_metadata", None)
@@ -254,9 +254,8 @@ def _log_usage(usage: dict) -> None:
 
 
 def _log(msg: str) -> None:
-    """Unbuffered: uvicorn's stdout is usually a pipe, and a buffered debug
-    line that appears minutes late is worse than none."""
-    print(f"  {msg}", file=sys.stderr, flush=True)
+    """Retry and token-usage notes, at DEBUG level."""
+    logger.debug("%s", msg)
 
 
 def _retry_delay(exc) -> float | None:
@@ -278,7 +277,7 @@ def _retry_delay(exc) -> float | None:
     if m:
         secs = float(m.group(1)) / (1000 if m.group(2) == "ms" else 1)
         best = max(best, secs)
-    # A sub-second delay on a per-minute quota just burns another attempt.
+    # A sub-second delay on a per-minute quota only wastes another attempt.
     return min(max(best, 2.0), 60.0) if best else None
 
 

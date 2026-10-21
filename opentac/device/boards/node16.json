@@ -6,7 +6,7 @@
   "title": "30-pin board (two stacked boards)",
   "connector": "Molex 505110-3091, 30 pins on the bottom board: pins 1-15 = c1..c15 (sensed), 16-30 = r1..r15 (driven)",
   "max_lines": "15 driven x 15 sensed",
-  "source": "KiCad 'Sensor_30.kicad_pcb' (Scalable Tactile Node/Sensor boards), 2026-10-15",
+  "source": "hardware/readout_30pin/bottom/readout_30pin_bottom.kicad_pcb",
   "checked": "hardware and netlist. Pads 7-24 measured on the 9x9 square skin (2026-09-11); the netlist gives the same map for all pads 1-30.",
   "hardware_checked": true,
   "pads": [

@@ -1,48 +1,48 @@
-"""What the BACK silkscreen says: a taxel-core QR, and a registration grid.
+"""What the back silkscreen says: a taxel-core QR, and a registration grid.
 
-`silk_label` puts the design name on the FRONT, inboard of the connector, so a
+`silk_label` puts the design name on the front, inboard of the connector, so a
 fabricated board says which design it is. This is the other half of the same
 problem: a board that has been separated from its manifest entirely.
 
 Two marks, and they answer different questions.
 
-THE QR carries the taxel core (see `export/taxel_core.py`): grid dimensions,
+The QR carries the taxel core (see `export/taxel_core.py`): grid dimensions,
 both pitches, the grid origin, taxel size, the interdigitated footprint
 parameters, the connector pad number for every row and column net, the
-active-taxel mask, and the pad-order permutation. 15-88 bytes across every
-board in this repo, which is a QR small enough to print. That is everything
-needed to READ a sensor -- the scan order, where each taxel physically sits,
-and which pad drives it.
+active-taxel mask, and the pad-order permutation. That is typically under 100
+bytes, which is a QR small enough to print, and it is everything needed to
+read a sensor -- the scan order, where each taxel physically sits, and which
+pad drives it.
 
 It prints as a link, HTTPS://OPENTAC.GITHUB.IO/Q/<payload> (taxel_core.qr_link),
 so a phone camera opens the website's decoder page. The link is 28 characters
-longer than the payload: one QR version (two on 1 of the 31 example designs),
-1.4 mm a side per version. A board too small for it gets the bare payload,
+longer than the payload, which usually costs one QR version, 1.4 mm a side
+per version. A board too small for it gets the bare payload,
 which a phone shows as text for the decoder page or `opentac manifest
 from-qr`; a board too small for that gets no QR.
 
-THE GRID carries the board's shape, by making the photograph measurable. The
+The grid carries the board's shape, by making the photograph measurable. The
 outline is deliberately not in the QR (it is 80-95% of the payload, and the
-physical board already has it), so it comes from a picture instead. On a FLEX
-sensor that is the hard case: it is almost never flat when photographed, so a
+physical board already has it), so it comes from a picture instead. A flex
+sensor is the hard case: it is almost never flat when photographed, so a
 single scale factor -- or four corner fiducials -- recovers the outline wrong
 exactly where the board curves. A grid samples the whole surface, so the photo
 can be unwarped locally.
 
-The grid sits on the MANIFEST coordinate frame with its origin at (0, 0), not
-on the board's bounding box, so an intersection read off a photo IS a taxel
+The grid sits on the manifest coordinate frame with its origin at (0, 0), not
+on the board's bounding box, so an intersection read off a photo is a taxel
 coordinate. That is most of the value and it costs nothing.
 
-MIRRORING -- the subtle part. Back-layer artwork is stored in board (top-view)
-coordinates in both KiCad and Gerber; the fab mirrors it at production. So
-anything here appears mirrored when you look at the physical back. The two
-marks want opposite things about that:
+Mirroring. Back-layer artwork is stored in board (top-view) coordinates in
+both KiCad and Gerber; the fab mirrors it at production. So anything here
+appears mirrored when you look at the physical back. The two marks want
+opposite things about that:
 
   * The QR is chiral. A mirrored QR is rejected by most decoders, so it is
     pre-mirrored about its own centre and therefore reads correctly off the
-    physical back. In a top-view editor it will look backwards. That is right.
+    physical back. In a top-view editor it looks backwards, as intended.
 
-  * The grid must NOT be mirrored. A grid line at x = 10 mm is physically at
+  * The grid must not be mirrored. A grid line at x = 10 mm is physically at
     x = 10 mm; seeing it flipped from the back is a fact about which side you
     are standing on, not an error to correct. Mirroring it would make the
     printed coordinates disagree with the board's real geometry.
@@ -50,12 +50,12 @@ marks want opposite things about that:
 The origin L-marker discloses the handedness, so a pipeline reading a back
 photo can detect the flip and account for it.
 
-SIZING is pinned to JLCPCB's flex silkscreen rules, which are the binding
+Sizing is pinned to JLCPCB's flex silkscreen rules, which are the binding
 constraint (they are the same as their rigid limits; flex silkscreen is not a
 special order):
 
     line width      >= 0.15 mm hard, 0.20 mm recommended
-    hollow gap      >  0.25 mm   -- and a knocked-out QR IS a hollow feature
+    hollow gap      >  0.25 mm   -- and a knocked-out QR is a hollow feature
     auto-widening   lines under the minimum are silently widened, which would
                     destroy the pre-compensation below without any warning
 
@@ -64,18 +64,18 @@ and the smallest knockout is 0.45 mm, which clears every recommended limit.
 0.30 mm sits exactly on the recommended ink minimum; 0.25 mm sits on the hard
 one, where auto-widening lives.
 
-POLARITY. Silkscreen is light ink on dark coverlay, so drawing ink where the QR
-is dark produces an INVERTED code, and decoder support for those is
-inconsistent. The ink is therefore the LIGHT field and the dark modules are
+Polarity. Silkscreen is light ink on dark coverlay, so drawing ink where the QR
+is dark produces an inverted code, and decoder support for those is
+inconsistent. The ink is therefore the light field and the dark modules are
 knocked out as bare coverlay, giving an ordinary dark-on-light code. KiCad
 unions overlapping silk and cannot subtract, so that knockout is built as
 horizontal runs of ink rather than as "rectangle minus modules".
 
-PRE-COMPENSATION. Screen printing spreads ink by a roughly fixed amount, which
+Pre-compensation. Screen printing spreads ink by a roughly fixed amount, which
 eats the knockouts. Shrinking the ink by that amount at design time cancels it
--- ordinary screen-print practice, and worth about 2x in tolerable spread. The
-figure in PRECOMP_MM is an ASSUMPTION until a test ladder comes back from a real
-order; see taxel_qr_prototype/README.md.
+-- ordinary screen-print practice, and worth about 2x in tolerable spread.
+PRECOMP_MM, the amount removed from every ink edge, is an estimate of that
+spread rather than a value calibrated on fabricated boards.
 """
 
 import json
@@ -105,7 +105,7 @@ EDGE_CLEAR_MM = 0.2        # silk this close to the cut line is a print defect
 # fine spacing is 5 mm or 10 mm, and guessing wrong scales the whole recovered
 # outline by 2x -- so the board states it.
 #
-# Just the text, sitting inside one cell. The grid lines ARE the dimension; the
+# Just the text, sitting inside one cell. The grid lines are the dimension; the
 # label only has to say which number goes with them, and a cell it sits inside
 # is unambiguous about which spacing it means. Anything more -- a bar, end ticks
 # -- duplicates what the lines already do and lines up with nothing.
@@ -127,7 +127,7 @@ QR_FORMS = ("link", "bare")
 def _qr_matrix(payload):
     """Dark-module matrix including the quiet zone. Returns None if segno is
     missing, so a board still exports -- without a back mark -- rather than
-    500ing on an optional feature."""
+    failing the request over an optional feature."""
     try:
         import segno
     except ImportError:
@@ -161,7 +161,7 @@ def _erode(mask, d):
 def _ink_runs(dark, precomp_modules):
     """Ink spans as (y0, y1, x0, x1) in module units.
 
-    With pre-compensation the run edges no longer land on module boundaries, so
+    With pre-compensation the run edges do not land on module boundaries, so
     the field is rasterised at SUBDIV per module, eroded, cut into runs, and
     vertically identical neighbours merged back -- which collapses the sub-rows
     to the two or three bands per module row that actually differ.
@@ -250,11 +250,11 @@ def qr_rects(manifest, center, form="link"):
 def _inset(edge_cuts, half_width):
     """The board, shrunk by half a line width plus edge clearance.
 
-    Clipping the line's CENTRELINE to the raw outline and then widening it is
+    Clipping the line's centreline to the raw outline and then widening it is
     wrong, and wrong in a way that only shows up at the boundary: the rect's
-    corners overhang wherever the edge is sloped or curved. On a 40 mm square
-    that put 19 of 21 grid rects over the cut line. Insetting first means a
-    span that survives is one where the full-width line actually fits.
+    corners overhang the cut line wherever the edge is sloped or curved.
+    Insetting first means a span that survives is one where the full-width
+    line actually fits.
 
     Returns None when nothing survives -- a board narrower than a grid line.
     """
@@ -271,8 +271,8 @@ def _spans_along(inner, coord, axis, lo, hi):
     """Spans of the line {axis == coord} that lie inside `inner`.
 
     Shapely does the clipping, so concave outlines and the curved grown edge
-    both work: on `gecko` the limbs come out separated from the body, which a
-    bounding-box clip would not manage.
+    both work: a line that crosses a gap between two parts of the board comes
+    out as separate spans, which a bounding-box clip would not manage.
     """
     line = (LineString([(coord, lo), (coord, hi)]) if axis == 0
             else LineString([(lo, coord), (hi, coord)]))
@@ -307,7 +307,7 @@ def _subtract(span, holes):
 
 
 def grid_rects(edge_cuts, keepouts=()):
-    """Registration-grid rectangles in board coords (y-up). NOT mirrored."""
+    """Registration-grid rectangles in board coords (y-up). Not mirrored."""
     if len(edge_cuts) < 3:
         return []
     xs = [float(p[0]) for p in edge_cuts]
@@ -435,7 +435,7 @@ def _qr_center(edge_cuts, tcx, tcy, size):
 
     First choice is the centre of the taxel field: every board has one, it is
     where a reader looks, and it keeps placement predictable across a family of
-    designs. But it is not guaranteed to be ON the board -- the U-notch test
+    designs. But it is not guaranteed to be on the board -- the U-notch test
     case puts that point squarely inside the notch -- so it is checked, not
     assumed.
 

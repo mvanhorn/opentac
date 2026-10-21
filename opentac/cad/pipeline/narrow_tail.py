@@ -95,11 +95,12 @@ def narrow_routed_tail(layout, routes, params) -> bool:
     piece = make_tail_poly(mid, t_hat, n_out, fit, wide, geom["cable_length"], geom["total_length"], offset,
                            step_fillet=r)
 
-    # Wire the router ran outside the drawn outline in the old tail (or in the
-    # shoulder fill beside it) keeps the board around it, and so does wire inside
-    # the outline close enough to the cable edge to have counted on the old tail
-    # below it: beside a narrower strip that edge is the board's edge again (a
-    # column running along it just inside a fixed outline came within 0.05 mm).
+    # Wire the router ran outside the drawn outline in the routed
+    # (connector-width) tail, or in the shoulder fill beside it, keeps the board
+    # around it, and so does wire inside the outline close enough to the cable
+    # edge to have counted on that tail below it: beside a narrower strip that
+    # edge is the board's edge again, and a column running along it just inside
+    # a fixed outline would come too close to it.
     # On a grown board the padding pass then pads the wire outside the strip like
     # any other wire (follow_padding._tail_strip), so this only holds what the
     # strip's own wires need where the strip pokes past the drawn outline.
@@ -110,10 +111,10 @@ def narrow_routed_tail(layout, routes, params) -> bool:
     outside = unary_union(lines).intersection(near_old) if lines else None
     if outside is not None and not outside.is_empty:
         # Buffer each piece and union the results, never the MultiLineString in one
-        # call: hundreds of parallel wire pieces in one GEOS buffer is ~300 MB and
-        # seconds (a 29 x 28 grown insole: +266 MB on Linux, +345 MB on macOS),
-        # enough to get the 512 MB hosted server OOM-killed mid-request. Per piece
-        # it is a few MB and a few ms, and the same region.
+        # call: hundreds of parallel wire pieces in one GEOS buffer take
+        # hundreds of MB and seconds, enough to exhaust the 512 MB hosted server
+        # mid-request. Per piece it is a few MB and a few ms, and the same
+        # region.
         pieces = shapely.get_parts(outside)
         cover = shapely.union_all(shapely.buffer(pieces, contain)).intersection(old)
         piece = unary_union([piece, cover]).buffer(0)

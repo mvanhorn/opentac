@@ -6,15 +6,15 @@ instructions and three function-calling tools, and every board comes out of
 invent a PCB.
 
 Import is deliberately failure-tolerant at the call site (see main.py): if
-google-genai is not installed or GEMINI_API_KEY is unset, the site must keep
-working exactly as before, with chat simply unavailable.
+google-genai is not installed or GEMINI_API_KEY is unset, the rest of the
+site keeps working, with chat unavailable.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
-import sys
 import traceback
 
 from fastapi import APIRouter
@@ -22,8 +22,9 @@ from pydantic import BaseModel
 
 try:
     # Local convenience only: put GEMINI_API_KEY in opentac/cad/.env and the
-    # double-click launcher picks it up. On Render the env vars are real and
-    # there is no file, so a missing dotenv is not an error.
+    # double-click launcher picks it up. On the hosted server the environment
+    # variables are set directly and there is no file, so a missing dotenv is
+    # not an error.
     from dotenv import load_dotenv
 
     load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -33,19 +34,11 @@ except Exception:
 from . import context, tools
 from .gemini import GeminiProvider, QuotaExhausted
 
-def say(msg: str) -> None:
-    """Print without ever raising.
-
-    The Windows console is cp1252, and this logs model-written text that
-    routinely contains characters it cannot encode ("40 x 40" comes back as
-    "40 × 40"). Unencodable output would otherwise raise UnicodeEncodeError
-    from inside the request and turn a finished design into a 500.
-    """
-    try:
-        print(msg, flush=True)
-    except UnicodeEncodeError:
-        enc = getattr(sys.stdout, "encoding", None) or "ascii"
-        print(msg.encode(enc, "replace").decode(enc, "replace"), flush=True)
+# Conversation traffic (prompts, replies, tool calls) is logged at DEBUG only,
+# so a server does not record what visitors type unless its operator enables
+# it. A logging handler that cannot encode a character reports the error
+# itself; it never raises into the request.
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -55,8 +48,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 SESSIONS: dict[str, dict] = {}
 _provider: GeminiProvider | None = None
 
-# Keeps one visitor from spending the account on a single conversation. The
-# hard cap is the billing account's prepaid balance; this is the polite one.
+# Limits the number of turns per conversation.
 MAX_TURNS_PER_SESSION = int(os.environ.get("OTC_CHAT_MAX_TURNS", "40"))
 
 
@@ -69,11 +61,11 @@ def provider() -> GeminiProvider:
     global _provider
     if _provider is None:
         instructions = context.system_instructions()
-        say(f"[chat] {len(instructions)} chars of SKILL.md as system "
-            f"instructions")
+        logger.debug("%d chars of SKILL.md as system instructions",
+                     len(instructions))
         _provider = GeminiProvider(system_instruction=instructions,
                                    tool_specs=tools.TOOL_SPECS)
-        say(f"[chat] model={_provider.model}")
+        logger.debug("model=%s", _provider.model)
     return _provider
 
 
@@ -132,7 +124,7 @@ def progress(session_id: str = "default"):
     sess = SESSIONS.get(session_id)
     if sess is None:
         # known=False after a turn was sent means the server lost its memory:
-        # it restarted mid-turn (on the free tier, almost always out of memory).
+        # it restarted mid-turn (for example after running out of memory).
         return {"busy": False, "steps": [], "known": False}
     return {"busy": sess.get("busy", False), "steps": sess.get("progress", []),
             "known": True}
@@ -169,7 +161,7 @@ def chat(body: ChatIn):
         return {"error": f"This conversation has reached its {MAX_TURNS_PER_SESSION}"
                          "-turn limit. Start a new one to keep designing."}
 
-    say(f"\n[chat] USER: {body.message}")
+    logger.debug("USER: %s", body.message)
     # Reset before the turn, not after: the page starts polling as soon as it
     # sends, and would otherwise be shown the previous turn's steps.
     sess["progress"] = ["Thinking…"]
@@ -191,16 +183,16 @@ def chat(body: ChatIn):
         sess["turns"] += 1
         designs = sess["tools"].designs
         newest = designs[-1] if designs else None
-        say(f"[chat] ASSISTANT: {turn.text[:200]}")
+        logger.debug("ASSISTANT: %s", turn.text[:200])
         # Round-tripped through json here, inside the try: a value FastAPI
-        # cannot encode (a numpy scalar in stats) would otherwise fail AFTER
+        # cannot encode (a numpy scalar in stats) would otherwise fail after
         # this handler returned, as a bare 500 the page cannot read.
         out = _jsonable({
             "text": turn.text,
             "tool_calls": [{"name": c["name"], "args": c["args"]}
                            for c in turn.tool_calls],
             # Only the newest board is returned: the page loads it into the
-            # editor, and the SVG is large enough that shipping the whole
+            # editor, and the SVG is large enough that returning the whole
             # history every turn would be wasteful.
             "design": None if newest is None else {
                 "name": newest["name"],
@@ -212,7 +204,7 @@ def chat(body: ChatIn):
             "turns_left": MAX_TURNS_PER_SESSION - sess["turns"],
         })
     except QuotaExhausted as exc:
-        say(f"[chat] {exc}")
+        logger.debug("%s", exc)
         out = {"error": str(exc)}
     except Exception as exc:
         traceback.print_exc()

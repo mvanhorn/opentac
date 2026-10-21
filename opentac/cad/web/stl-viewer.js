@@ -56,9 +56,9 @@ let modelRadius = 1;
 
 // Disconnected selections are joined server-side by /unroll-mesh-chain
 // (straight-strut cuts between surfaces that don't share mesh edges). The
-// backend needs the raw STL bytes (its face indices match three.js's — see
-// NOTES.md's real-face-index fix), the selections in click order, and any
-// manually-picked corner pairs per connection.
+// backend needs the raw STL bytes (its face indices match three.js's), the
+// selections in click order, and any manually-picked corner pairs per
+// connection.
 let stlBuffer = null;
 // frameObject() recenters the displayed geometry; backend coordinates stay
 // in the file's original frame, so 3D points it returns (corner-picker
@@ -232,10 +232,6 @@ function loadArrayBuffer(buffer, filename) {
     return;
   }
 
-  // Any newly loaded STL invalidates a previously-known catalog path (dev
-  // example picker, below) — a fresh regular upload should fall back to the
-  // filename-only naming guess, not silently reuse the last example's path.
-  currentExamplePath = null;
   clearSelection(false);
   surfaceModel = null;
   loadedName = "";
@@ -280,20 +276,18 @@ function loadArrayBuffer(buffer, filename) {
     `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)} mm${warning}`;
 }
 
-// Point the camera at the selected patch from ITS OWN side, at `distanceScale`
+// Point the camera at the selected patch from its own side, at `distanceScale`
 // of the app's standard framing distance.
 //
 // A patch on the far side of the part is occluded by the part itself from any
-// fixed viewing angle — confirmed live twice: the Yubi pad's selection sits
-// entirely in -x while the default camera sits at +x, so its highlight
-// rendered perfectly and stayed invisible behind the mesh, both in gallery
-// thumbnails and when opening the example in the viewer. Averaging the
+// fixed viewing angle: a selection that faces away from the default camera is
+// highlighted correctly but stays invisible behind the mesh. Averaging the
 // selected triangles' normals gives the direction the patch faces.
 //
 // Scaling the app's own frameObject distance (homePos) rather than deriving
 // one from modelRadius matters for elongated parts: their bounding sphere is
 // dominated by the long axis, so a radius-derived "tight" distance can land
-// inside the mesh (seen as an unrecognizable close-up sliver).
+// inside the mesh (which renders as an unrecognizable close-up sliver).
 function aimCameraAtSelection(triangles, distanceScale) {
   const avgNormal = new THREE.Vector3();
   for (const t of triangles) avgNormal.add(surfaceModel.triNormals[t]);
@@ -311,25 +305,21 @@ function aimCameraAtSelection(triangles, distanceScale) {
   controls.update();
 }
 
-// Landing-gallery handoff: fetch a catalog STL, show it in the normal 3D
-// viewer, and highlight the surface this example was built from — so opening
-// an example keeps the part visible and rotatable while its outline is being
-// turned into a board, instead of dropping the user into a bare 2D canvas.
-// The outline itself is handed over separately (and instantly, from the
-// manifest), so a slow or unreachable backend costs only the 3D preview, not
-// the example.
+// Landing-gallery handoff: fetch the example's preview mesh, show it in the
+// normal 3D viewer, and highlight the surface this example was built from —
+// so opening an example keeps the part visible and rotatable while its
+// outline is being turned into a board, instead of dropping the user into a
+// bare 2D canvas. The outline itself is handed over separately (and
+// instantly, from the manifest), so a failed mesh fetch costs only the 3D
+// preview, not the example.
 window.otcShowExampleInViewer = async function (meshUrl, triangles, label) {
   init();
   infoEl.textContent = `Loading ${label}…`;
   try {
-    // A same-origin STATIC file (frontend/example-meshes/), not a backend
-    // endpoint: the curated originals are print-quality — 17.5MB in total,
-    // up to 87k triangles — and live in the backend repo, which the Render
-    // image does not even contain (its Docker build context is backend/
-    // alone, so /example-stl 404'd for every part on the deployed site).
-    // These previews keep the selected faces at full resolution and decimate
-    // only the rest, which is 5.8MB for all 32 and identical on GitHub Pages
-    // and locally, with no backend round trip or cold start.
+    // A static file under web/example-meshes/ (34 files), served by the same
+    // origin as the page, so no API call or server start-up is needed. The
+    // originals in examples/stl/ are print-quality; these previews keep the
+    // selected faces at full resolution and decimate only the rest.
     const resp = await fetch(meshUrl);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     loadArrayBuffer(await resp.arrayBuffer(), meshUrl);
@@ -338,8 +328,8 @@ window.otcShowExampleInViewer = async function (meshUrl, triangles, label) {
     selectedRegions = new Set();
     rootTriangleId = selectedTriangles.values().next().value ?? null;
     refreshHighlight();
-    // Open facing the highlighted surface (full framing distance — this is
-    // the interactive viewer, not a thumbnail, so leave room to orbit).
+    // Open facing the highlighted surface, at the full framing distance so
+    // there is room to orbit.
     aimCameraAtSelection(selectedTriangles, 1.0);
     // The example arrives already unfolded; this viewer is for context and
     // inspection, so don't invite a second unfold of the same selection.
@@ -350,46 +340,6 @@ window.otcShowExampleInViewer = async function (meshUrl, triangles, label) {
   } catch (err) {
     infoEl.textContent =
       `${label}: 3D preview unavailable (${err.message}) — the board outline loaded fine.`;
-  }
-};
-
-window.__otc_debug = () => ({
-  hasHighlight: !!highlightMesh,
-  vertexCount: highlightMesh ? highlightMesh.geometry.attributes.position.count : 0,
-  selectedTrianglesSize: selectedTriangles.size,
-  boundingBox: highlightMesh ? (highlightMesh.geometry.computeBoundingBox(), highlightMesh.geometry.boundingBox.min.toArray().concat(highlightMesh.geometry.boundingBox.max.toArray())) : null,
-  cameraPos: camera.position.toArray(),
-  target: controls.target.toArray(),
-});
-
-// Dev tooling hook (gallery-thumbnail generator): load an STL from raw bytes
-// without going through the file-input UI at all.
-window.__otcLoadForThumb = loadArrayBuffer;
-
-// Replays a saved annotation's highlight (just which triangles were picked —
-// not its selection state or unfold logic) onto the currently loaded mesh:
-// used by the gallery-thumbnail generator. Every selection mode records its
-// picked triangles per click in click_order, including a chained multi-surface
-// join, so the union of every click's triangles is exactly what should render
-// as highlighted regardless of how those clicks were later joined into one 2D
-// outline — no unfold/chain machinery needed to reproduce the picture.
-window.otcReplayAnnotationHighlight = function (annotation, { thumbnailFraming = false } = {}) {
-  if (!surfaceModel) throw new Error("Load the STL first.");
-  const triangles = new Set();
-  for (const entry of annotation.click_order || []) {
-    for (const t of entry.triangles || []) triangles.add(t);
-  }
-  selectedTriangles = triangles;
-  selectedRegions = new Set();
-  refreshHighlight();
-  if (thumbnailFraming) {
-    // The interactive default leaves generous orbit/pan room — deliberately
-    // conservative for live use, but reads as "tiny object lost in a big dark
-    // grid" in a small gallery card. This hook only ever runs in the
-    // thumbnail generator's disposable tab, so it never restores either.
-    gridHelper.visible = false;
-    axesHelper.visible = false;
-    aimCameraAtSelection(triangles, 0.62);
   }
 };
 
@@ -762,7 +712,7 @@ function orderedClickEntries() {
   return entries.reverse();
 }
 
-// Guided flow for disconnected selections: corner picking is a REQUIRED
+// Guided flow for disconnected selections: corner picking is a required
 // step, not a fix-up. "Join surfaces" walks the chain cut by cut — the
 // backend (corners_first) stops at the first cut without user-picked
 // corners and returns its marker loops; the automatic corner heuristic
@@ -805,9 +755,9 @@ async function unfoldViaBackendChain() {
     showError(error.message);
     return;
   } finally {
-    // Clear BEFORE rendering the panel: its buttons bake `disabled` in at
-    // render time, so rendering while busy left "Use this shape" (and the
-    // pick buttons) permanently disabled.
+    // Clear before rendering the panel: its buttons bake `disabled` in at
+    // render time, so rendering while busy would leave "Use this shape" (and
+    // the pick buttons) permanently disabled.
     chainBusy = false;
     unfoldBtn.disabled = false;
   }
@@ -1340,9 +1290,9 @@ selectAllBtn.addEventListener("click", () => {
 });
 
 // The client-side unfold is synchronous and can block the page for tens of
-// seconds on a large curved selection (measured: ~65s for a 17k-triangle
-// patch) — without this deferred start the button click freezes the tab with
-// no feedback at all and reads as a crash. Paint the status first, then work.
+// seconds on a large curved selection; without this deferred start the
+// button click freezes the tab with no feedback and reads as a crash. Paint
+// the status first, then work.
 unfoldBtn.addEventListener("click", () => {
   const triangleCount = combinedSelectedTriangles().size;
   // Only the connected, client-side unfold blocks the thread; the
@@ -1388,136 +1338,3 @@ setSelectionControlsEnabled(false);
 window.addEventListener("otc:view-shown", () => {
   if (initialized) onResize();
 });
-
-// --- DEV ONLY: example-gallery annotation capture (localhost) ---------------
-// Curating STL examples of real end effectors: after selecting surfaces and
-// unfolding, "Save as example" posts the full selection state + resulting
-// outline to /dev/capture-example, which writes JSON under
-// stl_examples/end_effectors/annotations/. The gallery replay consumes these.
-// The button/picker only appear when the page is served by the local backend.
-let lastOutlineDetail = null;
-window.addEventListener("otc:face-outline", (e) => { lastOutlineDetail = e.detail; });
-
-// Set only when the currently loaded mesh came from the catalog picker below
-// (never guessed): the exact "robot/part.stl" path, known server-side, so
-// the annotation name can be generated with zero typing and zero ambiguity —
-// several parts share generic filenames (fingertip.stl exists under four
-// different robots) that the filename alone can't disambiguate.
-let currentExamplePath = null;
-
-const exampleSelect = document.getElementById("example-stl-select");
-const devExampleRow = document.getElementById("dev-example-row");
-if (exampleSelect && devExampleRow && API_BASE === "") {
-  devExampleRow.hidden = false;
-  fetch(`${API_BASE}/example-stls`)
-    .then((r) => r.json())
-    .then(({ paths }) => {
-      // Server paths are relative to stl_examples/ (so its handful of older
-      // root-level files — the Yubi pad, a soft fingertip, SO-100 parts —
-      // show up too, not just the end_effectors/ library). Strip that one
-      // transparent prefix before grouping/naming so it never leaks into a
-      // display name or a generated annotation name.
-      const byRobot = new Map();
-      for (const path of paths || []) {
-        const logical = path.replace(/^end_effectors\//, "");
-        const slash = logical.indexOf("/");
-        const robot = slash >= 0 ? logical.slice(0, slash) : "(other examples)";
-        const part = slash >= 0 ? logical.slice(slash + 1) : logical;
-        if (!byRobot.has(robot)) byRobot.set(robot, []);
-        byRobot.get(robot).push({ path, part });
-      }
-      for (const [robot, parts] of [...byRobot].sort((a, b) => a[0].localeCompare(b[0]))) {
-        const group = document.createElement("optgroup");
-        group.label = robot;
-        for (const { path, part } of parts.sort((a, b) => a.part.localeCompare(b.part))) {
-          const opt = document.createElement("option");
-          opt.value = path;
-          opt.textContent = part;
-          group.appendChild(opt);
-        }
-        exampleSelect.appendChild(group);
-      }
-    })
-    .catch(() => { /* dev-only convenience; a failed listing just leaves the picker empty */ });
-
-  exampleSelect.addEventListener("change", async () => {
-    const path = exampleSelect.value;
-    if (!path) return;
-    const logical = path.replace(/^end_effectors\//, "");
-    infoEl.textContent = `Loading ${logical}…`;
-    try {
-      const resp = await fetch(`${API_BASE}/example-stl?path=${encodeURIComponent(path)}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const buffer = await resp.arrayBuffer();
-      loadArrayBuffer(buffer, logical);
-      currentExamplePath = logical; // after loadArrayBuffer, which clears it
-    } catch (err) {
-      showError(`Could not load ${logical}: ${err.message}`);
-    }
-  });
-}
-
-const captureBtn = document.getElementById("capture-example");
-if (captureBtn && API_BASE === "") {
-  captureBtn.hidden = false;
-  captureBtn.addEventListener("click", async () => {
-    if (!loadedName) { showError("Load an STL first."); return; }
-    const outlineState = window.otcGetOutlineState ? window.otcGetOutlineState() : null;
-    if (!outlineState || outlineState.vertices.length < 3) {
-      showError("Unfold a selection into the Board Outline canvas first.");
-      return;
-    }
-    // Loaded via the catalog picker: the exact robot/part path names the
-    // annotation with no typing and no ambiguity. Anything else (a plain
-    // Upload STL of some other file) falls back to asking, since only the
-    // bare filename is known then.
-    let name;
-    if (currentExamplePath) {
-      name = currentExamplePath.replace(/\.stl$/i, "").replace(/[\\/]+/g, "_").replace(/[^A-Za-z0-9-_]+/g, "_");
-    } else {
-      const suggested = loadedName.replace(/\.stl$/i, "").replace(/[^A-Za-z0-9-_]+/g, "_");
-      name = window.prompt("Annotation name:", suggested);
-      if (!name) return;
-    }
-    const payload = {
-      // The shape only — the annotation is the surface selection and its
-      // unfolded outline, not a connector choice. Whoever loads this example
-      // later picks their own cable edge for their own setup, exactly like
-      // any other imported outline (DXF, hand-drawn).
-      outline: outlineState.vertices,
-      stl_name: loadedName,
-      selection_mode: selectionMode,
-      curvature_tolerance_deg: Number.parseFloat(curvatureTolInput?.value) || 18,
-      max_growth_radius_mm: Number.parseFloat(maxGrowthInput?.value) || null,
-      auto_seam: autoSeamInput?.checked !== false,
-      click_order: clickOrder.map((entry) => ({
-        faceIndex: entry.faceIndex,
-        regionId: entry.regionId,
-        triangles: [...entry.triangles],
-      })),
-      manual_seam_triangles: [...manualSeamTriangles],
-      chain_overrides: chainOverrides,
-      // Draw-patch annotations: the drawn loop (clicked mesh vertex ids +
-      // full surface cycle) and whether texture smoothing was applied.
-      patch_points: patchState?.closed ? [...patchState.points] : null,
-      patch_loop_vertices: patchState?.closed ? patchLoopVertices() : null,
-      patch_side_index: patchState?.closed ? patchState.sideIndex : null,
-      patch_smooth: patchState?.closed ? patchSmoothInput?.checked !== false : null,
-      fold_lines: lastOutlineDetail ? (lastOutlineDetail.foldLines || []) : [],
-      unfold_size_mm: lastOutlineDetail ? [lastOutlineDetail.w, lastOutlineDetail.h] : null,
-      captured_at: new Date().toISOString(),
-    };
-    try {
-      const resp = await fetch(`${API_BASE}/dev/capture-example`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, payload }),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      infoEl.textContent = `Saved example annotation → ${data.saved}`;
-    } catch (err) {
-      showError(`Capture failed: ${err.message}`);
-    }
-  });
-}

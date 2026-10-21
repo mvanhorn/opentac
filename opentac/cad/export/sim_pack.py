@@ -1,28 +1,30 @@
-"""The 3D half of the manifest (v6): where this sensor sits on the part.
+"""Optional 3D placement for a manifest: where this sensor sits on the part.
 
-manifest v5 and earlier describe a flat drawing. A simulator needs the sensor
+The rest of the manifest describes a flat drawing. A simulator needs the sensor
 in 3D -- each taxel's position on the part's surface, its outward normal, and a
-tangent -- so it can put the sensor on the finger it will actually be glued to
-and report shear along an axis that means something to the firmware.
+tangent -- so it can put the sensor on the finger it will be glued to and
+report shear along an axis that means something to the firmware.
 
-Everything here is an annotation on the user's own STL. OTC deliberately does
-NOT emit MJCF, USD, or a scene: that is the same layering as Gerber vs. KiCad,
-and a physics model belongs with the simulator that owns it. In particular no
-stiffness is exported -- that is a modelling choice, not a design output.
+Everything here is an annotation on the user's own STL. OpenTac-CAD
+deliberately does not emit MJCF, USD, or a scene: that is the same layering as
+Gerber vs. KiCad, and a physics model belongs with the simulator that owns it.
+In particular no stiffness is recorded -- that is a modelling choice, not a
+design output.
 
-Why the caller must hand us `source_outline_xy`
------------------------------------------------
+Why the caller must supply `source_outline_xy`
+----------------------------------------------
 The unfold produces uv in an arbitrary flat frame; /generate then rotates the
 board into the canonical cable-edge-down frame. That rotation is chosen from
-the outline's FIRST TWO VERTICES, so it cannot be recovered from the mesh, or
+the outline's first two vertices, so it cannot be recovered from the mesh, or
 from the boundary loop, or from the canonical outline alone -- reconstructing
 the loop gives the right point set in the wrong starting order and silently
 yields a sensor rotated on the part.
 
-So the caller passes the exact array it posted to /generate, and we re-run the
-same pure function on it. `verify_frame` then checks the result against the
-manifest's own outline and reports the residual, so a mismatch is a number in
-the export rather than a surprise in someone's simulator.
+So the caller passes the exact array it posted to /generate, and the same pure
+function is re-run on it. `verify_frame` then checks the result against the
+manifest's own outline and the residual is reported in the block's `fit`, so
+a mismatch is a recorded number rather than an error found later in a
+simulator.
 """
 import hashlib
 
@@ -38,12 +40,13 @@ FRAME_TOL_MM = 0.05
 # A taxel is expected to sit inside the unfolded patch. Past this it is off the
 # selected faces entirely and has been clamped to the nearest triangle.
 #
-# This is also the SECOND frame check, and it catches what the first cannot.
+# This is also the second frame check, and it catches what the first cannot.
 # cable_transform is invariant to a global rigid motion of its input, so an
 # outline handed over rotated or translated relative to the unfold's uv frame
 # still satisfies verify_frame perfectly -- and then every taxel is placed
-# somewhere else entirely on the part. Measured on a half-cylinder: a 90 degree
-# frame rotation leaves outline_mm at 0.0000 and pushes this to 28 mm.
+# somewhere else entirely on the part. On a half-cylinder, for example, a
+# 90 degree frame rotation leaves outline_mm at zero but moves taxels far off
+# the patch, which only this check detects.
 ON_PATCH_TOL_MM = 0.5
 
 
@@ -105,6 +108,8 @@ def build_sim3d(*, vertices, faces, face_normals, region_face_indices,
                 sha256=None, filename=None, units="mm", ndigits=4):
     """Return (sim3d_block, embedding_block).
 
+    The sim3d block is what a caller passes to export_manifest(sim3d=...);
+    the embedding block is the full flat<->3D triangle map (tris, uv, xyz).
     `pixel_xy` is the manifest's own `pixels` (index-parallel), `shear` its
     `shear` block. Both are already in the canonical frame, which is why the
     embedding is carried into that frame rather than the other way round.
@@ -175,30 +180,3 @@ def build_sim3d(*, vertices, faces, face_normals, region_face_indices,
     if warnings:
         sim3d["warnings"] = warnings
     return sim3d, emb.as_json()
-
-
-SIM_README = [
-    "The 3D placement of this sensor on its part, for simulation.",
-    "'taxels3d' is index-parallel to 'pixels': pos/normal/tangent per taxel,"
-    " in the SOURCE MESH's own frame (not the flat cable frame the 2D fields"
-    " use), in mm. 'rc' repeats each taxel's [row, col] so an image built"
-    " from these matches the one the firmware scans.",
-    "'pos' lies ON the part surface. The object contacts the SENSING surface,"
-    " which is 'stack.surface_to_bump_tip_mm' further along 'normal' - offset"
-    " it yourself so a change of film or sheet thickness does not need a"
-    " re-export.",
-    "'tangent' is the +column direction mapped onto the surface. Shear"
-    " resolved against it is directly comparable to the column index; without"
-    " it a 3D shear vector cannot be related to anything the board reports.",
-    "'fit.outline_mm' is how far the flat outline landed from the exported"
-    " board, and 'fit.worst_off_patch_mm' how far the worst taxel fell"
-    " outside the selected faces. Both should be ~0; large values mean the"
-    " placement is not trustworthy and 'warnings' will say so.",
-    "'mesh.sha256' identifies the STL this was computed against. Pair by it:"
-    " the same file re-exported with reordered vertices still hashes"
-    " differently, but the geometry here is self-contained either way.",
-    "embedding.json beside this file holds the full flat<->3D triangle map,"
-    " for re-deriving placements at a different stack height.",
-    "No stiffness, MJCF or scene is exported. Physics belongs to the"
-    " simulator; this file is geometry.",
-]

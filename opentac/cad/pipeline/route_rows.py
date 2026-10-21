@@ -1,4 +1,6 @@
-"""Row routing — greedy reactive with sensor-edge pull-right physics."""
+"""Row routing — greedy reactive router: each wire climbs from its pad and, at
+each sensor-row edge it passes, is pulled toward its anchor as far as the
+clearances allow."""
 
 from dataclasses import replace
 
@@ -101,7 +103,8 @@ def _route_once(layout, outline_xy, params, G, board_poly, skip_pix):
 
 
 def _route_once_side(layout, outline_xy, params, G, board_poly, skip_pix, row_info):
-    """Route a preselected row group using the existing left-side row router."""
+    """Route a preselected row group with the left-side row router (the
+    right-side group is passed in mirrored)."""
     row_nets, pad_nums, anchor_xy, pad_xy, row_pixel_idx = row_info
     N = len(row_nets)
 
@@ -136,7 +139,7 @@ def _route_once_side(layout, outline_xy, params, G, board_poly, skip_pix, row_in
         P = [[cur_x, cur_y]]
 
         for _iter in range(100):
-            # === GO UP at cur_x: find lowest horizontal blocker ===
+            # === Go up at cur_x: find lowest horizontal blocker ===
             best_y = float('inf')
             found = False
 
@@ -178,7 +181,7 @@ def _route_once_side(layout, outline_xy, params, G, board_poly, skip_pix, row_in
             else:
                 limit_y = ay
 
-            # === Walk UP through pull-points, pulling at each ===
+            # === Walk up through pull-points, pulling at each ===
             pull_ys = list(all_row_y - px_hh)
             for jj in range(idx):
                 k = order[jj]
@@ -281,12 +284,12 @@ def _route_once_side(layout, outline_xy, params, G, board_poly, skip_pix, row_in
                     P.append([ax, ay])
                 break
 
-            # Step UP to limit_y
+            # Step up to limit_y
             if abs(limit_y - cur_y) > 1e-9:
                 P.append([cur_x, limit_y])
                 cur_y = limit_y
 
-            # === Dodge LEFT past blocker at best_y ===
+            # === Dodge left past blocker at best_y ===
             agg_xlo = float('inf')
             for pp in active_pix:
                 bot_y = Pxy[pp, 1] - px_hh
@@ -413,14 +416,11 @@ def _route_once_side(layout, outline_xy, params, G, board_poly, skip_pix, row_in
     # === Boundary + edge proximity check ===
     #
     # Both passes below sample every route segment every 0.5mm and test each
-    # sample against the board. Done one point at a time -- Point(x, y) then
-    # board_poly.contains(...) -- that is ~730k individual Shapely calls on a
-    # 16x16 board, and it dominated the whole request (13.4s of an 18.3s
-    # generate, profiled). The geometry is identical either way; the cost was
-    # entirely per-call overhead crossing into GEOS. Sampling every segment up
-    # front and testing the whole array with shapely.contains_xy collapses that
-    # into two vectorised calls (~17x faster on 200k points, verified to give
-    # bit-identical results).
+    # sample against the board. Testing one point at a time -- Point(x, y)
+    # then board_poly.contains(...) -- makes hundreds of thousands of Shapely
+    # calls on a large board, each paying the per-call overhead of crossing
+    # into GEOS. Sampling every segment up front and testing the whole array
+    # with shapely.contains_xy gives the same result in vectorised calls.
     viol_pix = set()
 
     def _sample_points(P):
@@ -455,8 +455,8 @@ def _route_once_side(layout, outline_xy, params, G, board_poly, skip_pix, row_in
 
     # Pass 2: copper inside the board but too close to its edge blames the
     # nearest active pixel. Note the sampling differs from pass 1 (n_samp + 1
-    # points, t = qi / n_samp) -- kept exactly as it was.
-    boundary = board_poly.boundary          # hoisted: was rebuilt per sample
+    # points, t = qi / n_samp).
+    boundary = board_poly.boundary          # computed once, not per sample
     edge_min = trace_w / 2 + params.board_edge_clear_mm
     all_active = list(active_pix)
     all_active_pts = Pxy[all_active] if all_active else np.zeros((0, 2))

@@ -1,13 +1,9 @@
 """Tests for /unroll-mesh-chain called in-process (no HTTP client needed):
 the click_regions extension (explicit per-click face sets, for curved
-selections the coplanar click-growth can't reproduce), its validation
-errors, and the historical clicks-only path — which also guards against the
-NameError (missing MAX_STL_UPLOAD_BYTES) that silently broke all three STL
-endpoints while they were dormant.
+selections that coplanar click-growth cannot reproduce), its validation
+errors, and the clicks-only path.
 """
 
-import sys
-import os
 
 import asyncio
 import io
@@ -44,10 +40,10 @@ def build_corner_mesh():
     return vertices, faces, face_at, (n_a, n_arc, n_b, n_x)
 
 
-def stl_face_order_note(vertices, faces):
-    """trimesh must preserve face order through an STL round trip — the whole
-    click_face_indices contract depends on it (see NOTES.md's real-face-index
-    fix). Assert it on this synthetic mesh rather than assuming.
+def _assert_stl_keeps_face_order(vertices, faces):
+    """trimesh preserves face order through an STL round trip, on which the
+    click_face_indices contract depends. Asserted on this synthetic mesh
+    rather than assumed.
     """
     stl_bytes = trimesh.Trimesh(vertices=vertices, faces=faces, process=False).export(file_type="stl")
     reloaded = trimesh.load(io.BytesIO(stl_bytes), file_type="stl")
@@ -58,13 +54,12 @@ def stl_face_order_note(vertices, faces):
         "STL round trip reordered faces — click indices would be meaningless"
 
 
-def test_clicks_only_strut_chain_still_works():
-    """The historical contract: two clicks on the flat panels, regions grown
-    server-side, joined by a strut across the fillet. This exact request
-    500'd before MAX_STL_UPLOAD_BYTES was restored.
+def test_clicks_only_strut_chain():
+    """The clicks-only contract: two clicks on the flat panels, regions grown
+    server-side, joined by a strut across the fillet.
     """
     vertices, faces, face_at, (n_a, n_arc, n_b, n_x) = build_corner_mesh()
-    stl_face_order_note(vertices, faces)
+    _assert_stl_keeps_face_order(vertices, faces)
     mid_xi = n_x // 2
     panel_a_seed = face_at(mid_xi, 0)
     panel_b_seed = face_at(mid_xi, n_a + n_arc)
@@ -80,13 +75,13 @@ def test_clicks_only_strut_chain_still_works():
     assert len(resp.region_developability_mm) == 2
     assert all(d < 1e-6 for d in resp.region_developability_mm), \
         "flat panels should each be exactly developable"
-    print(f"test_clicks_only_strut_chain_still_works: OK (area={poly.area:.1f}mm²)")
 
 
 def test_click_regions_selects_curved_patch():
-    """The new path: the middle click's region is the whole fillet band plus
-    panel B, passed explicitly — a curved selection grow_coplanar_region
-    cannot produce (its normals rotate continuously away from any seed).
+    """The click_regions path: the middle click's region is the whole fillet
+    band plus panel B, passed explicitly, a curved selection that
+    grow_coplanar_region cannot produce (its normals rotate continuously away
+    from any seed).
     Panel A (explicit too) touches the fillet directly, so the chain merges
     by union and unfolds as one patch, no strut.
     """
@@ -119,8 +114,6 @@ def test_click_regions_selects_curved_patch():
     assert 2100 < poly.area < 2500, f"unexpected area {poly.area:.1f}mm²"
     assert all(d < 1e-6 for d in resp.region_developability_mm), \
         "both regions are developable (flat panel; swept fillet band)"
-    print(f"test_click_regions_selects_curved_patch: OK "
-          f"(curved region {len(curved)} faces, area={poly.area:.1f}mm²)")
 
 
 def test_click_regions_validation_errors():
@@ -148,11 +141,10 @@ def test_click_regions_validation_errors():
                     "region with a detached face")
     assert "not valid JSON" in d1 and "per click" in d2
     assert "not inside" in d3 and "connected" in d4
-    print("test_click_regions_validation_errors: OK (4 rejections with clear details)")
 
 
 def test_corners_first_walks_cut_by_cut():
-    """corners_first=True must never run the automatic corner heuristic:
+    """corners_first=True never runs the automatic corner heuristic:
     an unresolved strut connection comes back as pending_connection with its
     marker loops and no outline; supplying corners picked from those markers
     resolves it and completes the chain.
@@ -184,7 +176,6 @@ def test_corners_first_walks_cut_by_cut():
     poly = Polygon(r2.outline)
     assert poly.is_valid and 1500 < poly.area < 2500
     assert any("corners you picked" in w for w in r2.warnings)
-    print(f"test_corners_first_walks_cut_by_cut: OK (pending -> resolved, area={poly.area:.1f}mm²)")
 
 
 def test_doubly_curved_region_warns_per_surface():
@@ -198,14 +189,3 @@ def test_doubly_curved_region_warns_per_surface():
     assert resp.region_developability_mm[0] > 1.0, "sphere patch should be flagged"
     assert any("Surface 1" in w and "flattenable" in w for w in resp.warnings), \
         f"expected a per-surface warning, got {resp.warnings}"
-    print(f"test_doubly_curved_region_warns_per_surface: OK "
-          f"({resp.region_developability_mm[0]:.2f}mm flagged)")
-
-
-if __name__ == "__main__":
-    test_clicks_only_strut_chain_still_works()
-    test_click_regions_selects_curved_patch()
-    test_click_regions_validation_errors()
-    test_corners_first_walks_cut_by_cut()
-    test_doubly_curved_region_warns_per_surface()
-    print("\n=== ALL UNROLL CHAIN ENDPOINT TESTS PASSED ===")

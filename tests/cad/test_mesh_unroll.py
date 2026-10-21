@@ -1,10 +1,9 @@
-"""Tests for triangle-unfolding mesh unroll — cylinder, hexagonal prism,
-hexagonal-pyramid (angled facets, the case that broke an earlier axis-fit
-approach), and a sphere patch as a negative (non-developable) control.
+"""Tests for triangle-unfolding mesh unroll: a cylinder, a hexagonal prism,
+a hexagonal pyramid (angled facets that converge to an apex, which an
+axis-fit approach cannot unroll), and a sphere patch as a negative
+(non-developable) control.
 """
 
-import sys
-import os
 
 import numpy as np
 from opentac.cad.pipeline.mesh_unroll import unfold_triangle_patch, check_developability, grow_coplanar_region
@@ -53,8 +52,8 @@ def make_hex_prism_patch(radius, n_facets, height):
 
 def make_hex_pyramid_patch(base_radius, height, n_facets):
     """n_facets triangular lateral facets of a hexagonal pyramid, all
-    converging to a shared apex — the angled/converging case that broke the
-    earlier axis-fit approach.
+    converging to a shared apex: angled, converging facets that an axis-fit
+    approach cannot unroll.
     """
     hex_angles = np.linspace(0, 2 * np.pi, 6, endpoint=False)
     hex_pts = [[base_radius * np.cos(a), base_radius * np.sin(a), 0.0] for a in hex_angles]
@@ -90,14 +89,14 @@ def make_sphere_patch(radius, n_theta, n_phi, theta_range, phi_range):
 
 def make_filleted_corner_patch(panel_a_width, fillet_radius, panel_b_height,
                                 sweep_length, n_x, n_arc, n_a=4, n_b=4):
-    """Two flat panels — A in the z=0 plane, B in the y=fillet_radius plane
-    — joined by a quarter-circle fillet, swept along x. Every cross-section
+    """Two flat panels (A in the z=0 plane, B in the y=fillet_radius plane)
+    joined by a quarter-circle fillet, swept along x. Every cross-section
     (constant x) is the identical profile, so this whole patch is a true
     generalized cylinder (single-curvature, exactly developable), but the
-    fillet is discretized into many thin, continuously-rotating triangles —
-    exactly the case where grow_coplanar_region correctly refuses to walk
-    from one flat panel into the other, requiring bridge_gap to connect a
-    shift-click selection of both flats.
+    fillet is discretized into many thin, continuously rotating triangles.
+    grow_coplanar_region therefore does not walk from one flat panel into the
+    other, and a shift-click selection of both flats is joined by
+    connect_regions_with_strut.
 
     Returns (vertices, faces, face_at) where face_at(xi, pi, which=0) gives
     the face index of the `which`-th triangle (0 or 1) of grid cell
@@ -147,23 +146,18 @@ def compute_face_normals(vertices, faces):
 
 
 def test_filleted_corner_connects_with_strut():
-    """The exact case reported (in various forms, across many real STLs):
-    two flat panels joined by a rounded/chamfered corner don't naturally
-    union into one connected selection, because the fillet's many thin,
-    continuously-rotating triangles are correctly excluded from both flat
-    regions by grow_coplanar_region's angle tolerance.
+    """Two flat panels joined by a rounded or chamfered corner, a common
+    configuration in real STLs, do not form one connected selection: the
+    fillet's many thin, continuously rotating triangles are excluded from both
+    flat regions by grow_coplanar_region's angle tolerance.
 
-    `connect_regions_with_strut` sidesteps trying to select and flatten
-    that connecting geometry (an approach that went through many iterations
-    and kept finding new real-world failure modes — see NOTES.md) by just
-    approximating it with straight cuts between the two regions' nearest
-    corners. On this synthetic mesh the true fillet is exactly developable
-    (zero distortion), so the straight-cut approximation necessarily loses
-    some area (a chord is always shorter than its arc) — this test checks
-    the result is a valid, reasonably-sized polygon in the right ballpark,
-    not an exact geometric match (unlike the old bridge_gap tests, which
-    could check for an exact match because they included the real curved
-    geometry rather than approximating it away).
+    `connect_regions_with_strut` does not select and flatten that connecting
+    geometry; it approximates it with straight cuts between the two regions'
+    nearest corners. On this synthetic mesh the true fillet is exactly
+    developable (zero distortion), so the straight-cut approximation
+    necessarily loses some area (a chord is shorter than its arc). The test
+    therefore checks that the result is a valid polygon of plausible size,
+    not an exact geometric match.
     """
     from shapely.geometry import Polygon
     from opentac.cad.pipeline.mesh_unroll import connect_regions_with_strut
@@ -181,8 +175,8 @@ def test_filleted_corner_connects_with_strut():
     region_a = grow_coplanar_region(faces, normals, panel_a_seed, angle_tol_deg=2.0, vertices=vertices)
     region_b = grow_coplanar_region(faces, normals, panel_b_seed, angle_tol_deg=2.0, vertices=vertices)
 
-    # The angle-tolerance BFS should correctly refuse to cross the fillet on
-    # its own — this is the bug being fixed, confirmed as a real gap first.
+    # The angle-tolerance BFS does not cross the fillet on its own, so the
+    # two regions start disjoint.
     assert region_a.isdisjoint(region_b), "flat regions should not directly touch across the fillet"
 
     outline, outline_vertex_indices = connect_regions_with_strut(
@@ -197,14 +191,10 @@ def test_filleted_corner_connects_with_strut():
     # Sanity-check size: panel A is 30x40mm, panel B is 20x40mm, joined
     # along their 40mm edge — true combined area (including the fillet
     # strip) is a bit over 30*40 + 20*40 = 2000mm²; the straight-cut
-    # approximation should be in the same ballpark, not wildly smaller
-    # (a bug pulling in almost nothing) or larger (a bug wrapping around
-    # the wrong way).
+    # approximation should be close to that, not far smaller (an outline
+    # that takes in almost nothing) or larger (one that wraps around the
+    # wrong way).
     assert 1500 < poly.area < 2500, f"unexpected outline area {poly.area:.1f}mm² for a ~2000mm² patch"
-
-    print(f"test_filleted_corner_connects_with_strut: OK "
-          f"(region_a={len(region_a)}, region_b={len(region_b)}, outline={len(outline)} points, "
-          f"area={poly.area:.1f}mm²)")
 
 
 def test_remove_needle_spikes():
@@ -241,7 +231,6 @@ def test_remove_needle_spikes():
     stable = remove_needle_spikes(nested)
     assert len(stable) <= 7 and all(p[1] < 13.5 for p in stable), \
         f"nested spike not fully removed: {stable.tolist()}"
-    print("test_remove_needle_spikes: OK (spike dropped, tab kept, nested stable)")
 
 
 def test_cylinder_unrolls_flat():
@@ -251,8 +240,6 @@ def test_cylinder_unrolls_flat():
     disagreement = check_developability(vertices, faces, uv, visited)
     assert len(visited) == len(faces), "not all faces reached — mesh connectivity bug"
     assert disagreement < 1e-6, f"cylinder should be exactly developable, got {disagreement:.6f}mm"
-    print(f"test_cylinder_unrolls_flat: OK (max disagreement={disagreement:.2e}mm, "
-          f"{len(uv)} vertices, {len(visited)} faces)")
 
 
 def test_hex_prism_unrolls_to_exact_strip_widths():
@@ -269,14 +256,11 @@ def test_hex_prism_unrolls_to_exact_strip_widths():
         strip_width = np.linalg.norm(uv[v_a] - uv[v_b])
         assert abs(strip_width - true_edge_len) < 1e-9, (
             f"facet {hi}: strip width {strip_width:.4f} != true edge length {true_edge_len:.4f}")
-    print(f"test_hex_prism_unrolls_to_exact_strip_widths: OK "
-          f"(disagreement={disagreement:.2e}mm, strip width={true_edge_len:.4f}mm exact)")
 
 
 def test_hex_pyramid_angled_facets_unroll_correctly():
-    """The case that broke the earlier axis-fit draft: facets converge to
-    an apex instead of staying parallel. Triangle-unfolding needs no
-    special-casing for this — verifies the generalization actually holds.
+    """Facets that converge to an apex instead of staying parallel unroll
+    exactly; triangle unfolding needs no special case for them.
     """
     vertices, faces = make_hex_pyramid_patch(base_radius=20.0, height=25.0, n_facets=4)
     uv, visited = unfold_triangle_patch(vertices, faces, start_face=0)
@@ -291,8 +275,6 @@ def test_hex_pyramid_angled_facets_unroll_correctly():
     apex_uv_dists = [np.linalg.norm(uv[6] - uv[i]) for i in range(4)]
     for true_d, uv_d in zip(apex_true_dists, apex_uv_dists):
         assert abs(true_d - uv_d) < 1e-9
-    print(f"test_hex_pyramid_angled_facets_unroll_correctly: OK "
-          f"(disagreement={disagreement:.2e}mm, apex distances exact)")
 
 
 def test_sphere_patch_flagged_as_non_developable():
@@ -303,14 +285,11 @@ def test_sphere_patch_flagged_as_non_developable():
     disagreement = check_developability(vertices, faces, uv, visited)
     assert disagreement > 0.1, (
         f"sphere patch should show clear non-developability, got only {disagreement:.4f}mm")
-    print(f"test_sphere_patch_flagged_as_non_developable: OK "
-          f"(disagreement={disagreement:.3f}mm — correctly flagged as not flattenable)")
 
 
 def test_flat_cases_clearly_separated_from_sphere():
-    """Sanity check the discriminating power of check_developability: the
-    sphere's disagreement should be orders of magnitude larger than any of
-    the genuinely-developable cases, not just "a bit more."
+    """check_developability discriminates clearly: the sphere's disagreement
+    is orders of magnitude larger than that of any developable case.
     """
     cyl_v, cyl_f = make_cylinder_patch(20.0, 90.0, 15.0, 12, 5)
     cyl_uv, cyl_vis = unfold_triangle_patch(cyl_v, cyl_f)
@@ -322,16 +301,3 @@ def test_flat_cases_clearly_separated_from_sphere():
 
     assert sph_d > cyl_d * 1000, (
         f"sphere disagreement ({sph_d:.4f}) should be >>1000x the cylinder's ({cyl_d:.2e})")
-    print(f"test_flat_cases_clearly_separated_from_sphere: OK "
-          f"(cylinder={cyl_d:.2e}mm vs sphere={sph_d:.4f}mm, ratio={sph_d/max(cyl_d,1e-12):.0f}x)")
-
-
-if __name__ == "__main__":
-    test_remove_needle_spikes()
-    test_cylinder_unrolls_flat()
-    test_hex_prism_unrolls_to_exact_strip_widths()
-    test_hex_pyramid_angled_facets_unroll_correctly()
-    test_sphere_patch_flagged_as_non_developable()
-    test_flat_cases_clearly_separated_from_sphere()
-    test_filleted_corner_connects_with_strut()
-    print("\n=== ALL MESH UNROLL TESTS PASSED ===")

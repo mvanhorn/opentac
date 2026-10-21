@@ -10,7 +10,7 @@
 // wrap comes from finger_tip_soft.stl (flat side + curved contact face + flat
 // side, joined in the corner-picking flow) and the Yubi finger pad from the
 // Yubi gripper's curved pad surface (screw holes ignored). The "facts" lines
-// quote a verified local generate of the stored config (all DRC-clean).
+// quote the result of generating the stored config (all DRC-clean).
 import { showView } from "./views.js";
 import { setSource } from "./design-name.js";
 import { applyModeVisibility } from "./landing.js";
@@ -149,15 +149,16 @@ if (galleryEl) {
 
 // ---- Real robot end-effector gallery -------------------------------------
 // Each card is a surface of an actual robot part, selected by hand in the STL
-// tool and saved as an annotation (stl_examples/end_effectors/annotations/);
+// tool and saved as an annotation (examples/stl/end_effectors/annotations/);
 // stl-examples.json carries the resulting unfolded 2D outline plus a
 // thumbnail rendered from the 3D model with the chosen faces highlighted.
 //
 // Clicking loads the stored outline straight into the board editor — the
-// unfold already happened when the example was curated, so there's no STL
-// download, no mesh analysis, and no re-unfolding at click time. The cable
-// edge is deliberately NOT preset: which edge the connector should exit is a
-// decision about the reader's own build, so they choose it exactly as they
+// unfold already happened when the example was curated, so the outline needs
+// no mesh analysis or re-unfolding at click time; the 3D preview mesh loads
+// separately (otcShowExampleInViewer in stl-viewer.js). The cable
+// edge is deliberately not preset: which edge the connector should exit is a
+// decision about the user's own build, so they choose it exactly as they
 // would for a DXF import or a hand-drawn outline.
 const stlGalleryEl = document.getElementById("landing-stl-examples");
 const stlFilterEl = document.getElementById("stl-example-filter");

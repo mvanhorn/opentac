@@ -7,13 +7,11 @@ build_pad_to_net_map_centered). If the two segments hold unequal numbers of
 assignable pads, the whole used-pad block — and the wire bundle feeding it —
 slides off the housing by half the imbalance.
 
-Regression: 40-pos was tabulated as a 16/24 split and 50-pos as 26/24, which put
-a 16-row/16-column board's nets on pads 1-16 and 17-32 of a 40-pos connector
-instead of 5-20 and 21-36 — the connector body sat 2.00mm off the tail centre.
+For example, a 16-row/16-column board on a 40-pos connector uses pads 5-20 and
+21-36. With a 16/24 split it would use pads 1-16 and 17-32, and the connector
+body would sit 2.00 mm off the tail centre.
 """
 
-import sys
-import os
 
 from opentac.cad.pipeline.layout import (
     CONNECTOR_FAMILY,
@@ -51,7 +49,6 @@ def test_segments_are_equal_and_centred():
         assert right_avail[0] == left_avail[-1] + 1
         assert left_avail + right_avail == [
             p for p in range(1, conn_pos + 1) if p not in fixed_nc]
-    print("test_segments_are_equal_and_centred: OK")
 
 
 def test_70_pos_keeps_its_balancing_no_connects():
@@ -60,7 +57,6 @@ def test_70_pos_keeps_its_balancing_no_connects():
     assert fixed_nc == [1, 2, 3, 68, 69, 70]
     assert left[0] == 4 and left[-1] == 35
     assert right[0] == 36 and right[-1] == 67
-    print("test_70_pos_keeps_its_balancing_no_connects: OK")
 
 
 def test_assigned_pads_straddle_the_centre():
@@ -82,11 +78,11 @@ def test_assigned_pads_straddle_the_centre():
         # Every net gets exactly one pad, and no pad is double-booked.
         assert len(pad_to_net) == n_row + n_col
         assert len(set(pad_to_net.values())) == n_row + n_col
-    print("test_assigned_pads_straddle_the_centre: OK")
 
 
-def test_regression_16x16_on_40_pos():
-    """The reported case: rows landed on 1-16 and columns on 17-32."""
+def test_16x16_on_40_pos_is_centred():
+    """A 16x16 board on a 40-pos connector uses pads 5-20 for rows and 21-36
+    for columns."""
     conn_pos, swap = select_connector_for_nets(16, 16)
     assert conn_pos == 40 and not swap
     pad_to_net = build_pad_to_net_map_centered(
@@ -97,12 +93,3 @@ def test_regression_16x16_on_40_pos():
     col_pads = sorted(p for p, n in pad_to_net.items() if n.startswith("COL_"))
     assert (row_pads[0], row_pads[-1]) == (5, 20), row_pads
     assert (col_pads[0], col_pads[-1]) == (21, 36), col_pads
-    print("test_regression_16x16_on_40_pos: OK (rows 5-20, cols 21-36)")
-
-
-if __name__ == "__main__":
-    test_segments_are_equal_and_centred()
-    test_70_pos_keeps_its_balancing_no_connects()
-    test_assigned_pads_straddle_the_centre()
-    test_regression_16x16_on_40_pos()
-    print("\n=== ALL CONNECTOR CENTERING TESTS PASSED ===")

@@ -3,7 +3,7 @@
 // Separate from app.js because it is another output part with its own
 // lifecycle, rebuilt several times against one board while tuning the fit.
 //
-// The shear bumps are a SETTING here, not a separate part: "flat lid" and
+// The shear bumps are a setting here, not a separate part: "flat lid" and
 // "bumped lid" are two versions of the same top piece.
 //
 // Download ZIP also puts the case in the ZIP (case/, every lid), built from
@@ -68,7 +68,7 @@ window.otcCaseBoardReady = (ready) => {
   updateButtons();
 };
 
-/** Called by app.js before a new board generates: the old case no longer fits. */
+/** Called by app.js before a new board generates: the current case will not fit it. */
 window.otcCaseInvalidate = () => {
   boardReady = false;
   bottomBytes = null;

@@ -3,8 +3,6 @@ connector: when no attempt routes everything and pruning the failed taxels
 does not either, generate refuses with a 400 instead of returning the board.
 Rules that cannot reach the connector at all are refused up front."""
 
-import os
-import sys
 
 
 import pytest
@@ -22,8 +20,8 @@ def _req(**kw):
 
 def test_unconnected_nets_are_refused_not_shipped(monkeypatch):
     # A router that always reports one taxel's nets as failed: every attempt
-    # and every prune round is left with an unconnected net. The board used
-    # to ship anyway (prune out of rounds, most taxels still there).
+    # and every prune round is left with an unconnected net. The board is
+    # refused, although the prune rounds end with most taxels still present.
     real = main.route_for
 
     def refusing(params):

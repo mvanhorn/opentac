@@ -34,13 +34,9 @@ export function showView(name) {
     location.hash = target;
   }
   // Lets stl-viewer.js re-run its Three.js resize logic once its container
-  // is actually visible (a WebGL canvas can't size itself against a
+  // is actually visible (a WebGL canvas cannot size itself against a
   // display:none/hidden parent).
   window.dispatchEvent(new CustomEvent("otc:view-shown", { detail: { view: target } }));
-}
-
-export function currentView() {
-  return normalizeHash();
 }
 
 window.addEventListener("hashchange", () => showView(normalizeHash()));

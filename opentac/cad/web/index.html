@@ -219,11 +219,6 @@
           <p class="hint">
             Upload an STL, select connected planar or curved surfaces, then unfold them into the board outline.
           </p>
-          <div class="row dev-example-row" id="dev-example-row" hidden>
-            <label>Example STL (dev)
-              <select id="example-stl-select"><option value="">Choose an example…</option></select>
-            </label>
-          </div>
           <div class="row">
             <button id="upload-stl" type="button" class="primary">Upload STL</button>
             <button id="select-single" type="button" class="mode-button active" disabled>Single face</button>
@@ -235,8 +230,6 @@
             <button id="unfold-faces" type="button" class="primary" disabled>Unfold selection</button>
             <button id="clear-face" type="button" class="secondary" disabled>Clear selection</button>
             <button id="reset-view" type="button" class="secondary" disabled>Reset view</button>
-            <button id="capture-example" type="button" class="secondary" hidden
-              title="Dev (localhost only): save the current selection + unfold as an example-gallery annotation JSON">Save as example</button>
             <input id="stl-input" type="file" accept=".stl,model/stl,application/sla" hidden />
           </div>
           <div class="stl-curved-controls">
@@ -416,8 +409,8 @@
 
       <!-- ================= Views =================
            Ordered to follow the workflow top to bottom: draw the outline, press
-           Generate, then read the result. The PCB Preview panel is last because
-           it is the output of the two panels above it. -->
+           Generate, then read the result. The PCB Preview panel follows the
+           two panels above it because it is their output. -->
       <section class="views">
         <div class="panel view">
           <div class="view__head">
@@ -545,9 +538,7 @@
           <div id="route-edit-status" class="mini"></div>
         </div>
 
-        <!-- Last panel in the column, below the preview: you generate, inspect
-             the board above, and only then download it. -->
-        <!-- Two-piece printed case. The shear bumps are a version of the TOP
+        <!-- Two-piece printed case. The shear bumps are a version of the top
              piece, not a separate part: flat lid or bumped lid. -->
         <div class="panel bump-panel" id="case-panel">
           <div class="bump-head">
@@ -692,6 +683,8 @@
           </div>
         </div>
 
+        <!-- Last panel in the column, below the preview and the case: you
+             generate, inspect the board above, and only then download it. -->
         <div class="panel download-panel">
           <div class="download-bar">
             <label class="download-bar__name" for="design-name">
@@ -773,7 +766,7 @@
           <p>The sensor grid can be specified from either end:</p>
           <dl>
             <dt>Set taxel size</dt>
-            <dd>You give Taxel W/H and Pitch X/Y; how many fit is whatever your outline allows. The original behaviour.</dd>
+            <dd>You give Taxel W/H and Pitch X/Y; how many fit is whatever your outline allows. This is the default.</dd>
             <dt>Set rows &amp; columns</dt>
             <dd>You give the grid you want and the taxel size needed to fit it is calculated from your outline (its bounding box, minus the edge keepout, divided by the requested counts). Pitch is set equal to the taxel size, so taxels tile edge to edge with no gap. On a non-rectangular outline the taxel size is shrunk in small steps until the requested rows and columns really pack — corners that fall outside the shape are still dropped, so you may get slightly fewer taxels than rows × columns. Available in <em>Grow board to fit wiring</em> mode only: with the outline fixed, the packable area depends on the wiring keep-out band, whose width depends in turn on the row/column counts you are trying to set.</dd>
           </dl>
@@ -792,7 +785,7 @@
             <dt>Readout board (<code>readout_board</code>)</dt>
             <dd>The OpenTac board the sensor plugs into: 30-pin (up to 15 x 15 taxels, two stacked 16 x 22.8&nbsp;mm boards) or 60-pin (up to 30 x 30, one 37 x 34.3&nbsp;mm board). It sets the connector on the sensor's tail.</dd>
             <dt>2 or 4 copper layers (<code>copper_layers</code>)</dt>
-            <dd>On 2 layers, columns run on the top copper and rows on the bottom, and every wire travels around the outside of the sensor field to the connector, so the board needs a wiring band around the field. On 4 layers the rows are wired on two inner layers instead: In1 carries each row straight through the field to the connector, in row order, and In2 joins the pieces of rows a notch cuts in two. Rows then need no band, so with a fixed outline more of it holds taxels. Either choice works with either board mode below. A 4-layer board costs more to fabricate, and needs the hug router.</dd>
+            <dd>On 2 layers, columns run on the top copper and rows on the bottom, and every wire travels around the outside of the sensor field to the connector, so the board needs a wiring band around the field. On 4 layers the rows are wired on two inner layers instead: In1 carries each row straight through the field to the connector, in row order, and In2 joins the pieces of rows a notch cuts in two. Rows then need no band, so with a fixed outline more of it holds taxels. Either choice works with either board mode below. A 4-layer board costs more to fabricate.</dd>
             <dt>Grow board to fit wiring (<code>board_mode: "expand"</code>)</dt>
             <dd>The default. Taxels are packed at maximum density inside the shape you drew, then the final board outline is grown outward until every wire fits. No taxel is ever dropped — but the exported board is larger than the shape you drew.</dd>
             <dt>Keep outline fixed, shrink sensor grid (<code>board_mode: "fixed_keepout"</code>)</dt>
@@ -881,7 +874,7 @@
             <dd>Your outline is too small for the current taxel size, pitch, and edge keepout. Draw a larger outline or reduce those parameters.</dd>
             <dt>"Sensor fill region does not overlap the board outline"</dt>
             <dd>The sensorize zone you drew is fully outside the board outline — make sure it's drawn inside the outline shape.</dd>
-            <dt>"No closed outline found — check for gaps or open ends" (DXF import)</dt>
+            <dt>"No closed outline found — check the DXF contains a single closed polyline/region (no gaps or open ends)" (DXF import)</dt>
             <dd>The DXF file doesn't contain one clean closed loop of geometry — check for gaps, unconnected segments, or stray extra shapes in the source file.</dd>
             <dt>"Server: not reachable"</dt>
             <dd>The server has not answered for 90 seconds. On the hosted site the server sleeps after 15 minutes without use and takes about a minute to start; the page keeps trying every 30 seconds and runs a pending Generate once it answers. If it stays unreachable, reload the page. On your own computer, check that the window running <code>opentac cad</code> is still open.</dd>

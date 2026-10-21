@@ -171,7 +171,7 @@ static FrameStats runFrame(const XampGrid *grid, XampState *st, uint8_t mode, ui
 // ----- Tests ------------------------------------------------------------------
 
 static void testPattern(const XampGrid *grid) {
-  // The sketches' table must be a permutation of all 1024 positions, with the
+  // The pattern table must be a permutation of all 1024 positions, with the
   // level ends where the batching assumes.
   std::set<uint16_t> seen;
   for (uint16_t i = 0; i < XAMP_PATTERN_LENGTH; ++i) {

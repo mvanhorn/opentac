@@ -1,60 +1,57 @@
 // OpenTac Xampling -- binary compressive sampling over any provisioned skin.
 //
-// The same scheme as the hand-written Teensy sketches (binary_sampling_64x64,
-// adaptiveFR_binary, binary_sampling_SHIFTING_SHEAR), derived instead from the
-// DeviceConfig, so it runs on whatever skin the board was provisioned with:
+// The sampling plan is derived from the DeviceConfig, so it runs on whatever
+// skin the board was provisioned with:
 //
 //   1. Last frame's trigger points are re-checked first.
-//   2. The sketches' coarse-to-fine quadtree pattern searches the skin in
-//      PHYSICAL space (row_geom/col_geom), shifted by one taxel each frame so
-//      contacts that fall between coarse lattice points are found.
+//   2. A coarse-to-fine quadtree pattern searches the skin in physical space
+//      (row_geom/col_geom), shifted by one taxel each frame so contacts that
+//      fall between coarse lattice points are found.
 //   3. Any sample at or above threshold grows: its whole shear bump and its
 //      8 physical neighbours (each with its whole bump) are sampled, and
 //      every new sample above threshold grows in turn.
 //
-// Two budgets, as in the originals:
+// Two budgets:
 //   FIXED  every sample counts toward M -- constant frame time.
 //   GROW   M counts pattern samples only; growth is unbounded, so a light
 //          touch costs little and a large contact is followed completely.
 // In both, growth waits until SEARCH_MIN pattern samples have been taken, so
 // a large contact from the last frame cannot use up a frame before it has
-// looked anywhere else (the fixed-M 64x64 sketch could).
+// looked anywhere else.
 //
-// ----- What changed from the Teensy sketches, and why -----------------------
+// ----- Design notes ----------------------------------------------------------
 //
-// Sample order. The Teensy drove each row from its own pin, so any order cost
-// the same. Here the rows are a '595 walking 1 that only moves forward, and
-// every change of driven line costs a walk and ROW_SETTLE_US. So a frame is as
-// few forward passes as the algorithm allows, each read exactly as the raster
-// scan reads (scan-plan entries in order, skipping those not queued):
+// Sample order. The rows are driven by a '595 walking 1 that only moves
+// forward, so unlike a readout that drives each row from its own pin, order
+// matters: every change of driven line costs a walk and ROW_SETTLE_US. So a
+// frame is as few forward passes as the algorithm allows, each read exactly as
+// the raster scan reads (scan-plan entries in order, skipping those not
+// queued):
 //   1. last frame's seeds, then one pass per growth wave (empty, and free,
 //      when nothing is being touched);
 //   2. the search: M pattern points in GROW, SEARCH_MIN in FIXED, then growth;
 //   3. FIXED only: one pass filling the rest of M from the pattern.
 // A pass crosses the driven lines at most once, as a raster frame does. Growth
 // waits for the end of its pass rather than starting at each trigger; seeds
-// still grow before the search, so the search skips held contacts as the
-// sketches' isSampled check did. In FIXED, triggers found by the filling pass
-// grow next frame, as seeds.
+// still grow before the search, so the search skips held contacts. In FIXED,
+// triggers found by the filling pass grow next frame, as seeds.
 //
-// Pattern. The 32x32 ctrMsrRows/ctrMsrCols tables, verbatim, shifted one taxel
-// per frame mod 32 -- but diagonally, not along the row as the sketches did
-// (see the end of xampFrame). Every OpenTac skin fits in 32x32,
-// so the physical grid is laid on the table's top-left corner; a position that
-// falls off the skin or into a hole in its mask is skipped and does not count
-// toward any budget.
+// Pattern. A fixed 32x32 coarse-to-fine table (XAMP_PATTERN_ROW/_COL), shifted
+// one taxel per frame mod 32, diagonally (see the end of xampFrame). Every
+// OpenTac skin fits in 32x32, so the physical grid is laid on the table's
+// top-left corner; a position that falls off the skin or into a hole in its
+// mask is skipped and does not count toward any budget.
 //
-// Shear bumps. The shear sketch filled a hard-coded (r>>1, c>>1) 2x2 block.
-// Here the bump is the manifest's shear group, found by searching a small grid
-// window around the taxel. Building the grid checks that every group fits in
-// that window; a skin whose groups do not is refused for xampling rather than
-// sampled with half-filled bumps. Bump fill is a setting (XAMP_BUMP_FILL, off
-// by default): off, or on a pressure-only skin, growth takes the 8 neighbours
-// alone.
+// Shear bumps. The bump is the manifest's shear group, found by searching a
+// small grid window around the taxel. Building the grid checks that every
+// group fits in that window; a skin whose groups do not is refused for
+// xampling rather than sampled with half-filled bumps. Bump fill is a setting
+// (XAMP_BUMP_FILL, off by default): off, or on a pressure-only skin, growth
+// takes the 8 neighbours alone.
 //
 // Values and threshold. Values are baseline-subtracted and clamped at zero,
 // against a per-taxel baseline captured by the firmware (`Z`). A taxel
-// triggers when its value reaches its OWN hands-off noise peak (also from `Z`)
+// triggers when its value reaches its own hands-off noise peak (also from `Z`)
 // plus the margin XAMP_THRESH. One global threshold cannot fit a skin whose
 // taxels range from ~3 counts of noise to occasional 600-count spikes.
 // Measured on the 32x32: a 64-frame capture and a 30-count margin leave the
@@ -182,8 +179,7 @@ static bool xampBuildGrid(const OtDeviceConfig *config, const ScanPlan *plan,
 
 // ----- Pattern ----------------------------------------------------------------
 //
-// ctrMsrRows / ctrMsrCols from adaptiveFR_binary.ino (identical in
-// binary_sampling_SHIFTING_SHEAR), a permutation of all 1024 positions. Kept in
+// A coarse-to-fine permutation of all 1024 positions of a 32x32 grid. Kept in
 // flash: 2 KB of flash, no RAM.
 
 #define XAMP_PATTERN_LENGTH 1024u
@@ -472,8 +468,8 @@ static void xampGrow(XampFrameContext *ctx) {
   }
 }
 
-// Pattern entry `index`, shifted as the sketches did: mod 32, whatever the
-// skin's size. Off-skin positions map to NONE and are refused by xampQueue().
+// Pattern entry `index`, shifted mod 32, whatever the skin's size. Off-skin
+// positions map to NONE and are refused by xampQueue().
 static inline uint16_t xampPatternEntry(const XampGrid *grid, const XampState *st,
                                         uint16_t index) {
   return grid->gridEntry[xampPos(
@@ -512,9 +508,9 @@ static void xampFrame(const XampGrid *grid, const XampSettings *settings,
   st->priorityCount = 0;
 
   // Pass 1: last frame's seeds, grown before anything else, so every contact
-  // they still touch is sampled before the search runs -- the sketches' order,
-  // where a hit grew at once and later search points on it were skipped. In
-  // FIXED they may not eat into the SEARCH_MIN reserve.
+  // they still touch is sampled before the search runs, and later search
+  // points on it are skipped. In FIXED they may not eat into the SEARCH_MIN
+  // reserve.
   const uint16_t limit = st->limit;
   if (fixed) st->limit = (uint16_t)(limit > searchMin ? limit - searchMin : 0u);
   for (uint8_t p = 0; p < previousCount; ++p) {
@@ -550,11 +546,11 @@ static void xampFrame(const XampGrid *grid, const XampSettings *settings,
 
   // Slide the whole pattern one taxel diagonally for next frame, with one extra
   // column step each time the row wraps, so all 1024 offsets still come round.
-  // The sketches moved the row only when the column wrapped: the first M
-  // pattern points sit on a coarse row lattice, so for 32 frames at a time the
-  // same rows were searched and a press on any other waited for the next row
-  // shift (simulated, 32x32 grow M=64: a 2x2 press waited 25 frames on
-  // average, up to 158; diagonal, 2.8 and 14).
+  // Moving the row only when the column wraps would not do: the first M
+  // pattern points sit on a coarse row lattice, so the same rows would be
+  // searched for 32 frames at a time, and a press on any other row would wait
+  // for the next row shift (simulated, 32x32 grow M=64: a 2x2 press waits 25
+  // frames on average, up to 158; with the diagonal shift, 2.8 and 14).
   st->shiftRow = (uint8_t)((st->shiftRow + 1u) & 0x1Fu);
   st->shiftCol = (uint8_t)((st->shiftCol + (st->shiftRow == 0u ? 2u : 1u)) & 0x1Fu);
 }

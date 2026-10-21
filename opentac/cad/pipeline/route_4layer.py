@@ -29,8 +29,8 @@ def route_hug_4layer(layout: Layout, outline_xy, params: Params):
     contract. row_routes mixes the B.Cu wires that remain with the inner-layer
     links and feeds; each inner route has .layer set. plan.inner records what
     went where (for stats)."""
-    # the hug's own refusal report repairs its column fan (opt-in in
-    # route_hug, so 2-layer boards keep the unchanged hug router)
+    # the hug's own refusal report repairs its column fan (repair=True is
+    # passed only here; 2-layer boards route without it)
     col, row, plan, _ = route_hug_all(layout, outline_xy, params, repair=True)
     is_pad_hop = [_starts_at_pad(r) for r in row]
 
@@ -53,7 +53,7 @@ def route_hug_4layer(layout: Layout, outline_xy, params: Params):
            if (pad_hop and r.net_name in inner_failed) or (not pad_hop and r.net_name not in nets_linked)]
 
     # The hug's failure set counts row wires it could not draw on B.Cu, which
-    # no longer matters for rows now on the inner layers: recount from what
+    # does not matter for rows routed on the inner layers: recount from what
     # was actually routed.
     col_ok = {r.net_name for r in col}
     fed = {r.net_name for r in feeds}

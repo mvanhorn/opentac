@@ -1,20 +1,20 @@
 """The 1:1 printable cutting template.
 
-The single property that matters is scale: a PDF that renders beautifully but
-prints at 97% produces a cut-out that is wrong in a way nothing on screen
-reveals. These pin the scale, the on-page scale check that lets a user catch a
-scaling print dialog, and the tiling path for boards too big for one sheet.
+The essential property is scale: a PDF that renders correctly but prints at
+97% produces a cut-out that is wrong in a way nothing on screen reveals. These
+tests cover the scale, the on-page scale check that lets a user detect a
+scaling print dialog, and the tiling path for boards too large for one sheet.
 """
 import base64
 import io
 import os
 import re
-import sys
 import zipfile
 
 import pytest
 
 
+import opentac.cad
 from opentac.cad.main import (GenerateRequest, _layout_from_edit_data,
                   connector_export_dir, generate)
 from opentac.cad.export.print_pdf import MM_TO_PT, RULER_MM, generate_print_pdf
@@ -29,8 +29,8 @@ def _pdf_for(outline, **kw):
     body.update(kw)
     edit_data = generate(GenerateRequest(**body)).edit_data
     layout, outline_xy, params, removed = _layout_from_edit_data(edit_data)
-    cdir = connector_export_dir(
-        layout, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "connectors"))
+    cdir = connector_export_dir(layout, os.path.join(os.path.dirname(opentac.cad.__file__), "connectors"))
+    assert cdir, "the connector footprint was not found"
     return generate_print_pdf(layout, outline_xy, params, removed, cdir), edit_data
 
 
@@ -55,8 +55,8 @@ def test_pdf_is_structurally_valid():
 
 
 def test_geometry_is_drawn_at_true_1_to_1():
-    """1 mm of board must be exactly 72/25.4 PDF units. This is the whole point
-    of the file, and it is one wrong constant away from being silently false."""
+    """1 mm of board is exactly 72/25.4 PDF units. This is the purpose of the
+    file, and a single wrong constant would break it without any visible sign."""
     raw, _ = _pdf_for(SQUARE)
     txt = _page_streams(raw)[0].decode("latin-1")
     lines = [tuple(map(float, m)) for m in
@@ -67,9 +67,9 @@ def test_geometry_is_drawn_at_true_1_to_1():
 
 
 def test_every_page_carries_the_scale_check():
-    """Including tiled sheets. The ruler was originally drawn in board space,
-    which put it off the media box entirely on 2 of 4 tiles -- removing the only
-    way a user can tell their printer scaled the sheet."""
+    """Including tiled sheets. Drawn in board space, the ruler would fall off
+    the media box of some tiles, removing the only way a user can tell that the
+    printer scaled the sheet."""
     raw, _ = _pdf_for(HUGE, pixel_w_mm=22, pixel_h_mm=22, pitch_x_mm=22.4, pitch_y_mm=22.4)
     streams = _page_streams(raw)
     assert len(streams) > 1, "this board should have tiled"
@@ -100,8 +100,8 @@ def test_pdf_is_in_the_export_zip():
 
 def test_the_cut_outline_is_closed():
     """Edge.Cuts deliberately leaves a gap where the connector footprint
-    supplies its own edge. Correct for a board file; useless on paper, where an
-    open loop is a shape you cannot cut out."""
+    supplies its own edge. That is correct for a board file but not on paper,
+    where an open loop is a shape that cannot be cut out."""
     raw, _ = _pdf_for(SQUARE)
     st = _page_streams(raw)[0].decode("latin-1")
     subpaths = re.findall(r"(?:-?[\d.]+ -?[\d.]+ m)(?:\s+-?[\d.]+ -?[\d.]+ l)+\s+(h S|S)", st)
@@ -110,10 +110,10 @@ def test_the_cut_outline_is_closed():
 
 
 def test_the_cut_outline_includes_the_connector():
-    """The template is the board the fab cuts, so it must span the same extent
-    as the Gerber Edge.Cuts in the same export. It used to stop at the
-    connector's open edge, where the footprint draws the rest of the outline,
-    and printed every board short by the connector body."""
+    """The template is the board the fab cuts, so it spans the same extent as
+    the Gerber Edge.Cuts in the same export. Stopping at the connector's open
+    edge, where the footprint draws the rest of the outline, would print every
+    board short by the connector body."""
     body = {"outline": SQUARE, "router": "hug", "board_mode": "expand",
             "pixel_w_mm": 4, "pixel_h_mm": 4, "pitch_x_mm": 4.2, "pitch_y_mm": 4.2}
     resp = generate(GenerateRequest(**body))
@@ -130,8 +130,8 @@ def test_the_cut_outline_includes_the_connector():
 
 
 def test_a_broken_pdf_never_costs_the_user_their_gerbers():
-    """The PDF is a convenience; the Gerbers are the deliverable. Export must
-    survive a PDF failure rather than returning a 500 for the whole board."""
+    """The PDF is a convenience; the Gerbers are the deliverable. Export
+    survives a PDF failure rather than returning a 500 for the whole board."""
     from opentac.cad import main as main_mod
     original = main_mod.generate_print_pdf
     main_mod.generate_print_pdf = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))

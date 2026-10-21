@@ -1,26 +1,21 @@
-"""An exported design must re-open and reproduce the same board.
+"""An exported design re-opens and reproduces the same board.
 
-manifest.json describes the board that was MADE. That is not the same thing as
-describing how to make it: /generate takes about thirty-five inputs and the
-manifest carried seven, so a re-import used to have to guess board_mode, the
-router and every clearance, and would silently
-produce a different board.
+manifest.json describes the board that was made, which is not the same as
+describing how to make it: /generate takes about thirty-five inputs. An export
+(export/design.py) therefore writes two records, and these tests cover both:
 
-Two records now come out of an export (export/design.py), and this pins both:
-
-  manifest.json["design"] — the recipe. Re-generating from it must reproduce
-      the board EXACTLY: same cut boundary, same taxels, same DRC.
-  design.json             — the save file. Restoring it through
-      /export-edited must give back the same board, hand-dragged routes
-      included, and must refuse rather than guess when it was written by a
-      different pipeline version.
+  manifest.json["design"]: the recipe. Re-generating from it reproduces the
+      board exactly: same cut boundary, same taxels, same DRC.
+  design.json: the save file. Restoring it through /export-edited gives back
+      the same board, hand-dragged routes included, and a save file written
+      by a different pipeline version is not replayed as-is.
 
 The reproduction check compares the re-generated manifest's `edge_cuts` and
-`pixels` against the original's, not just the taxel count: the failure this
-guards against is a board that comes back the right size with the wrong
-wiring keep-out, which a count check cannot see.
+`pixels` against the original's, not only the taxel count: a board can come
+back the right size with the wrong wiring keep-out, which a count check cannot
+detect.
 """
-import base64, io, json, sys, os, zipfile
+import base64, io, json, zipfile
 
 
 import numpy as np
@@ -91,18 +86,18 @@ CASES = [
                             pixel_w_mm=3, pixel_h_mm=3, pitch_x_mm=3.2, pitch_y_mm=3.2)),
     ("square/expand/legacy", dict(outline=SQUARE, router="legacy", board_mode="expand",
                                   pixel_w_mm=4, pixel_h_mm=4, pitch_x_mm=4.2, pitch_y_mm=4.2)),
-    # Solved grid: the recipe stores the SOLVED taxel size, not target_cols/rows,
+    # Solved grid: the recipe stores the solved taxel size, not target_cols/rows,
     # so a replay must not re-solve and land somewhere else.
     ("square/target-grid", dict(outline=SQUARE, router="hug", board_mode="expand",
                                 target_cols=6, target_rows=6)),
     # Every value deliberately off its default, including a hand-upsized
-    # connector. Without this, a recipe that silently fell back to defaults
-    # would pass every case above — most designs are drawn near the defaults,
-    # so "reproduced" and "regenerated from scratch" look identical.
-    # test_the_recipe_is_load_bearing pins that down from the other side.
-    # (Trace + clearance stays under the 0.5mm pin pitch: at 0.25 + 0.28 the
-    # wires to neighbouring pins cannot clear each other, generate now refuses
-    # it, and before that this board shipped 5 unconnected nets.)
+    # connector. Without this case, a recipe that fell back to defaults would
+    # pass every case above: most designs are drawn near the defaults, so
+    # "reproduced" and "regenerated from scratch" look identical.
+    # test_the_recipe_is_load_bearing covers the other direction.
+    # (Trace plus clearance stays under the 0.5 mm pin pitch: at 0.25 + 0.28
+    # the wires to neighbouring pins cannot clear each other, and generate
+    # refuses the request.)
     ("square/all-non-default", dict(
         outline=SQUARE, router="hug", board_mode="fixed_keepout",
         pixel_w_mm=3.4, pixel_h_mm=2.8, pitch_x_mm=3.9, pitch_y_mm=3.3,
@@ -159,13 +154,13 @@ def test_save_file_restores_the_board(tag, req):
 
 
 def test_the_recipe_is_load_bearing():
-    """The other direction: the outline ALONE must not reproduce the board.
+    """The other direction: the outline alone does not reproduce the board.
 
-    Every reproduction test above is worthless if the design block turns out
-    to carry no information the defaults don't already supply. Re-generating
-    the all-non-default board from its outline and nothing else has to give a
-    visibly different board — otherwise those tests are green for the wrong
-    reason and would stay green if the block were dropped entirely.
+    The reproduction tests above are meaningful only if the design block
+    carries information that the defaults do not already supply.
+    Re-generating the all-non-default board from its outline alone gives a
+    visibly different board; otherwise those tests would pass for the wrong
+    reason, and would still pass if the block were dropped entirely.
     """
     req = dict(CASES[-1][1])
     original = generate(GenerateRequest(**req))
@@ -182,11 +177,11 @@ def test_the_recipe_is_load_bearing():
 
 
 def test_hand_edited_routes_survive_a_round_trip():
-    """The point of design.json: a dragged route comes back dragged.
+    """A dragged route comes back dragged through design.json.
 
-    /export-edited's ZIP has to carry the caller's LIVE routes, not
-    edit_data["routes"] (the routes the board was generated from) — otherwise
-    re-opening an edited export quietly reverts every edit.
+    /export-edited's ZIP carries the caller's live routes, not
+    edit_data["routes"] (the routes the board was generated from); otherwise
+    re-opening an edited export would revert every edit.
     """
     original = generate(GenerateRequest(
         outline=SQUARE, router="hug", board_mode="expand",
@@ -212,10 +207,10 @@ def test_hand_edited_routes_survive_a_round_trip():
 
 
 def test_fill_region_round_trips():
-    """A sensorize zone was dropped by every export before this.
+    """A sensorize zone survives an export and a re-generation.
 
     layout.sensor_outline_xy is set to the outline, not to the fill region, so
-    the zone existed only in the browser: re-generating from a downloaded file
+    unless the export records the zone, re-generating from a downloaded file
     would sensorize the whole board.
     """
     fill = [[-12, -12], [12, -12], [12, 12], [-12, 12]]
@@ -252,7 +247,7 @@ def test_a_design_from_another_pipeline_falls_back_to_the_recipe():
     assert opened.mode == "recipe", "a stale save file must not be replayed as-is"
     assert opened.edit_data is None and opened.routes is None
     assert any("1999.01.01" in w for w in opened.warnings), opened.warnings
-    # It still has to be openable — degrading to the recipe is the whole point.
+    # It remains openable: the save file falls back to the recipe.
     replay = generate(GenerateRequest(outline=opened.outline, **opened.params))
     _assert_same_board(_manifest(original), _manifest(replay), "stale-save recipe")
 
@@ -272,9 +267,9 @@ def test_bad_files_say_why():
         pixel_w_mm=4, pixel_h_mm=4, pitch_x_mm=4.2, pitch_y_mm=4.2))
     man = _manifest(original)
 
-    # A manifest from before the design block is NOT an error: it opens in
-    # geometry mode, which is what makes an already-fabricated board usable
-    # for a case. See test_legacy_manifest_recovery.py for that behaviour.
+    # A manifest without a design block is not an error: it opens in geometry
+    # mode, so that an already-fabricated board can be used for a case. See
+    # test_legacy_manifest_recovery.py for that behaviour.
     old = {k: v for k, v in man.items() if k != "design"}
     old["v"] = 3
     assert open_design(OpenDesignRequest(file=old)).mode == "geometry"
@@ -284,13 +279,13 @@ def test_bad_files_say_why():
         open_design(OpenDesignRequest(file={**old, "pixels": []}))
     assert e.value.status_code == 400 and "taxel" in e.value.detail.lower()
 
-    # A file from a NEWER app version: refuse rather than half-read it.
+    # A file from a newer app version is refused rather than half-read.
     with pytest.raises(HTTPException) as e:
         open_design(OpenDesignRequest(file={**man, "design": {**man["design"],
                                                               "schema": DESIGN_SCHEMA + 1}}))
     assert e.value.status_code == 400 and "newer version" in e.value.detail
 
-    # Not one of ours at all.
+    # A file that is not an OpenTac design.
     with pytest.raises(HTTPException) as e:
         open_design(OpenDesignRequest(file={"hello": "world"}))
     assert e.value.status_code == 400

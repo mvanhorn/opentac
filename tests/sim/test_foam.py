@@ -1,8 +1,7 @@
-"""The ported foam model must give the same per-taxel forces as the original.
+"""The foam model gives the reference per-taxel forces.
 
-The reference numbers in fixtures/foam_reference.json were computed by the lab
-script `opentac_indent_compare.sim_taxel_forces` (see make_reference.py), on
-the inputs stored beside them.
+The reference numbers in fixtures/foam_reference.json were computed with the
+analysis code of the OpenTac paper, on the inputs stored beside them.
 """
 import json
 from pathlib import Path
@@ -18,7 +17,7 @@ REF = json.loads((FIX / "foam_reference.json").read_text())
 
 
 @pytest.mark.parametrize("case", REF["cases"], ids=lambda c: f"{c['skin']}-{c['geom']['kind']}-{c['total_n']}N")
-def test_port_matches_the_original(case):
+def test_matches_the_reference(case):
     m = manifest.load(FIX / case["skin"])
     got = foam.taxel_forces(m.xy, Sensor(m).pitch_mm, case["geom"], case["centre_mm"], case["total_n"],
                             case["sigma_mm"], case["angle_deg"], case["k_n_per_mm3"])
@@ -26,7 +25,7 @@ def test_port_matches_the_original(case):
 
 
 def test_reference_cases_are_not_trivial():
-    """Guard the fixture: every case must actually press something."""
+    """Guards the fixture: every case presses something."""
     for case in REF["cases"]:
         f = np.asarray(case["forces_n"])
         assert f.max() > 0.01 and (f > 1e-6).sum() >= 4, case["skin"]
@@ -87,7 +86,7 @@ def test_readout_turns_newtons_into_counts():
 
 
 def test_each_taxel_reads_a_window_of_2_round_pitch_plus_1_cells():
-    """A property of the original model, kept by the port and stated in docs/sim.md.
+    """A property of the model, stated on https://opentac.github.io/sim/.
 
     Each taxel sums the pressure over a square of w = (2*round(pitch) + 1) * 0.5 mm.
     w equals the pitch at 2.5 mm, but is 0.5 mm wider at 2.0 and 4.0 mm, so

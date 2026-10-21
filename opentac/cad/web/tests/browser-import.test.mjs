@@ -3,31 +3,29 @@
 // dependency: just Chrome's own debugging protocol over the WebSocket that
 // node has had built in since v22.
 //
-// Run it against a local backend serving the frontend:
+// Run it against a local server, which serves the frontend too:
 //
-//   python -m uvicorn main:app --port 8123          # from backend/
-//   node frontend/tests/browser-import.test.mjs
+//   uv run opentac cad --port 8123 --no-browser
+//   node opentac/cad/web/tests/browser-import.test.mjs
 //
-// ...or straight at the deployed site, which also exercises the real Render
-// backend and the GitHub Pages sub-path:
+// ...or against the deployed site, which also exercises the hosted backend
+// and the GitHub Pages sub-path:
 //
-//   OTC_APP=https://aslepyan.github.io/opentactilecad/ node .../browser-import.test.mjs
+//   OTC_APP=https://opentac.github.io/cad/ node opentac/cad/web/tests/browser-import.test.mjs
 //
 //   OTC_APP       the page to drive (default http://127.0.0.1:8123/)
 //   OTC_CDP_PORT  Chrome's debug port (default 9333)
 //
 // It generates its own export in the page rather than reading a fixture, and
 // resolves modules and the API relative to the PAGE, so the same script works
-// on both. Root-relative paths do not: Pages serves the app under
-// /opentactilecad/, where "/design-import.js" returns an HTML 404 that lands
-// in JSON.parse.
+// on both. Root-relative paths do not: Pages serves the app under /cad/,
+// where "/design-import.js" returns an HTML 404 that lands in JSON.parse.
 //
-// Worth the ~80 lines of harness: the import flow is the one feature that is
-// mostly *wiring* -- a form field written by the wrong DOM call, an event
-// nobody listens for, a promise nobody awaits -- and none of that shows up in
-// a unit test of either side. Both real bugs found while building it (a ZIP
-// reader that returned the wrong entry, and a checkbox set with .value) were
-// invisible until the page actually ran.
+// The import flow is mostly wiring -- a form field written by the wrong DOM
+// call, an event nobody listens for, a promise nobody awaits -- and none of
+// that shows up in a unit test of either side. Faults such as a ZIP reader
+// that returns the wrong entry, or a checkbox set through .value, appear only
+// when the page actually runs.
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -128,11 +126,11 @@ try {
       && document.getElementById("dxf-import-group").hidden`, false),
      "picking Open shows its panel and hides DXF's");
 
-  // Everything below resolves modules and the API relative to the PAGE, not
-  // to the origin root: GitHub Pages serves this app under /opentactilecad/,
-  // so a root-relative "/design-import.js" 404s there and the page gets an
-  // HTML error document where it expected JSON. Same reason the export is
-  // generated here rather than fetched from a fixture file -- the fixture is
+  // Everything below resolves modules and the API relative to the page, not
+  // to the origin root: GitHub Pages serves this app under /cad/, so a
+  // root-relative "/design-import.js" returns 404 there and the page gets an
+  // HTML error document where it expected JSON. For the same reason the export
+  // is generated here rather than read from a fixture file: the fixture is
   // gitignored and does not exist on the deployed site.
   await evaluate(`(async () => {
     window.__otc = {
@@ -180,7 +178,6 @@ try {
       stats: document.getElementById("stats").textContent.replace(/\\s+/g, " ").slice(0, 160),
       outlineInfo: (document.getElementById("outline-info")||{}).textContent || "",
       boardMode: (document.querySelector('input[name="board_mode"]:checked')||{}).value,
-      hug: document.getElementById("hug_router").checked,
       pixelW: document.getElementById("pixel_w_mm").value,
       pitchX: document.getElementById("pitch_x_mm").value,
       routeTools: !document.getElementById("route-tools").hidden,
@@ -193,7 +190,6 @@ try {
   ok(restore.downloadEnabled, "the download button is enabled");
   ok(/Reopened/i.test(restore.status), "the generate status announces the reopen", restore.status);
   ok(restore.boardMode === "expand", "board mode came back as expand", restore.boardMode);
-  ok(restore.hug === true, "the hug router checkbox came back ticked");
   ok(restore.pixelW === "4" || Number(restore.pixelW) === 4, "taxel width restored", restore.pixelW);
   ok(Number(restore.pitchX) === 4.2, "pitch restored", restore.pitchX);
   ok(restore.routeTools, "the route editor is live on the restored board");
@@ -204,8 +200,7 @@ try {
       outline: [[-18,-18],[18,-18],[18,18],[-18,18]],
       router: "hug", board_mode: "fixed_keepout",
       pixel_w_mm: 3, pixel_h_mm: 3, pitch_x_mm: 3.4, pitch_y_mm: 3.4,
-      anchor_holes: true, anchor_hole_lattice: "paired",
-      anchor_hole_square_cells: false, cable_length_mm: 15,
+      cable_length_mm: 15,
     });
     // Pull manifest.json out of the ZIP the same way the app does.
     const bin = window.__otc.zipBytes(data.zip_b64);
@@ -224,35 +219,25 @@ try {
       status: gs.textContent.trim(),
       info: document.getElementById("design-import-info").textContent.trim(),
       boardMode: (document.querySelector('input[name="board_mode"]:checked')||{}).value,
-      anchorHoles: document.getElementById("anchor_holes").checked,
-      lattice: (document.querySelector('input[name="anchor_hole_lattice"]:checked')||{}).value,
-      squareCells: document.getElementById("anchor_hole_square_cells").checked,
       cable: document.getElementById("cable_length_mm").value,
       hasSvg: !!document.querySelector("#pcb-preview svg"),
       originalActive: data.stats.active_pixels,
-      originalHoles: data.stats.anchor_holes,
       statsText: document.getElementById("stats").textContent.replace(/\\s+/g," "),
     };
   })()`);
   console.log("    recipe ->", JSON.stringify(recipe).slice(0, 500));
   ok(recipe.status === "Done.", "the recipe re-generated cleanly", recipe.status);
   ok(recipe.boardMode === "fixed_keepout", "fixed_keepout survived the import", recipe.boardMode);
-  ok(recipe.anchorHoles === true, "the anchor-holes CHECKBOX was ticked by the import");
-  ok(recipe.lattice === "paired", "the anchor-lattice RADIO was set by the import", recipe.lattice);
-  ok(recipe.squareCells === false, "an unticked checkbox was unticked by the import");
   ok(Number(recipe.cable) === 15, "cable length survived", recipe.cable);
   ok(recipe.hasSvg, "the recipe rebuilt a board");
-  ok(recipe.statsText.includes(`(taxels)${recipe.originalActive}`),
+  ok(Number((recipe.statsText.match(/Taxels(\d+)/) || [])[1]) === recipe.originalActive,
      `the rebuild has the original taxel count (${recipe.originalActive})`,
      recipe.statsText.slice(0, 120));
-  ok(recipe.statsText.includes(`${recipe.originalHoles} × `),
-     `the rebuild has the original anchor-hole count (${recipe.originalHoles})`,
-     recipe.statsText.slice(0, 200));
 
   // ---- a pre-design-block manifest opens as a finished board ----
-  // The real case this exists for: a board that was already fabricated, whose
-  // owner needs a case for it. Case and bump sheet must come alive; the
-  // download must NOT, because no honest manufacturing files can be produced.
+  // A board that was already fabricated, whose owner needs a case for it. The
+  // case builder must be enabled; the download must not, because manufacturing
+  // files that match the fabricated board cannot be produced from it.
   const legacy = await evaluate(`(async () => {
     const made = await window.__otc.gen({
       outline: [[-20.5,0],[20.5,0],[20.5,41],[-20.5,41]], router: "hug",
@@ -261,7 +246,7 @@ try {
     });
     const bin = window.__otc.zipBytes(made.zip_b64);
     const entry = await window.__otc.mod.readZipEntry(bin.buffer, ["manifest.json"]);
-    // Strip it back to what an August export actually held.
+    // Strip it back to what a version-3 manifest held.
     const man = JSON.parse(entry.text);
     delete man.design; man.v = 3;
 
@@ -285,7 +270,6 @@ try {
       svgTaxels: document.querySelectorAll("#pcb-preview svg rect.pixel").length,
       downloadDisabled: document.getElementById("download").disabled,
       caseDisabled: document.getElementById("case-generate").disabled,
-      bumpDisabled: document.getElementById("bump-generate").disabled,
       storedTaxels: made.stats.active_pixels,
     };
   })()`);
@@ -296,9 +280,8 @@ try {
      `the preview draws every stored taxel (${legacy.svgTaxels}/${legacy.storedTaxels})`);
   ok(legacy.taxelsShown, "the stats panel describes the recovered board", legacy.stats);
   ok(legacy.downloadDisabled === true,
-     "Download ZIP is disabled — no honest manufacturing files exist");
+     "Download ZIP is disabled: matching manufacturing files cannot be produced");
   ok(legacy.caseDisabled === false, "the case builder is enabled", String(legacy.caseDisabled));
-  ok(legacy.bumpDisabled === false, "the bump sheet is enabled", String(legacy.bumpDisabled));
   ok(/case|bump/i.test(legacy.status), "the page says what can still be built", legacy.status);
 
   // ---- a junk file is refused, not swallowed ----
