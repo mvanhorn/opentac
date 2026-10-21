@@ -1,42 +1,36 @@
 // OpenTac single-board API surface -- modes, parameters, capabilities.
 //
-// The vocabulary here is deliberately NOT new. v1/API.md already defines a
-// hardware-validated command surface for the bus nodes -- SET_MODE, SET_PARAM,
-// GET_PARAM, SET_LED_MODE, GET_CAPS, RESET_STATS -- with specific parameter
-// ids and meanings. This board speaks the same nouns over USB CDC so that one
-// mental model, and eventually one host library, covers both. Parameter ids
-// that exist there keep their numbers here even where a few of them do not
-// apply to a single board; ids v1 uses for bus-only concerns (demand
-// reference, vibration projection weights, per-modality LED channels) are left
-// unallocated rather than reused for something else.
+// Commands and parameter ids are the same on USB and on the OpenTac bus (a bus
+// node runs this firmware), so one host library, opentac.device, drives both.
+// Ids 0, 1, 10-18 and 20-23 are reserved for bus-node features (demand
+// reference, vibration projection weights, per-modality LED channels, binary
+// thresholds) and are left unallocated rather than reused.
 //
 // ----- The split that matters: what persists ---------------------------------
 //
-// v1/API.md 2.7.1 draws the line by what the state BELONGS to, and this
-// follows it:
+// State is divided by what it belongs to:
 //
 //   Board identity -- the DeviceConfig: array size, ordering, active mask,
 //   pitch, shear grouping. Belongs to the physical skin, written once when it
-//   is provisioned. PERSISTS in flash (ot_devcfg.h).
+//   is provisioned. Persists in flash (ot_devcfg.h).
 //
 //   Session config -- mode, per-modality enables, scan timing, LED behaviour,
-//   IMU rates. Belongs to the experiment, written every session. Does NOT
+//   IMU rates. Belongs to the experiment, written every session. Does not
 //   persist. The board boots to known-safe defaults and the host asserts what
 //   it wants.
 //
-// That asymmetry is deliberate. A board silently retaining a mode from someone
-// else's session, which the current host never chose, is exactly the confusion
-// to avoid; whereas a host holding per-board skin tables keyed by serial number
-// breaks the moment a board is swapped. Each piece of state lives with whatever
+// The asymmetry is deliberate. A board that silently retains a mode from an
+// earlier session, which the current host never chose, would mislead that
+// host; a host that holds per-board skin tables keyed by serial number would
+// fail as soon as a board is swapped. Each piece of state lives with whatever
 // owns it.
 //
 // ----- Config generation -----------------------------------------------------
 //
-// v1/API.md 2.7 calls this the keystone and it is: a u16 that is 0 at boot and
-// increments on every accepted config write. Every frame record echoes it, so a
-// recording says which configuration produced it, and a host that sees the
-// generation go backwards knows the board rebooted and its session config is
-// gone. Self-healing rather than hope.
+// A u16 that is 0 at boot and increments on every accepted config write. Every
+// frame record echoes it, so a recording says which configuration produced it,
+// and a host that sees the generation go backwards knows the board rebooted
+// and its session config is gone, and can assert it again.
 
 #pragma once
 
@@ -49,10 +43,10 @@
 // RASTER reads every active taxel. The two XAMPLE modes are binary
 // compressive sampling (ot_xampling.h) and emit sparse X records instead of F.
 // The remaining slots are reserved, not stubbed: selecting one is refused with
-// NOTIMPL rather than quietly falling back to a raster scan. v1/API.md 2.1 is
-// explicit that a response must state the mode that produced it, precisely so
-// a host cannot decode one mode's data as another's and get confident garbage;
-// silently substituting a mode would break that guarantee at the source.
+// NOTIMPL rather than quietly falling back to a raster scan. Every response
+// states the mode that produced it, so that a host cannot decode one mode's
+// data as another's and obtain plausible but wrong values; silently
+// substituting a mode would break that guarantee at the source.
 
 #define OT_TAC_RASTER        0   // every active taxel, shift-register order
 #define OT_TAC_XAMPLE_FIRST  1   // 1..15 reserved for xampling schemes
@@ -71,7 +65,7 @@ static inline bool otTacModeIsXampling(uint16_t mode) {
 
 // Bit n set = tactile mode n is meaningless without shear bumps.
 //
-// Whether a skin has shear is a property of the SKIN, not of the firmware, so
+// Whether a skin has shear is a property of the skin, not of the firmware, so
 // a mode can be implemented and still be unusable on the sensor currently
 // provisioned. Selecting one on a pressure-only skin is refused with NOSHEAR
 // rather than run over taxels that share no bump -- the answer would be a
@@ -82,14 +76,14 @@ static inline bool otTacModeIsXampling(uint16_t mode) {
 
 // ----- LED modes -------------------------------------------------------------
 //
-// Numbers match v1/API.md's led mode list so the vocabulary is shared.
+// The numbers are shared with the bus-node LED modes.
 // IDENTITY and BINARY are bus-node concepts (showing an assigned address,
 // per-modality thresholds) and are not implemented here.
 
 #define OT_LED_OFF        0
 #define OT_LED_MANUAL     1   // host drives the colour with `c r g b`
 #define OT_LED_IDENTITY   2   // not implemented on a single board
-#define OT_LED_HEARTBEAT  3   // the r/g/b cycle this firmware has always done
+#define OT_LED_HEARTBEAT  3   // red, green, blue cycle
 #define OT_LED_SENSOR     4   // brightness follows peak tactile level
 #define OT_LED_BINARY     5   // not implemented here
 #define OT_LED_MODE_MAX   5
@@ -100,11 +94,10 @@ static inline bool otTacModeIsXampling(uint16_t mode) {
 
 // ----- Parameters ------------------------------------------------------------
 //
-// Ids 0-23 follow v1/API.md's table. Unallocated here: 0 DEMAND_REF,
-// 1 VIB_AXIS, 10-12 projection weights, 13-18 per-modality LED channels/gains,
-// 20-23 binary thresholds and the transition counter -- all bus-node concerns.
-// 24-28 are the knobs v1/API.md 2.6 lists as "currently forces a reflash";
-// 29-34 are xampling's; 35 is the 60-pin board's gain switch.
+// Unallocated here, reserved for bus-node features: 0 DEMAND_REF, 1 VIB_AXIS,
+// 10-12 projection weights, 13-18 per-modality LED channels and gains, 20-23
+// binary thresholds and the transition counter. 24-28: frame rate and IMU;
+// 29-34: xampling; 35: the 60-pin board's gain switch.
 
 #define OT_P_TAC_MODE       2
 #define OT_P_LED_MODE       3
@@ -136,9 +129,9 @@ static inline bool otTacModeIsXampling(uint16_t mode) {
 #define OT_GAIN_SW_DEFAULT 0
 #endif
 
-// Whether VIB_ENABLE and ORIENT_ENABLE boot on. A USB board boots with both on,
-// as it always has; a bus node (-DOT_BUS_NODE) defines this 0 before including
-// this file, so its IMU stays off until a host asks for it.
+// Whether VIB_ENABLE and ORIENT_ENABLE boot on. A USB board boots with both
+// on; a bus node (-DOT_BUS_NODE) defines this 0 before including this file, so
+// its IMU stays off until a host asks for it.
 #ifndef OT_IMU_DEFAULT
 #define OT_IMU_DEFAULT 1
 #endif
@@ -155,7 +148,7 @@ struct OtParamSpec {
 // over the wire -- id, name, range and current value -- so the host discovers
 // what a board supports instead of carrying its own copy to drift out of sync.
 // Ranges are enforced here, on the board: a host must not be able to set scan
-// timing that breaks the board's own real-time behaviour (v1/API.md 2.6).
+// timing that breaks the board's own real-time behaviour.
 static const OtParamSpec OT_PARAMS[] = {
   {OT_P_TAC_MODE,       "TAC_MODE",       0, OT_TAC_MODE_MAX, OT_TAC_RASTER},
   {OT_P_LED_MODE,       "LED_MODE",       0, OT_LED_MODE_MAX, OT_LED_HEARTBEAT},
@@ -173,8 +166,8 @@ static const OtParamSpec OT_PARAMS[] = {
   {OT_P_GYRO_FS_DPS,    "GYRO_FS_DPS",    125, 4000, 2000},  // snaps to 125<<n
   // Clamped again to the skin's taxel count when a frame runs.
   {OT_P_XAMP_M,         "XAMP_M",         1, 1024,  128},
-  // Defaults from 30 s hands-off on the 32x32 readout, 2026-09-14: a 64-frame
-  // noise capture plus a 30-count margin; see README "Threshold".
+  // Defaults from 30 s hands-off on the 32x32 readout: a 64-frame noise
+  // capture plus a 30-count margin.
   {OT_P_XAMP_THRESH,    "XAMP_THRESH",    1, 4095,  30},
   {OT_P_XAMP_SEARCH_MIN, "XAMP_SEARCH_MIN", 0, 1024, 30},
   {OT_P_XAMP_ZERO_FRAMES, "XAMP_ZERO_FRAMES", 16, 1024, 64},
@@ -183,7 +176,7 @@ static const OtParamSpec OT_PARAMS[] = {
   // 0 = off. A reading that would trigger is taken again after this much more
   // settling, and the second reading stands; `Z` measures at the same settle.
   // 50 us, hands-off on the 32x32 at MUX_SETTLE_US 8: false growth 92% of
-  // frames -> 0%, and every taxel's noise <= 27 counts (was up to ~900).
+  // frames -> 0%, and every taxel's noise <= 27 counts (without it, up to ~900).
   {OT_P_XAMP_CONFIRM_US, "XAMP_CONFIRM_US", 0, 500,   50},
 #if defined(OT_BOARD_READOUT60)
   // Which MAX14662 switches are closed. Each puts a resistor across the
@@ -196,8 +189,8 @@ static const OtParamSpec OT_PARAMS[] = {
 
 #define OT_PARAM_COUNT ((uint8_t)(sizeof(OT_PARAMS) / sizeof(OT_PARAMS[0])))
 
-// Table slot for a parameter id, or 0xFF. Linear over 20 entries: a switch
-// would have to repeat the ids that the table already states.
+// Table slot for a parameter id, or 0xFF. Linear over at most 21 entries: a
+// switch would have to repeat the ids that the table already states.
 static inline uint8_t otParamSlot(uint8_t id) {
   for (uint8_t i = 0; i < OT_PARAM_COUNT; ++i) {
     if (OT_PARAMS[i].id == id) return i;

@@ -1,17 +1,16 @@
-// OpenTac bus v2 -- one Teensy 4.0 controller, 1..18 sensor nodes, one I2C bus.
+// OpenTac bus -- one Teensy 4.0 controller, 1..18 sensor nodes, one I2C bus.
 //
 // A node is not a different kind of board. It runs the single-board firmware
-// (stm_test/tactile_imu_fast_cfg) built with -DOT_BUS_NODE, so it is
-// provisioned from a manifest, configured with the same parameters and
-// xampled exactly as a board on USB is. Only the transport changes. The bus
-// carries three things:
+// (firmware/opentac_readout) built with -DOT_BUS_NODE, so it is provisioned
+// from a manifest, configured with the same parameters and xampled exactly as
+// a board on USB is. Only the transport changes. The bus carries three things:
 //
-//   1. Addressing. SMBus ARP as i2c_smoke validated it on three nodes and v1
-//      kept it: every node answers the Device Default Address 0x61, the
-//      controller hands out 0x10 upward, and a node that reboots is recognised
-//      by the CRC-32 of its 96-bit STM32 UID and given its old slot back.
+//   1. Addressing. SMBus ARP: every node answers the Device Default Address
+//      0x61, the controller hands out 0x10 upward, and a node that reboots is
+//      recognised by the CRC-32 of its 96-bit STM32 UID and given its old slot
+//      back.
 //   2. Text. The board's own command lines, and its replies, carried as byte
-//      streams in both directions. So there is ONE command surface -- ot_api.h
+//      streams in both directions. So there is one command surface -- ot_api.h
 //      -- whether a board is on USB or on the bus, and the host library drives
 //      both through the same code.
 //   3. Frames. Binary, because the bus is the bottleneck: a 12-bit sample is
@@ -19,16 +18,11 @@
 //      the exact F / X / V records a USB board prints, so everything above the
 //      controller parses one format.
 //
-// What is deliberately NOT carried over from v1: the Haar codec, the
-// bandwidth scheduler and the tonic sweep. They assume a fixed 16x16 skin
-// compiled into the node, and v2 skins come from manifests. v1 stays in
-// stm_test/v1 for reference.
-//
 // Every field is little-endian and written byte by byte, never by casting a
 // struct: the two ends are different compilers on different architectures.
 //
-// Hardware-free. The node, the controller and v2/tests/bus_host_test.cpp all
-// include this file, so the test drives the same code both ends run.
+// Hardware-free. The node, the controller and firmware/tests/bus_host_test.cpp
+// all include this file, so the test drives the same code both ends run.
 
 #pragma once
 
@@ -43,8 +37,8 @@
 
 // ----- Versions and addresses -------------------------------------------------
 
-// Carried in the INFO frame. v1 nodes report 4 there, and a different INFO
-// magic besides, so neither generation of controller adopts the other's node.
+// Carried in the INFO frame. Earlier bus firmware reports version 4 and INFO
+// magic 0xA7, so a controller never adopts a node of the other version.
 #define OTB_VERSION        5
 #define OTB_BUS_HZ         1000000UL
 
@@ -52,7 +46,7 @@
 #define OTB_ADDR_BASE      0x10     // first assigned address
 #define OTB_MAX_NODES      18
 
-// ----- SMBus ARP (unchanged bytes from i2c_smoke / v1) -------------------------
+// ----- SMBus ARP ---------------------------------------------------------------
 
 #define OTB_ARP_PREPARE    0x01     // clear every node's Address Resolved flag
 #define OTB_ARP_RESET      0x02     // clear AR and drop assigned addresses
@@ -66,13 +60,13 @@
 #define OTB_UDID_SPECIFIC  12       // 32-bit: CRC-32 of the STM32 96-bit UID
 #define OTB_UID_BYTES      12
 
-// ----- Commands (0x40 block: v1 never used it) --------------------------------
+// ----- Commands (the 0x40 block) ----------------------------------------------
 
 #define OTB_CMD_STATUS     0x40     // r: OTB_STATUS_LEN
 #define OTB_CMD_TEXT       0x41     // w: off u16, len, bytes, PEC
 #define OTB_CMD_GET_TEXT   0x42     // w: ack u16, max, PEC; r: off u16, len, max bytes, PEC
 #define OTB_CMD_GET_FRAME  0x43     // w: chunk, PEC;         r: OTB_CHUNK_RESP_LEN
-// A plain read with no command before it returns INFO, as in v1.
+// A plain read with no command before it returns INFO.
 
 // ----- Sizes ------------------------------------------------------------------
 //
@@ -120,7 +114,7 @@ static inline uint32_t otbCrc32(const uint8_t *data, uint32_t len) {
   return ~crc;
 }
 
-// The ARP shapes, as SMBus defines them. Byte-identical to v1's.
+// The ARP shapes, as SMBus defines them.
 static inline uint8_t otbPecSendByte(uint8_t addr, uint8_t cmd) {
   const uint8_t h[2] = {(uint8_t)(addr << 1), cmd};
   return otbCrc8Cont(0, h, 2);
@@ -138,9 +132,9 @@ static inline uint8_t otbPecBlockWrite(uint8_t addr, uint8_t cmd, uint8_t count,
   return otbCrc8Cont(otbCrc8Cont(0, h, 3), data, count);
 }
 
-// Every v2 transaction: CRC-8 over the node address, the command and the bytes
-// that follow it -- for a request the arguments, for a response the payload.
-// The address is in it so a reply from the wrong node cannot pass.
+// Every command transaction: CRC-8 over the node address, the command and the
+// bytes that follow it -- for a request the arguments, for a response the
+// payload. The address is in it so a reply from the wrong node cannot pass.
 static inline uint8_t otbPec(uint8_t addr, uint8_t cmd, const uint8_t *data, uint16_t len) {
   const uint8_t h[2] = {addr, cmd};
   return otbCrc8Cont(otbCrc8Cont(0, h, 2), data, len);
@@ -164,7 +158,7 @@ static inline void otbBuildUdid(uint8_t *udid, const uint8_t *uid) {
   udid[0] = 0x80;                    // capabilities: address type 'random'
   udid[1] = 0x08;                    // UDID version
   udid[2] = 0xFF; udid[3] = 0xFF;    // vendor: none registered
-  udid[4] = 0x00; udid[5] = 0x02;    // device: OpenTac bus v2 node (v1 was 1)
+  udid[4] = 0x00; udid[5] = 0x02;    // device: OpenTac bus node (id 2)
   udid[6] = 0x00; udid[7] = 0x04;    // interface: SMBus
   const uint32_t h = otbCrc32(uid, OTB_UID_BYTES);
   udid[OTB_UDID_SPECIFIC + 0] = (uint8_t)(h >> 24);
@@ -179,7 +173,7 @@ static inline uint32_t otbUdidUidHash(const uint8_t *udid) {
 }
 
 // INFO, the answer to a plain read: magic, version, address, board, UID, CRC-8.
-#define OTB_INFO_MAGIC     0xB5     // v1's INFO magic is 0xA7
+#define OTB_INFO_MAGIC     0xB5     // 0xA7 in earlier bus firmware
 #define OTB_INFO_LEN       17
 #define OTB_BOARD_READOUT32 0
 #define OTB_BOARD_NODE16    1

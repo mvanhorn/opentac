@@ -1,13 +1,13 @@
 // Host test for libraries/OpenTactileBus/src/ot_bus.h -- the code the node and
-// the controller both run, driven here without hardware.
+// the controller both run, driven here without hardware. From firmware/tests:
 //
-//   c++ -std=c++17 -O2 -Wall -Wextra -I../../../libraries/OpenTactileBus/src \
+//   c++ -std=c++17 -O2 -Wall -Wextra -I../libraries/OpenTactileBus/src \
 //       bus_host_test.cpp -o /tmp/bt && /tmp/bt fixtures/bus_records.txt
 //
 // The optional argument writes the records the controller would print for a
-// set of test frames. tests/test_bus.py parses that file with the host
-// library's own Frame parser, which is what ties the C formatter to the Python
-// reader: change either and one of the two tests fails.
+// set of test frames. tests/readout/test_protocol.py parses that file with the
+// host library's own Frame parser, which is what ties the C formatter to the
+// Python reader: change either and one of the two tests fails.
 
 #include <cstdio>
 #include <cstdlib>
