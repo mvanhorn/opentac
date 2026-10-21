@@ -550,9 +550,13 @@ export function createRouteEditor({
 
   function onPointerMove(event) {
     if (panDrag && event.pointerId === panDrag.pointerId) {
+      // Pixels per viewBox unit. The element fills the panel and the viewBox
+      // is fitted inside it (preserveAspectRatio meet), so the scale is set by
+      // whichever axis binds and is the same on both.
       const rect = svg.getBoundingClientRect();
-      const dx = (event.clientX - panDrag.x) * panDrag.viewBox.w / rect.width;
-      const dy = (event.clientY - panDrag.y) * panDrag.viewBox.h / rect.height;
+      const scale = Math.min(rect.width / panDrag.viewBox.w, rect.height / panDrag.viewBox.h);
+      const dx = (event.clientX - panDrag.x) / scale;
+      const dy = (event.clientY - panDrag.y) / scale;
       setViewBox({
         ...panDrag.viewBox,
         x: panDrag.viewBox.x - dx,

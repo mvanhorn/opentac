@@ -814,16 +814,17 @@ dl.bump-stats dd { margin: 0; color: var(--text); }
   flex: 1; min-height: 0; overflow: auto; background: #fff; border-radius: 6px;
   display: flex; align-items: center; justify-content: center; padding: 8px;
 }
-/* Fit the whole board to the panel, both axes. The generated SVG carries an
-   intrinsic width/height (about 800x770) alongside its viewBox, so
-   constraining width alone would let `height: auto` render it at full height
-   inside a shorter panel: it would overflow, be centre-cropped by the flex
-   centering and look zoomed in, with Reset View powerless since the viewBox
-   itself is correct.
-   Capping both axes with auto sizing keeps the aspect ratio and scales to
-   whichever constraint binds. Zoomed-in states still scroll via .pcb-preview's
-   own overflow. */
-.pcb-preview svg { max-width: 100%; max-height: 100%; width: auto; height: auto; }
+/* The SVG element fills the panel, and its default preserveAspectRatio
+   (xMidYMid meet) fits the whole board inside it, centred. Zoom and pan change
+   only the viewBox (route-editor.js), so a zoomed view uses the full panel
+   rather than a box with the board's own proportions, which for a tall board
+   is a narrow strip. Absolute positioning takes the size from the panel, never
+   from the SVG's intrinsic width/height attributes (800 px wide, height to
+   match the board). */
+.pcb-preview > svg {
+  position: absolute; top: 8px; left: 8px;
+  width: calc(100% - 16px); height: calc(100% - 16px);
+}
 .route-editor-svg {
   cursor: grab;
   touch-action: none;
