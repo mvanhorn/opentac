@@ -1290,16 +1290,6 @@ function renderRecoveredStats(editData, notes) {
       : "");
 }
 
-// Dev annotation capture (stl-viewer.js "Save as example") reads the outline
-// exactly as it currently sits on the canvas — including any cable-edge
-// rotation or hand-editing done AFTER the unfold — rather than the raw
-// unfold result, so a saved annotation reproduces what was actually on
-// screen when it was saved, not a stale pre-confirmation snapshot.
-window.otcGetOutlineState = () => ({
-  vertices: vertices.map((p) => p.slice()),
-  cableEdgeConfirmed,
-});
-
 // ---- server status ----
 // On the hosted site (GitHub Pages) API_BASE is a free-tier Render service. It
 // sleeps after ~15 minutes without requests and takes 30-60 s to start, and a

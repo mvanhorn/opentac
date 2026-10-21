@@ -574,23 +574,6 @@ button.mode-button.active {
   margin-top: 8px;
 }
 .stl-patch-controls[hidden] { display: none; }
-.dev-example-row[hidden] { display: none; }
-.dev-example-row label {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  color: var(--muted);
-  gap: 3px;
-  flex: 1;
-}
-.dev-example-row select {
-  font: inherit;
-  padding: 5px 7px;
-  border-radius: 5px;
-  border: 1px solid var(--line);
-  background: #0c1116;
-  color: var(--text);
-}
 .stl-patch-controls .hint { flex: 1 1 100%; margin: 0; }
 .stl-patch-controls .check-field {
   display: flex;

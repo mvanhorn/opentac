@@ -93,9 +93,8 @@ def drop_removed_params(stored: dict) -> dict:
     """`stored` without REMOVED_PARAM_KEYS; ValueError if it used anchor holes."""
     if stored.get("anchor_holes"):
         raise ValueError(
-            "This design uses bump anchor holes, a feature that was removed before "
-            "release. Open it in an earlier build, or regenerate it "
-            "from its outline.")
+            "This design uses bump anchor holes, which this version of OpenTac-CAD "
+            "does not support. Regenerate it from its outline.")
     return {k: v for k, v in stored.items() if k not in REMOVED_PARAM_KEYS}
 
 

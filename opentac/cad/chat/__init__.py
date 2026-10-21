@@ -13,8 +13,8 @@ working exactly as before, with chat simply unavailable.
 from __future__ import annotations
 
 import json
+import logging
 import os
-import sys
 import traceback
 
 from fastapi import APIRouter
@@ -33,19 +33,11 @@ except Exception:
 from . import context, tools
 from .gemini import GeminiProvider, QuotaExhausted
 
-def say(msg: str) -> None:
-    """Print without ever raising.
-
-    The Windows console is cp1252, and this logs model-written text that
-    routinely contains characters it cannot encode ("40 x 40" comes back as
-    "40 × 40"). Unencodable output would otherwise raise UnicodeEncodeError
-    from inside the request and turn a finished design into a 500.
-    """
-    try:
-        print(msg, flush=True)
-    except UnicodeEncodeError:
-        enc = getattr(sys.stdout, "encoding", None) or "ascii"
-        print(msg.encode(enc, "replace").decode(enc, "replace"), flush=True)
+# Conversation traffic (prompts, replies, tool calls) is logged at DEBUG only,
+# so a server does not record what visitors type unless its operator enables
+# it. A logging handler that cannot encode a character reports the error
+# itself; it never raises into the request.
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -69,11 +61,11 @@ def provider() -> GeminiProvider:
     global _provider
     if _provider is None:
         instructions = context.system_instructions()
-        say(f"[chat] {len(instructions)} chars of SKILL.md as system "
-            f"instructions")
+        logger.debug("%d chars of SKILL.md as system instructions",
+                     len(instructions))
         _provider = GeminiProvider(system_instruction=instructions,
                                    tool_specs=tools.TOOL_SPECS)
-        say(f"[chat] model={_provider.model}")
+        logger.debug("model=%s", _provider.model)
     return _provider
 
 
@@ -169,7 +161,7 @@ def chat(body: ChatIn):
         return {"error": f"This conversation has reached its {MAX_TURNS_PER_SESSION}"
                          "-turn limit. Start a new one to keep designing."}
 
-    say(f"\n[chat] USER: {body.message}")
+    logger.debug("USER: %s", body.message)
     # Reset before the turn, not after: the page starts polling as soon as it
     # sends, and would otherwise be shown the previous turn's steps.
     sess["progress"] = ["Thinking…"]
@@ -191,7 +183,7 @@ def chat(body: ChatIn):
         sess["turns"] += 1
         designs = sess["tools"].designs
         newest = designs[-1] if designs else None
-        say(f"[chat] ASSISTANT: {turn.text[:200]}")
+        logger.debug("ASSISTANT: %s", turn.text[:200])
         # Round-tripped through json here, inside the try: a value FastAPI
         # cannot encode (a numpy scalar in stats) would otherwise fail AFTER
         # this handler returned, as a bare 500 the page cannot read.
@@ -212,7 +204,7 @@ def chat(body: ChatIn):
             "turns_left": MAX_TURNS_PER_SESSION - sess["turns"],
         })
     except QuotaExhausted as exc:
-        say(f"[chat] {exc}")
+        logger.debug("%s", exc)
         out = {"error": str(exc)}
     except Exception as exc:
         traceback.print_exc()

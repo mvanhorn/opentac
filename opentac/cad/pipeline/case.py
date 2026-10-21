@@ -378,7 +378,8 @@ def _no_tail(final_outline_xy, cable_y: float) -> tuple[str, str]:
             "The board is full width all the way down to the connector, so there is no "
             "narrower tail to cut a slot around — the connector sits inside the outline "
             "rather than on a protruding tail. The cable edge is left open, which is the only "
-            "thing this shape allows. Turning follow-padding on gives the board a real tail.")
+            "thing this shape allows. Generating with follow-padding on (follow_main_padding) "
+            "gives the board a real tail.")
     return "unsteady", (
         "No cable tail was found: below the cable edge the outline never settles to a width "
         f"that holds steady for {NECK_STABLE_MM:g}mm. The case leaves the whole cable edge "

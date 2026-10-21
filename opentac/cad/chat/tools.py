@@ -18,6 +18,7 @@ because only build_sensor_outline can mint one.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -32,6 +33,8 @@ if str(HELPERS_DIR) not in sys.path:
 
 import outline as O            # noqa: E402  (the skill's own helper)
 import preflight as P          # noqa: E402  (the skill's own helper)
+
+logger = logging.getLogger(__name__)
 
 CABLE_SIDES = ("bottom", "top", "left", "right")
 
@@ -533,18 +536,17 @@ def _summarize(stats: dict, drc: dict, kinds: dict) -> str:
 
 
 def log_call(name: str, args: dict, result: dict) -> None:
-    """Tool traffic on the terminal, for debugging.
+    """Log one tool call and its result at DEBUG level.
 
-    say() rather than print(): this echoes model-written arguments, and the
-    Windows console cannot encode much of what comes back. Imported inside the
-    function because chat/__init__.py imports this module — at call time the
-    package is fully loaded, at import time it is not.
+    Nothing is formatted unless DEBUG is enabled for this logger, so a server
+    that does not log conversation traffic does no work here.
     """
-    from . import say
+    if not logger.isEnabledFor(logging.DEBUG):
+        return
     shown = {k: v for k, v in args.items() if k != "points"}
     if "points" in args:
         shown["points"] = f"<{len(args['points'])} pts>"
-    say(f"  -> TOOL {name}({json.dumps(shown, default=str)})")
+    logger.debug("-> TOOL %s(%s)", name, json.dumps(shown, default=str))
     # default=str: a debug log line must never be what fails a finished turn.
     text = json.dumps({k: v for k, v in result.items() if k != "svg"}, default=str)
-    say(f"  <- {text[:400]}{' ...' if len(text) > 400 else ''}")
+    logger.debug("<- %s%s", text[:400], " ..." if len(text) > 400 else "")

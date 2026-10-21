@@ -4,6 +4,7 @@ import base64
 import copy
 import io
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -13,7 +14,7 @@ import zipfile
 from dataclasses import replace
 
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,10 +39,6 @@ from opentac.cad.pipeline.bump_sheet import BumpParams, build_bump_sheet
 from opentac.cad.pipeline.case import NECK_STABLE_MM, CaseParams, build_case, case_cable_check
 from opentac.cad.pipeline import keepout as keepout_mod
 from opentac.cad.pipeline.keepout import _TOO_SMALL_MSG as _KEEPOUT_TOO_SMALL_MSG
-_UNROUTED_MSG = (
-    "Some rows or columns cannot be wired to the connector inside this fixed outline, even on its "
-    "most conservative layout, and a board with unconnected taxels is not shipped. Enlarge the "
-    "outline, coarsen the pitch, or switch to grow-board mode.")
 from opentac.cad.pipeline.route_columns import route_columns_grid
 from opentac.cad.pipeline.route_hug import route_hug_all
 from opentac.cad.pipeline.route_4layer import INNER_LAYERS, copper_layers_of, is_feed, route_for, sync_pads_to_feeds
@@ -83,6 +80,12 @@ from opentac.cad.export.svg_preview import generate_svg
 from opentac.cad.importers.dxf import parse_dxf_outline, DxfImportError
 
 app = FastAPI(title="OpenTac-CAD API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+_UNROUTED_MSG = (
+    "Some rows or columns cannot be wired to the connector inside this fixed outline, even on its "
+    "most conservative layout, and OpenTac-CAD does not produce a board with unconnected taxels. "
+    "Enlarge the outline, coarsen the pitch, or switch to grow-board mode.")
 
 MAX_DXF_UPLOAD_BYTES = 10 * 1024 * 1024
 # Guard for the STL-upload endpoints (/unroll-mesh, /grow-region,
@@ -136,11 +139,9 @@ app.add_middleware(JsonErrors)
 app.add_middleware(
     CORSMiddleware,
     # The hosted demo's page lives on GitHub Pages; a local run serves the page
-    # itself (same origin), so it needs no entry here. aslepyan.github.io is the
-    # old address, kept while it redirects.
+    # itself (same origin), so it needs no entry here.
     allow_origins=[
         "https://opentac.github.io",
-        "https://aslepyan.github.io",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -200,15 +201,10 @@ class GenerateRequest(BaseModel):
     router: str = Field(
         "hug",
         description='"hug" (default: route wires hugging the sensor field) or '
-                    '"legacy" (the original column/row routers). The default was '
-                    '"legacy" until it was measured against "hug": on the arch '
-                    'preset in fixed_keepout at 3mm, legacy ships 11 of 152 taxels '
-                    'with 17 DRC violations where hug ships 63 clean. The web '
-                    'frontend always sent "hug" explicitly, so only API callers '
-                    'that omitted the field were affected. "legacy" is still '
-                    'honoured explicitly, is still the guarded fallback for '
-                    'topologies the hug plan cannot order planar, and is still '
-                    'what a design.json with no recorded router replays with. '
+                    '"legacy" (the column/row routers). "legacy" is used when '
+                    'requested explicitly, as the guarded fallback for topologies '
+                    'the hug plan cannot order planar, and to replay a design.json '
+                    'that records no router. '
                     'Under "hug", rows/columns cut apart by a concavity stay one '
                     'net, bridged by a link trace around it. '
                     "Works in both board modes; in fixed_keepout the wiring "
@@ -1083,13 +1079,6 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
     connects cleanly. The two new side edges where this rectangle is wider
     than the existing cable/corridor are the only visible change: a clean
     step out to the new connector's shoulder, right at the connector.
-
-    (make_connector_ear_polys/add_connector_ears_to_board, elsewhere in
-    pipeline/geometry.py, looks similar but only adds a ~0.55mm sliver
-    beyond whatever width the board already has there — sized for the base
-    pipeline's auto-width mode where the cable is already exactly
-    connector-width. It can't bridge a genuinely narrower cable, so it's
-    not used here.)
     """
     dims = connector_dimensions(new_conn_pos, params.pad_pitch_mm)
     overlap = 1.0
@@ -2054,7 +2043,7 @@ def generate(req: GenerateRequest):
                     f"{len(layout.placements_xy)} pixels' nets refused"
                     + (f"; legacy alternative had {fallback.drc['violations']} violations"
                        if fallback is not None else "; legacy alternative failed")
-                    + ") — shipped the reduced clean board. Consider placing the "
+                    + ") — the board keeps only the taxels that route cleanly. Consider placing the "
                     "cable edge on the outline's outermost edge and giving "
                     "sensors a little spacing (pitch > pixel).")
             plan_warnings = list(hug_plan.warnings)
@@ -2219,8 +2208,9 @@ def generate(req: GenerateRequest):
                                 return fallback
                             hug_plan.warnings.append(
                                 "hug ordering cannot solve this topology and the "
-                                "legacy alternative was not clean either — refused "
-                                "nets drive the keep-out retry.")
+                                "legacy alternative was not clean either — the "
+                                "keep-out band is widened for the refused nets and "
+                                "routing is retried.")
                         # Refused nets drive the keep-out growth retry exactly
                         # like a legacy routing failure would.
                         col_problem, row_problem = set(hug_failed), set()
@@ -3499,22 +3489,6 @@ async def unroll_mesh_chain(
     )
 
 
-# --- STL example catalog ----------------------------------------------------
-# Serves the curated end-effector STLs two ways: the landing gallery loads one
-# into its 3D viewer when a card is opened (public, so the deployed frontend on
-# GitHub Pages can fetch them from Render — the 17.5MB of meshes lives in this
-# repo and is deliberately not duplicated into the frontend repo), and the
-# dev-only picker below lists them for curating new annotations.
-#
-# The catalog root is stl_examples/ itself, not just the end_effectors/
-# subtree: a handful of hand-picked files (the Yubi finger pad, a soft
-# fingertip, SO-100 jaw/wrist parts) live directly under stl_examples/ from
-# before the end_effectors/ library existed, and the picker should surface
-# those too, not just the ones fetched from public robot repos.
-STL_EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "examples", "stl")
-ANNOTATIONS_DIR = os.path.join(STL_EXAMPLES_DIR, "end_effectors", "annotations")
-
-
 class DecodeBackmarkRequest(BaseModel):
     payload: str
 
@@ -3551,78 +3525,6 @@ def decode_backmark(req: DecodeBackmarkRequest):
     return DecodeBackmarkResponse(manifest=manifest, absent=list(ABSENT))
 
 
-@app.get("/example-stls")
-def list_example_stls() -> dict:
-    """Every curated example STL, as paths relative to STL_EXAMPLES_DIR
-    ("allegro/fingertip.stl", or a bare filename for the older root-level
-    files) — lets the frontend offer a picker instead of the user hunting
-    through stl_examples/ in a native file dialog, and gives 'Save as
-    example' the exact path (several files share generic names like
-    "fingertip.stl" across different robots, so the filename alone can't
-    name an annotation unambiguously)."""
-    root = os.path.abspath(STL_EXAMPLES_DIR)
-    paths = []
-    if os.path.isdir(root):
-        for dirpath, _dirnames, filenames in os.walk(root):
-            if os.path.basename(dirpath) == "annotations":
-                continue
-            for fn in filenames:
-                if fn.lower().endswith(".stl"):
-                    rel = os.path.relpath(os.path.join(dirpath, fn), root)
-                    paths.append(rel.replace(os.sep, "/"))
-    return {"paths": sorted(paths)}
-
-
-@app.get("/example-stl")
-def get_example_stl(path: str) -> Response:
-    """Serve one catalog STL. Accepts either the on-disk path
-    ("end_effectors/allegro/fingertip.stl") or the display path the UI shows
-    and annotations record ("allegro/fingertip.stl") — the picker strips the
-    end_effectors/ prefix so the root-level files and the library read the
-    same way, so both spellings reach here and both must resolve."""
-    root = os.path.abspath(STL_EXAMPLES_DIR)
-    for candidate in (path, os.path.join("end_effectors", path)):
-        full = os.path.abspath(os.path.join(root, candidate))
-        if not full.startswith(root + os.sep) or not full.lower().endswith(".stl"):
-            raise HTTPException(status_code=400, detail="Invalid path.")
-        if os.path.isfile(full):
-            with open(full, "rb") as f:
-                data = f.read()
-            return Response(content=data, media_type="model/stl")
-    raise HTTPException(status_code=404, detail="STL not found.")
-
-
-# --- DEV ONLY: STL example annotation capture -------------------------------
-# The frontend's localhost-only "Save as example" button posts a complete
-# selection state (STL name, selection mode + parameters, per-click triangle
-# sets, seam/corner picks, and the final unfolded outline) here, and it lands
-# as JSON under stl_examples/end_effectors/annotations/ in the repo working
-# tree. Those files are the source the gallery manifest is built from; nothing
-# in production calls this (on Render the write target is ephemeral).
-class ExampleAnnotation(BaseModel):
-    name: str = Field(..., min_length=1, max_length=80)
-    payload: dict
-
-
-@app.post("/dev/capture-example")
-def capture_example(req: ExampleAnnotation) -> dict:
-    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in req.name.strip())
-    if not safe:
-        raise HTTPException(status_code=400, detail="Empty annotation name.")
-    os.makedirs(ANNOTATIONS_DIR, exist_ok=True)
-    path = os.path.join(ANNOTATIONS_DIR, f"{safe}.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(req.payload, f, indent=1)
-    return {"saved": os.path.abspath(path)}
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
-
-
-# Serve the web frontend (index.html, JS, vendored Three.js) at the site root.
-# Mounted AFTER the API routes above so /health and /generate keep priority.
 # Plain-English design chat. Registered before the frontend mount below,
 # because that mount claims "/" and would otherwise swallow these routes.
 #
@@ -3634,7 +3536,7 @@ try:
     from opentac.cad.chat import router as chat_router
 
     app.include_router(chat_router)
-    print("[chat] design assistant routes registered")
+    logger.info("design assistant routes registered")
 except Exception as _chat_exc:      # noqa: BLE001 - never break the site
     # Without a key the chat is off by design (a local run, a script); say
     # something only when a key was given but the chat still could not load.
@@ -3643,6 +3545,8 @@ except Exception as _chat_exc:      # noqa: BLE001 - never break the site
               "(install the chat's packages: uv run --extra demo opentac cad)")
 
 
+# Serve the web frontend (index.html, JS, vendored Three.js) at the site root.
+# Mounted after the API routes above so /health and /generate keep priority.
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "web")
 if os.path.isdir(FRONTEND_DIR):
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

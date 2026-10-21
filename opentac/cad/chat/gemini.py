@@ -8,9 +8,9 @@ UI, which is the whole point of a debugging prototype.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
-import sys
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -29,6 +29,8 @@ class Turn:
 
 
 ToolFn = Callable[[str, dict], dict]
+
+logger = logging.getLogger(__name__)
 
 # gemini-2.5-flash is retired for new API keys: generateContent returns 404
 # pointing here, even though the model still appears in models.list().
@@ -78,8 +80,8 @@ class GeminiProvider:
         key = api_key or os.environ.get("GEMINI_API_KEY")
         if not key:
             raise RuntimeError(
-                "GEMINI_API_KEY is not set. Put it in web-prototype/.env - "
-                "see .env.example.")
+                "GEMINI_API_KEY is not set. Put it in opentac/cad/.env or set "
+                "it in the environment.")
         self.model = model or os.environ.get("OTC_MODEL") or DEFAULT_MODEL
         self.client = genai.Client(api_key=key)
         self.config = types.GenerateContentConfig(
@@ -174,7 +176,7 @@ class GeminiProvider:
         _log_usage(usage)
         return Turn(
             text=(f"Stopped after {MAX_TOOL_ROUNDS} tool rounds without a "
-                  "final answer. Check the terminal log."),
+                  "final answer."),
             tool_calls=calls_made, usage=usage)
 
 
@@ -192,9 +194,9 @@ class QuotaExhausted(RuntimeError):
         others = ", ".join(m for m in ALTERNATIVES if m != model)
         super().__init__(
             f"Daily free-tier quota for {model} is used up{cap}. It resets at "
-            f"midnight Pacific. To keep going now, either set OTC_MODEL in "
-            f"web-prototype/.env to a model with its own separate daily pool "
-            f"({others}) and restart the server, or enable billing on the "
+            f"midnight Pacific. To keep going now, either set OTC_MODEL (in "
+            f"opentac/cad/.env or the environment) to a model with its own "
+            f"separate daily pool ({others}) and restart the server, or enable billing on the "
             f"Google Cloud project at https://aistudio.google.com/apikey for "
             f"much higher limits.")
 
@@ -254,9 +256,8 @@ def _log_usage(usage: dict) -> None:
 
 
 def _log(msg: str) -> None:
-    """Unbuffered: uvicorn's stdout is usually a pipe, and a buffered debug
-    line that appears minutes late is worse than none."""
-    print(f"  {msg}", file=sys.stderr, flush=True)
+    """Retry and token-usage notes, at DEBUG level."""
+    logger.debug("%s", msg)
 
 
 def _retry_delay(exc) -> float | None:
