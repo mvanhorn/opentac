@@ -1,4 +1,4 @@
-// Planar-surface extraction and true-scale unfolding for STL triangle meshes.
+// Surface selection and true-scale unfolding for STL triangle meshes.
 //
 // An STL is an unindexed triangle soup. We first weld coincident vertices, merge
 // connected coplanar triangles into user-facing "faces", and build adjacency from
@@ -6,9 +6,11 @@
 // child is rigidly placed on the opposite side of its shared edge from its parent.
 // Lengths and angles inside every planar face are preserved exactly.
 //
-// This first version intentionally targets simple faceted/manifold geometry
-// (boxes, prisms, low-poly enclosures). It detects disconnected selections and
-// overlapping 2D nets instead of silently producing an invalid PCB outline.
+// Curved patches (grown from a clicked triangle, or enclosed by a loop drawn on
+// the surface and optionally smoothed) unfold triangle by triangle, with a seam
+// cut to open cones and tubes; that unfold is approximate and reports overlaps
+// as warnings. Disconnected selections and overlapping planar nets are rejected
+// instead of silently producing an invalid PCB outline.
 import * as THREE from "three";
 
 const DEFAULT_ANGLE_TOL_DEG = 1;
@@ -110,13 +112,12 @@ export function buildSurfaceModel(geometry, angleTolDeg = DEFAULT_ANGLE_TOL_DEG)
   }
 
   // Preserve degenerate triangles as isolated, non-selectable entries in mapping.
-  // A region whose boundary can't be chained into closed loops (duplicate
+  // A region whose boundary cannot be chained into closed loops (duplicate
   // faces, T-junctions — common in meshes converted from DAE/OBJ or scene
-  // dumps) must NOT abort the whole model: it becomes an inert stub the
+  // dumps) must not abort the whole model: it becomes an inert stub the
   // selection code refuses with a pointer to Curved-surface mode, which works
-  // from triangle adjacency alone and doesn't need the region's boundary.
-  // (Before this, one bad region out of thousands failed the entire upload —
-  // 15 of 42 real end-effector meshes.)
+  // from triangle adjacency alone and does not need the region's boundary.
+  // Otherwise one bad region out of thousands would fail the entire upload.
   const regions = regionTriangles.map((triangles, id) => {
     try {
       return buildRegion(id, triangles, triVerts, triNormals, vertices, pos);
@@ -333,16 +334,15 @@ export function unfoldSelectedTriangles(model, selectedTriangleIds, rootTriangle
   let outline;
   if (!seam.edges.size) {
     // Simple, robust outline for the common case (no seam cut): the
-    // selection's boundary loops in VERTEX space always close — every
+    // selection's boundary loops in vertex space always close — every
     // boundary edge belongs to exactly one selected triangle — so take
     // the largest loop, map each vertex to its unfolded 2D position, and
-    // simply disregard every smaller loop (screw holes, vents). This
-    // replaces re-deriving the boundary from unfolded 2D edge soup,
-    // which broke three separate ways on a holed pad (hole-rim seams,
-    // hinge drift outrunning the snap tolerance, rims fragmented at
-    // branch meetings) — all fights the vertex loop never has. Where the
-    // unfold's tree branches disagree about a rim vertex's position, the
-    // average of its placed copies is used.
+    // disregard every smaller loop (screw holes, vents). Re-deriving the
+    // boundary from the unfolded 2D edges is fragile on a holed patch
+    // (hole-rim seams, hinge drift exceeding the snap tolerance, rims
+    // fragmented where tree branches meet); the vertex loop avoids all
+    // three. Where the unfold's tree branches disagree about a rim
+    // vertex's position, the average of its placed copies is used.
     const { loops } = selectedBoundaryLoops(model, selected);
     const pos = new Map();
     for (const face of placedFaces) {
@@ -378,14 +378,14 @@ export function unfoldSelectedTriangles(model, selectedTriangleIds, rootTriangle
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
   const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
   let centeredOutline = outline.map(([x, y]) => [x - cx, y - cy]);
-  // No fold guides for a curved unfold. It hinges at EVERY triangle, so
-  // mapping the used hinges painted the whole triangulation as hundreds
-  // of orange "fold lines" (user report on the Yubi pad) — and none of
-  // them can ever be a real crease: the smooth flood-fill that built the
-  // selection stops at anything sharper than its curvature tolerance, so
-  // every interior hinge is by construction a micro-bend of a surface
-  // that is bent continuously, not folded. (The planar multi-face unfold
-  // keeps its fold lines: those are real folds between flat faces.)
+  // No fold guides for a curved unfold. It hinges at every triangle, so
+  // mapping the used hinges would paint the whole triangulation as
+  // hundreds of "fold lines", none of them a real crease: the smooth
+  // flood-fill that builds a curved selection stops at anything sharper
+  // than its curvature tolerance, so every interior hinge is a micro-bend
+  // of a surface that is bent continuously, not folded. (The planar
+  // multi-face unfold keeps its fold lines: those are real folds between
+  // flat faces.)
   let foldLines = [];
 
   if (polyArea(centeredOutline) < 0) centeredOutline.reverse();
@@ -696,7 +696,7 @@ function loopPerimeter(model, loop) {
   return p;
 }
 
-// A boundary loop much smaller than the selection's largest loop is a HOLE
+// A boundary loop much smaller than the selection's largest loop is a hole
 // (screw hole, vent), not a second rim that needs cutting open. A true
 // tube's two rims are comparable in size; a mounting hole is a fraction.
 const HOLE_LOOP_RATIO = 0.35;
@@ -723,11 +723,10 @@ function resolveTrianglePatchSeam(model, selected, rootTriangleId, options = {})
   }
 
   // Holes are ignored for seam purposes: a disk-with-holes unfolds as a
-  // plain tree, and treating a screw hole as a tube rim used to cut an
-  // outer->hole seam that shredded the unfold (Yubi finger pad: 3 loops,
-  // the two ~18mm screw holes vs a 181mm outer boundary — the "seam"
-  // disconnected 557 of 606 triangles). The final outline chaining already
-  // keeps only the largest 2D loop, so ignored holes simply close over.
+  // plain tree, and treating a screw hole as a tube rim would cut an
+  // outer->hole seam that breaks the unfold apart. The final outline
+  // chaining already keeps only the largest loop, so ignored holes simply
+  // close over.
   const byPerimeter = loops
     .map((loop) => ({ loop, perimeter: loopPerimeter(model, loop) }))
     .sort((a, b) => b.perimeter - a.perimeter);
@@ -795,10 +794,11 @@ function autoLoopToLoopSeamEdges(model, selected, loops, rootTriangleId) {
 }
 
 function autoConeSeamEdges(model, selected, boundaryLoop, rootTriangleId, allLoops = null) {
-  // Exclude the vertices of EVERY boundary loop from apex candidacy, not
+  // Exclude the vertices of every boundary loop from apex candidacy, not
   // just the outer loop's: ignored hole rims are the densest vertices in
   // the selection (fine hole tessellation), and the degree-scored apex
-  // used to lock onto a screw-hole rim instead of the surface's interior.
+  // would otherwise lock onto a screw-hole rim instead of the surface's
+  // interior.
   const boundary = new Set((allLoops ?? [boundaryLoop]).flat());
   const vertexUse = new Map();
   for (const triangleId of selected) {
@@ -825,13 +825,13 @@ function autoConeSeamEdges(model, selected, boundaryLoop, rootTriangleId, allLoo
   }
   if (apex === null || apexUseCount < 4) return new Set();
 
-  // Cut only when the apex concentrates REAL curvature. The angular defect
+  // Cut only when the apex concentrates real curvature. The angular defect
   // (2π minus the sum of incident triangle angles) is what the cut opens
   // up: a true cone/dome apex carries a large defect and the cut gapes; a
   // gently curved pad has ~zero defect, and cutting it produces a seam
   // that "opens" by microns — two nearly coincident edge copies that
   // derail the 2D boundary walker into the "could not construct one
-  // closed boundary" failure (Yubi finger pad).
+  // closed boundary" failure.
   let apexAngleSum = 0;
   for (const triangleId of trianglesTouchingVertices(model, selected, [apex])) {
     const ids = model.triVerts[triangleId];
@@ -900,12 +900,11 @@ function selectionCentroid(model, selected) {
 function shortestVertexPath(model, selected, startVertex, endVertex) {
   if (startVertex === null || endVertex === null || startVertex === undefined || endVertex === undefined) return [];
   const adjacency = selectedVertexAdjacency(model, selected);
-  // Dijkstra by 3D edge LENGTH, not hop count. Hop-count BFS preferred
-  // few-hop routes through large triangles — on mixed-density meshes the
-  // "path" zigzagged via ~20mm chords down a coarse side wall and back,
-  // and cutting that zigzag shredded the unfold tree into pieces (Yubi
-  // finger pad). A length-weighted path hugs the surface like a geodesic
-  // and cuts cleanly.
+  // Dijkstra by 3D edge length, not hop count. Hop-count BFS prefers
+  // few-hop routes through large triangles: on mixed-density meshes the
+  // path zigzags via long chords down a coarse side wall and back, and
+  // cutting that zigzag breaks the unfold tree into pieces. A
+  // length-weighted path hugs the surface like a geodesic and cuts cleanly.
   const dist = new Map([[startVertex, 0]]);
   const previous = new Map([[startVertex, null]]);
   const done = new Set();
@@ -1009,13 +1008,11 @@ function buildTrianglePatchBoundary(placedFaces, tolerance, seamEdges = new Set(
   // Chaining snap tolerance must scale with the mesh, not the weld
   // epsilon: each boundary edge's 2D endpoints come from the transform of
   // the one triangle that owns it, and the accumulated hinge float drift
-  // across a few hundred placed triangles moves the SAME welded vertex by
-  // more than weldEps*20 between neighboring rim triangles. With the old
-  // micron-scale tolerance the walk around a perfectly clean rim missed
-  // its own next edge and every loop dead-ended — the Yubi finger pad's
-  // "could not construct one closed boundary" (178 clean boundary edges,
-  // zero closed loops). A fraction of the median boundary edge length
-  // rides far above drift and far below real geometry.
+  // across a few hundred placed triangles moves the same welded vertex by
+  // more than weldEps*20 between neighboring rim triangles. With a
+  // micron-scale tolerance the walk around a clean rim misses its own
+  // next edge and every loop dead-ends. A fraction of the median boundary
+  // edge length rides far above drift and far below real geometry.
   const lens = [];
   for (const items of meshEdges.values()) {
     if (items.length === 1) {
@@ -1043,13 +1040,12 @@ function buildTrianglePatchBoundary(placedFaces, tolerance, seamEdges = new Set(
     }
     if (!seamEdges.has(key)) continue;
     // A seam edge belongs on the boundary only where the cut actually
-    // OPENED. On a gently curved patch the angular defect is ~zero, the
+    // opened. On a gently curved patch the angular defect is ~zero, the
     // unfold reproduces identical positions on both sides of the cut, and
     // pooling two exactly-coincident opposite copies derails the boundary
-    // walker into dead ends (Yubi finger pad: 184 pooled edges, zero
-    // closed loops — the reported "could not construct one closed
-    // boundary"). A closed cut is simply not a boundary; skip it. Real
-    // cone cuts gape open and keep both sides.
+    // walker into dead ends, so no closed loop is found. A closed cut is
+    // simply not a boundary; skip it. Real cone cuts gape open and keep
+    // both sides.
     const minOpen = Math.max(tolerance * 4, 0.05);
     const opened = items.length !== 2
       || Math.hypot(items[0].a[0] - items[1].b[0], items[0].a[1] - items[1].b[1]) > minOpen
@@ -1093,11 +1089,9 @@ function chainBoundaryEdges(edges, tolerance) {
   }
 
   // On strongly curved selections the approximate unfold's tree branches
-  // meet along the rim MISALIGNED — by millimeters, not float drift — so
+  // meet along the rim misaligned — by millimeters, not float drift — so
   // the 2D boundary arrives as open fragments and the strict walk above
-  // closes nothing ("could not construct one closed boundary" on the Yubi
-  // finger pad: 178 clean rim edges, fragments of 28/41/17 points, zero
-  // closed loops). The unfold is still the approximation the overlap
+  // closes nothing. The unfold is still the approximation the overlap
   // warnings already flag, so make the boundary total: close a fragment
   // onto itself, or splice the nearest fragment end on, whenever the gap
   // is small relative to the geometry. Distant fragments (a hole rim vs
@@ -1364,7 +1358,7 @@ function polyArea(points) {
   return sum / 2;
 }
 
-// Douglas-Peucker for a CLOSED outline, tolerance in mm. Mesh-derived
+// Douglas-Peucker for a closed outline, tolerance in mm. Mesh-derived
 // outlines walk one point per boundary vertex, so a gently curved or
 // near-straight stretch arrives as dozens of sub-millimetre segments that
 // are almost — but not exactly — collinear, which the relative-tolerance
@@ -1478,7 +1472,7 @@ function distance2(a, b) {
 // consecutive points are joined by the shortest path along the mesh, the
 // closed loop splits the mesh in two, and the enclosed side becomes the
 // selection — unfolded by the normal machinery, optionally after Laplacian
-// smoothing so surface texture (tread bumps, ribs) doesn't distort the
+// smoothing so surface texture (tread bumps, ribs) does not distort the
 // flattened outline. Boundary vertices are pinned during smoothing, so the
 // drawn outline's true dimensions are preserved.
 
@@ -1505,7 +1499,7 @@ function vertexAdjacency(model) {
 
 export function shortestSurfacePath(model, startVertex, endVertex) {
   // Dijkstra over the mesh's vertex graph, weighted by true edge length.
-  // Returns the vertex-id path INCLUDING both endpoints.
+  // Returns the vertex-id path including both endpoints.
   if (startVertex === endVertex) return [startVertex];
   const adj = vertexAdjacency(model);
   const dist = new Map([[startVertex, 0]]);
@@ -1544,7 +1538,7 @@ function firstFaceTouchingVertex(model, vertexId) {
 }
 
 function connectedFaces(model, seedFace) {
-  // Flood fill with NO edge blocked — the whole mesh shell touching `seedFace`.
+  // Flood fill with no edge blocked — the whole mesh shell touching `seedFace`.
   const visited = new Set([seedFace]);
   const stack = [seedFace];
   while (stack.length) {
@@ -1563,19 +1557,17 @@ export function splitByLoop(model, loopVertexPath) {
   // loopVertexPath: closed vertex cycle (first == last is optional). Blocks its
   // edges and flood-fills triangles across every other shared edge; returns the
   // resulting components sorted smallest-area first. Two components = a clean
-  // cut; one = the loop didn't separate the surface (degenerate drawing).
+  // cut; one = the loop did not separate the surface (degenerate drawing).
   //
-  // First restricted to the SINGLE mesh shell the loop was actually drawn on
+  // The fill is restricted to the single mesh shell the loop was drawn on
   // (a whole-mesh flood fill ignoring the cut, seeded from one of the loop's
-  // own vertices). Real end-effector STLs routinely arrive as many
-  // disconnected shells — an overmold, a separate fillet patch, stray debris
-  // islands from a mesh export — that have nothing to do with the drawn
-  // patch; without this restriction those islands show up as extra "sides",
-  // and if the smallest one (picked as the default side) happens to be a
-  // tiny watertight island, unfolding throws "Closed surface selected" for a
-  // reason completely unrelated to what the user drew. Measured live: one
-  // real gripper-finger STL with 19 disconnected shells produced 15 "sides"
-  // from a single 4-point loop before this fix.
+  // own vertices). End-effector STLs routinely arrive as many disconnected
+  // shells — an overmold, a separate fillet patch, stray debris islands from
+  // a mesh export — that have nothing to do with the drawn patch; without
+  // this restriction those islands show up as extra "sides", and if the
+  // smallest one (picked as the default side) happens to be a tiny
+  // watertight island, unfolding throws "Closed surface selected" for a
+  // reason unrelated to what the user drew.
   const cycle = loopVertexPath.slice();
   if (cycle[0] !== cycle[cycle.length - 1]) cycle.push(cycle[0]);
   const blocked = new Set();

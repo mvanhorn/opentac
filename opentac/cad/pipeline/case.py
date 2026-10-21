@@ -15,18 +15,18 @@ simply stops at the cable edge, so the skirt is a U and the connector leaves
 through the open side with nothing to detect or carve.
 
 How the lid is held on. A rib rises from the skirt and passes through a slot in
-the lid; its head is wider than the slot, so the lid is retained by SHAPE. That
+the lid; its head is wider than the slot, so the lid is retained by shape. That
 matters because TPU creeps: anything held by a squeeze force goes slack in
 weeks, while a shoulder wider than its slot stays wider than its slot.
 
 Why the rib is broken. An unbroken rib needs an unbroken slot, and an unbroken
 slot cuts a closed loop through the lid -- severing the inner panel that covers
-the sensor from the outer flange. Measured on a 42x42 board, that panel ends up
-hanging off a 1.4mm neck at the cable edge and would tear off in handling. Every
-gap in the rib is therefore a bridge in the lid, and the default 10/10 duty is
+the sensor from the outer flange, which leaves that panel hanging off a narrow
+neck at the cable edge, where it tears off in handling. Every gap in the rib
+is therefore a bridge in the lid, and the default 10/10 duty is
 chosen so the bridges carry as much material as the rib does. Duty is the knob:
 at a fixed period, lengthening the rib buys grip and shortens the bridges, and
-it does NOT change the number of segment ends -- which is where the lid tears
+it does not change the number of segment ends -- which is where the lid tears
 from. Shortening the period instead adds ends for no gain.
 
 Printing the pocket. At a 0.10mm flex and 0.10mm Velostat the pocket is 0.20mm
@@ -39,9 +39,7 @@ to a 0.1mm layer height.
 
 Placement is a modulo on arc length and nothing else. Each segment is a swept
 curve, not a straight tab, so it follows the outline's facets and corners with
-no corner test; a gap that lands on a corner is simply a bridge at a corner. An
-earlier straight-tab version needed an arc walk, a corner test, a nudge pass and
-a gap-repair pass, and still skipped 43mm of a 197mm perimeter.
+no corner test; a gap that lands on a corner is simply a bridge at a corner.
 """
 
 from __future__ import annotations
@@ -59,7 +57,7 @@ from .bump_sheet import (BumpParams, _above_cable, _clean, _frustum,
                          bump_centers_from_taxels, sensor_body_polygon)
 
 
-# Below this a bridge is a tear waiting to happen, whatever the duty cycle.
+# Below this width a bridge tears easily, whatever the duty cycle.
 MIN_BRIDGE_MM = 2.5
 # The lid's perimeter slit and the rib slot are two concentric cuts with a
 # ligament between them, and that ligament carries every load from the flange
@@ -67,20 +65,19 @@ MIN_BRIDGE_MM = 2.5
 MIN_WEB_MM = 1.0
 # How far below the cable edge to look for the tail neck, and how decisive the
 # step has to be before it counts as one.
-# The scan runs the FULL depth below the cable edge, not a fixed window. A 9mm
-# window was enough for a 42x42 board and wrong twice on a 65x65: with follow
-# padding off the board is still full width at -10.5, and at 20x20 taxels the
-# tail settles at -8.0 but confirming "stable for 2mm" needs samples down to
-# -10.0, which the window did not have. Searching deeper is safe because the
-# rule takes the FIRST stable narrow run going down -- the tail is always found
-# before the connector's own narrower step further along.
+# The scan runs the full depth below the cable edge, not a fixed window: on a
+# large board, or with follow padding off, the board can still be full width
+# well below the cable edge, and confirming "stable for NECK_STABLE_MM" needs
+# samples that far beyond where the tail settles, so a fixed window misses the
+# tail on some boards. Searching deeper is safe because the rule takes the
+# first stable narrow run going down -- the tail is always found before the
+# connector's own narrower step further along.
 # The bottom piece is a stack -- sheet, wall on it, rib on the wall. Stacked face
 # to face, two solids are fused through a shared plane, which the boolean can
 # keep as a pinch where an edge of one meets the other's outline (the tail
 # slot's corner): closed in memory, open once the STL's float32 vertices are
-# merged on load (16 of 310 generated boards). Each layer rises this far out of
-# the one below instead, as the lid's bumps plug into its slab; the solid is the
-# same.
+# merged on load. Each layer instead rises this far out of the one below, as
+# the lid's bumps plug into its slab; the solid is the same.
 FUSE_MM = 0.10
 # Rib pieces under this area (in units of the rib head squared) are slivers the
 # tail slot clips off a segment's end; extruded they are not a closed solid and
@@ -94,17 +91,17 @@ NECK_FLAT_MM = 0.25       # ...to within this much
 @dataclass
 class CaseParams:
     """Every dimension in mm."""
-    # Wider than BumpParams' 3.0 on purpose. The bump sheet puts ONE cut near
+    # Wider than BumpParams' 3.0 on purpose. The bump sheet puts one cut near
     # the pocket edge; the case puts two concentric ones -- the perimeter slit
     # and the rib slot -- and the ligament between them scales with the skirt
     # at about half a millimetre per millimetre. At 3.0 that ligament is
     # 0.65mm, under two extrusion widths, and it carries the whole tile field.
     skirt_width_mm: float = 4.0
     recess_tolerance_mm: float = 0.20   # slip fit around the board edge
-    # Measured, not estimated: flex ~0.10 + Velostat ~0.10. An earlier 0.30 came
-    # from assuming a 0.15mm flex and left the board 0.1mm loose in a joint where
-    # contact pressure IS the signal. Note this is now ONE 0.2mm layer -- see the
-    # printing note in the module docstring before changing it.
+    # Measured, not estimated: flex ~0.10 + Velostat ~0.10. A deeper pocket
+    # leaves the board loose in a joint where contact pressure is the signal.
+    # This is one 0.2mm layer -- see the printing note in the module docstring
+    # before changing it.
     recess_depth_mm: float = 0.20
     plate_thickness_mm: float = 0.60    # pocket floor
     lid_thickness_mm: float = 0.80
@@ -118,8 +115,8 @@ class CaseParams:
     min_bridges: int = 8                # small boards need a shorter period
     # Wrap the cable edge and cut only a slot for the tail, instead of leaving
     # the whole side open. The board is full width at the cable line -- the tail
-    # does not narrow until a few mm below it -- so clipping there opens ~46mm
-    # of wall for a ~15mm tail. False restores the open-edge U.
+    # does not narrow until a few mm below it -- so clipping there opens far
+    # more wall than the tail needs. False gives the open-edge U.
     wrap_cable_edge: bool = True
     tail_clearance_mm: float = 0.60     # each side of the tail slot
     tail_grip_mm: float = 1.00          # tail captured in the pocket: strain relief
@@ -131,11 +128,11 @@ class CaseParams:
     min_tail_clear_mm: float = 3.00
     # Hatch the lid: cut it on the taxel boundaries so a press lands on the taxel
     # under it instead of spreading to its neighbours. Material stays over every
-    # taxel -- a hole THERE would remove the only thing that can push on the
+    # taxel -- a hole there would remove the only thing that can push on the
     # pixel and put the load path on the boundaries, which is backwards.
     hatch: bool = False
     hatch_groove_mm: float = 0.90
-    # Through-cut by default. A groove only THINS the boundary: at half the lid
+    # Through-cut by default. A groove only thins the boundary: at half the lid
     # thickness that is 12.5% stiffness -- 8x softer, but still a continuous
     # membrane carrying moment across every edge. A through-cut carries nothing
     # but the tabs, which is the point. hatch_through=False gives the groove
@@ -144,17 +141,17 @@ class CaseParams:
     hatch_tab_mm: float = 1.20          # bridges across each cut; through-cut only
     hatch_tabs_per_edge: int = 1
     hatch_depth_mm: float = 0.40        # groove mode only: leaves lid - depth of web
-    # One small bump per taxel on the hatched lid. Default TOP, and the reasoning
+    # One small bump per taxel on the hatched lid. Default top, and the reasoning
     # is worth keeping because the alternative looks tempting.
     #
-    # A pip on the UNDERSIDE would raise pressure at the sensing junction --
+    # A pip on the underside would raise pressure at the sensing junction --
     # tile force over contact area, so ~6x at these sizes. But it contradicts
     # the rule the whole lid is built on: the underside stays dead flat against
     # the Velostat. A pip is a permanent contact point, so it preloads the
     # junction, gives a non-zero baseline and then creeps; and it caps the
     # signal, since only the comb fingers beneath it ever get bridged.
     #
-    # A bump on TOP gives a discrete, repeatable contact instead of somewhere
+    # A bump on top gives a discrete, repeatable contact instead of somewhere
     # ambiguous on a flat tile. Against a flat rigid indenter it does not change
     # the junction pressure -- but a flat rigid indenter is the worst case for
     # it, not the usual one. Against a finger or any curved or compliant object
@@ -189,21 +186,23 @@ class CaseResult:
 def _tail_neck(final_outline_xy, cable_y: float):
     """Where the board settles into its cable tail: (clip_y, x_lo, x_hi) or None.
 
-    The cable edge is NOT the right place to open the wall. At that line the
+    The cable edge is not the right place to open the wall. At that line the
     board is still full width -- the routing fan-out shoulder sits just below it
     and only then does the outline step down to the tail, which is sized by the
     connector rather than by the board. Clipping at the cable edge therefore
-    opens ~46mm of wall to let a ~15mm tail out.
+    opens the wall across the whole board to let a much narrower tail out.
 
-    Two things make this awkward to detect and both were found by measuring:
+    Two things make this awkward to detect:
 
     * The step is not a clean edge. Across roughly a millimetre the scan line
       grazes the taper and returns two or three slivers, so anything that keys
       off the largest single drop lands inside that zone and reports a tail
-      33mm wide. What is reliable is the STABLE width below the step.
-    * "Narrow" cannot be a fraction of the board. An 18x18 board's tail is 62%
-      of its width, so any fixed fraction that catches a big board misses a
-      small one. The test is only that the tail is clearly narrower than full.
+      far wider than the real one. What is reliable is the stable width below
+      the step.
+    * "Narrow" cannot be a fraction of the board. A small board's tail can be
+      well over half its width, so any fixed fraction that catches a big board
+      misses a small one. The test is only that the tail is clearly narrower
+      than full.
 
     Where the board steps in to the connector's tab at the connector's opening
     (_neck_floor), the tab past it is not looked at.
@@ -214,7 +213,7 @@ def _tail_neck(final_outline_xy, cable_y: float):
     minx, miny, maxx, maxy = poly.bounds
 
     def width(y):
-        """Widest CONTIGUOUS run at this height, not the overall extent."""
+        """Widest contiguous run at this height, not the overall extent."""
         g = poly.intersection(LineString([(minx - 1.0, y), (maxx + 1.0, y)]))
         if g.is_empty:
             return 0.0, None
@@ -249,10 +248,10 @@ def _neck_floor(poly: Polygon, miny: float) -> float:
     export puts CONNECTOR_BODY_BELOW_MM before the end. A tail wider than the
     tab there (one typed wider than the connector, or the routing canvas of a
     board without follow padding) is cut to the tab past the opening
-    (connector_geometry.clip_beside_tab), and that tab, the connector itself,
-    then read as the neck: the case sealed the connector in. Any other tail is
-    as wide as the tab before the opening as after it, and is looked at whole,
-    as it always was."""
+    (connector_geometry.clip_beside_tab); scanned past the opening, that tab,
+    the connector itself, would read as the neck and the case would seal the
+    connector in. Any other tail is as wide as the tab before the opening as
+    after it, and is looked at whole."""
     y_open = miny + CONNECTOR_BODY_BELOW_MM
     minx, _, maxx, _ = poly.bounds
 
@@ -268,8 +267,8 @@ def _polygons(geom):
 
     Unions and differences of cut shapes can return a GeometryCollection (a
     polygon plus a stray sliver line or point) instead of a MultiPolygon. Treating
-    that as one piece skipped every cut in it: the hatched lid of a plain square
-    patch came out almost uncut.
+    that as one piece would skip every cut in it and leave a hatched lid almost
+    uncut.
     """
     if geom is None or geom.is_empty:
         return []
@@ -286,9 +285,9 @@ def _hatch_geometry(recess_poly, pts, pitch_x, pitch_y, width,
     without it a border pad is stiffened by the flange it is welded to, and only
     the interior taxels get the compliance.
 
-    Column and row lines are taken as the midpoint of each ADJACENT PAIR rather
-    than centre+pitch, so an uneven lattice
-    grooves in the right places instead of drifting across the array.
+    Column and row lines are taken as the midpoint of each adjacent pair rather
+    than centre+pitch, so an uneven lattice grooves in the right places instead
+    of drifting across the array.
     """
     pts = np.asarray(pts, dtype=float)
     if not len(pts):
@@ -316,7 +315,7 @@ def _hatch_geometry(recess_poly, pts, pitch_x, pitch_y, width,
 
     # A through-cut needs bridges back across every cut or the lid falls into one
     # loose tile per taxel. Each tab group is subtracted only from the cut it
-    # belongs to: merging them lets a ring tab plug the END of a grid cut, which
+    # belongs to: merging them lets a ring tab plug the end of a grid cut, which
     # is exactly how a border tile ends up still welded on the side that was
     # supposed to come free.
     tw = tab_width / 2.0
@@ -353,7 +352,7 @@ def _hatch_geometry(recess_poly, pts, pitch_x, pitch_y, width,
 
 
 def _no_tail_reason(final_outline_xy, cable_y: float) -> str:
-    """Say WHY no tail was found, because the two causes need different fixes."""
+    """Say why no tail was found, because the two causes need different fixes."""
     return _no_tail(final_outline_xy, cable_y)[1]
 
 
@@ -429,10 +428,11 @@ def _gap_cutters(samples, total: float, period: float, gap: float, width: float)
 def tail_extension_length(tail_extension: dict | None) -> float:
     """Arc length of a drawn tail extension, or 0.
 
-    The extension is NOT in the board outline. `apply_tail_extension` moves the
+    The extension is not in the board outline. `apply_tail_extension` moves the
     connector pads and re-routes to them, but `final_outline_xy` is unchanged --
-    so anything that measures the outline is blind to it, and a user who adds a
-    15mm extension sees the same "cable too short" warning as before.
+    so anything that measures the outline is blind to it, and without this
+    length a user who adds an extension would still see the "cable too short"
+    warning.
     """
     if not tail_extension or tail_extension.get("enabled") is False:
         return 0.0
@@ -447,7 +447,7 @@ def _case_plan(final_outline_xy, cable_y, p: CaseParams) -> dict:
     the tail (the neck), the pocket (recess), the sheet under it, the cut that
     opens the wall, and why the tail could not be found if it could not."""
     # Where the wall opens. Wrapping the cable edge and cutting only a tail slot
-    # means clipping BELOW the fan-out shoulder, not at the cable line -- at the
+    # means clipping below the fan-out shoulder, not at the cable line -- at the
     # cable line the board is still full width, so the wall would open across
     # the whole side to pass a tail a third that wide.
     neck = _tail_neck(final_outline_xy, cable_y) if p.wrap_cable_edge else None
@@ -476,7 +476,7 @@ def _case_plan(final_outline_xy, cable_y, p: CaseParams) -> dict:
 
 def _cable_clearance(final_outline_xy, sheet, p: CaseParams, tail_extension: dict | None) -> dict:
     """How much tail actually escapes the case, and how much of that is the rigid
-    connector body. Measured from the shipped outline rather than from
+    connector body. Measured from the final outline rather than from
     cable_length_mm, because the neck (and so the clip) moves with the board."""
     case_bottom = float(sheet.bounds[1])
     board_bottom = float(Polygon(np.asarray(final_outline_xy, dtype=float)).buffer(0).bounds[1])
@@ -547,7 +547,7 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
     # A fixed period does not scale down: a fingertip-sized board has too short
     # a perimeter to fit enough gaps, and the lid panel is then held on by two
     # or three bridges. Shrink the period until there are at least min_bridges,
-    # and shrink the gap by the SAME factor so the duty cycle is preserved --
+    # and shrink the gap by the same factor so the duty cycle is preserved --
     # scaling the period alone either starves the rib or, if the gap is used as
     # a floor, silently makes the period longer instead of shorter.
     period, gap = p.rib_period_mm, p.rib_gap_mm
@@ -572,7 +572,7 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
 
     open_edge = edge_cut
     rib_cut, n_gaps = _gap_cutters(samples, total, period, gap, p.rib_head_mm)
-    # The slot must be LONGER than the rib at every end or the two butt together
+    # The slot must be longer than the rib at every end or the two butt together
     # and the lid will not seat. Cutting the slot with a shorter cutter leaves
     # slot_end_clearance of free space beyond each rib end.
     slot_cut, _ = _gap_cutters(samples, total, period,
@@ -607,11 +607,11 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
     bottom = trimesh.boolean.union(parts) if len(parts) > 1 else parts[0]
 
     # ---- top piece --------------------------------------------------------
-    # Both the rib slot and the bump slits are cut by SUBTRACTING solid cutters
+    # Both the rib slot and the bump slits are cut by subtracting solid cutters
     # from a plain slab, never by extruding a polygon that already carries them
-    # as interior rings. bump_sheet learned this the hard way: with 30+ rings
-    # pinching against each other and the outer boundary, the extrusion is not a
-    # closed volume and the whole sheet gets thrown away.
+    # as interior rings (bump_sheet does the same): with many rings pinching
+    # against each other and the outer boundary, the extrusion is not a closed
+    # volume and the whole sheet is discarded.
     centers = np.zeros((0, 2))
     slits = None
     hatch = None
@@ -653,7 +653,7 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
                 "skirt adds about 0.5mm here) or narrow the bump slit.")
 
     lid_2d = sheet.difference(slot)
-    # Every THROUGH cut has to count here, or the piece check silently ignores
+    # Every through cut has to count here, or the piece check silently ignores
     # the one most likely to fall apart: a hatch whose tabs failed leaves one
     # loose tile per taxel. A groove is not a through cut and must not count.
     lid_cut_2d = lid_2d
@@ -677,7 +677,7 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
                 continue
             c.apply_translation((0, 0, -0.5))
             cutters.append(c)
-    # Grooves are PARTIAL depth and open at the top: the underside has to stay
+    # Grooves are partial depth and open at the top: the underside has to stay
     # dead flat against the Velostat, or the lid presses along the boundaries —
     # exactly where the compliance is supposed to be.
     if hatch is not None and not hatch.is_empty:
@@ -721,7 +721,7 @@ def build_case(final_outline_xy, cable_y, placements_xy, active_idx,
                                      rb, rt, p.segments))
             else:
                 # Built upward from below the lid so the wide end meets it: the
-                # pip narrows AWAY from the lid, same profile as a top bump seen
+                # pip narrows away from the lid, same profile as a top bump seen
                 # from the other side.
                 tops.append(_frustum(cx, cy, -p.hatch_bump_height_mm, p.hatch_bump_height_mm,
                                      rt, rb, p.segments))

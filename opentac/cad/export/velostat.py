@@ -2,9 +2,7 @@
 
 What gets cut. The outline the user drew (the manifest's "outline"), not the
 manufactured board: it contains every taxel and never the cable tail. See
-`velostat_polygon` for why the board-minus-tail version was dropped. Anchor-hole
-cutouts are punched through too: the bump-sheet posts pass through the board
-there, and a Velostat sheet without the holes would block every post.
+`velostat_polygon` for why the board outline minus the tail is not used.
 
 The fold template. Velostat is thin, static-clingy and curls, and a pen line on
 it is hard to follow with scissors. The PDF prints the shape twice, mirrored
@@ -38,9 +36,8 @@ def velostat_polygon(layout, outline_xy, inset_mm: float = 0.0) -> Polygon:
 
     Not the manufactured board. That one carries the cable tail and connector,
     and cutting the tail back off is fragile: clipping at the cable-edge line
-    threw away whole sensor arms whenever the cable sat on an inner edge (14 of
-    128 boards in a sweep over every edge of the site's presets). The drawn
-    outline has no tail by construction and every taxel is packed inside it,
+    discards whole sensor arms whenever the cable sits on an inner edge. The
+    drawn outline has no tail by construction and every taxel is packed inside it,
     whichever edge the cable is on. It ends a few mm inside the board edge,
     over the routing margin, where there is nothing to sense.
 
@@ -103,7 +100,7 @@ def velostat_fold_pdf(poly: Polygon, title="OpenTac-CAD Velostat fold template",
     Every fold layout on every sheet is tried before giving up on folding, so
     an A3 fold wins over a single copy on A4.
 
-    If the doubled shape fits no sheet, the page carries the shape ONCE, with
+    If the doubled shape fits no sheet, the page carries the shape once, with
     no mirror and no crease: tape the Velostat under the sheet and cut along
     the line. `info["fold"]` is None in that case. Returns None only when even
     one copy fits no single sheet; the DXF still covers that, and a tiled

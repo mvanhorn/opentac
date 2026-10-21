@@ -4,7 +4,7 @@ Entities are flattened to line segments (uniformly, regardless of whether they
 were originally LINE/ARC/CIRCLE/LWPOLYLINE/SPLINE/etc via ezdxf's Path API),
 segment endpoints are snap-merged, and the resulting graph is walked into
 closed loops. Winding order / cable-edge normalization is intentionally left
-to the frontend so there's a single implementation shared with hand-drawn
+to the web app so there is a single implementation shared with hand-drawn
 outlines.
 """
 

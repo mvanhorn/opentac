@@ -409,8 +409,8 @@
 
       <!-- ================= Views =================
            Ordered to follow the workflow top to bottom: draw the outline, press
-           Generate, then read the result. The PCB Preview panel is last because
-           it is the output of the two panels above it. -->
+           Generate, then read the result. The PCB Preview panel follows the
+           two panels above it because it is their output. -->
       <section class="views">
         <div class="panel view">
           <div class="view__head">
@@ -538,9 +538,7 @@
           <div id="route-edit-status" class="mini"></div>
         </div>
 
-        <!-- Last panel in the column, below the preview: you generate, inspect
-             the board above, and only then download it. -->
-        <!-- Two-piece printed case. The shear bumps are a version of the TOP
+        <!-- Two-piece printed case. The shear bumps are a version of the top
              piece, not a separate part: flat lid or bumped lid. -->
         <div class="panel bump-panel" id="case-panel">
           <div class="bump-head">
@@ -685,6 +683,8 @@
           </div>
         </div>
 
+        <!-- Last panel in the column, below the preview and the case: you
+             generate, inspect the board above, and only then download it. -->
         <div class="panel download-panel">
           <div class="download-bar">
             <label class="download-bar__name" for="design-name">

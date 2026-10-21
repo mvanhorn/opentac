@@ -1,18 +1,18 @@
 """A 1:1 printable PDF of the board outline, for cutting and test-fitting.
 
-Why this exists: the Gerbers are for a fab house, and nothing in the ZIP let
-you check a shape against the real part before paying for a board. Printing
+Why this exists: the Gerbers are for a fab house, and nothing else in the ZIP
+lets you check a shape against the real part before paying for a board. Printing
 this, cutting it out and holding it against the gripper takes a minute and
 catches a wrong dimension that would otherwise arrive as 20 useless PCBs.
 
 Why a hand-rolled writer instead of reportlab: PDF vector line art is a small,
 stable format -- paths, a stroke colour, one Type1 font -- and the one thing
 this file must get exactly right is scale. Owning the transform end to end is
-worth more here than a dependency, and this project has already shipped one
-outage from an unpinned transitive import that only failed in production.
+worth more here than a dependency, and every added dependency brings
+transitive imports that can fail only on the deployed server.
 
 Everything is emitted in PDF user space, where 1 unit = 1/72 inch, so the
-millimetre -> unit factor below IS the 1:1 guarantee.
+millimetre -> unit factor below is the 1:1 guarantee.
 """
 
 from __future__ import annotations
@@ -60,13 +60,12 @@ class _Content:
             self.parts.append("[] 0 d")
 
     def line_page(self, a, b):
-        """A line positioned on the PAGE, unaffected by where the board sits.
+        """A line positioned on the page, unaffected by where the board sits.
 
         Page furniture -- the scale ruler, tiling guides -- must not ride on the
-        board origin: on a tiled sheet that origin is far off-page, and drawing
-        the ruler in board space put it outside the media box entirely on two
-        of four sheets, silently removing the only check that the print came
-        out at true size.
+        board origin: on a tiled sheet that origin is far off-page, and a ruler
+        drawn in board space lands outside the media box on some sheets,
+        silently removing the only check that the print came out at true size.
         """
         self.parts.append(f"{a[0] * MM_TO_PT:.3f} {a[1] * MM_TO_PT:.3f} m "
                           f"{b[0] * MM_TO_PT:.3f} {b[1] * MM_TO_PT:.3f} l S")
@@ -93,7 +92,7 @@ class _Content:
             + ("f" if fill else "S"))
 
     def text(self, x_mm, y_mm, s, size_pt=8.0, rgb=(0, 0, 0), page_space=False):
-        """page_space=True places text relative to the PAGE, not the board."""
+        """page_space=True places text relative to the page, not the board."""
         if page_space:
             x, y = x_mm * MM_TO_PT, y_mm * MM_TO_PT
         else:
@@ -223,7 +222,7 @@ def _draw_board(c, chains, taxels, pixel_w, pixel_h, show_taxels=True):
     # Every chain is closed. With the connector's own edges joined in (see
     # generate_print_pdf) the outline is already one loop; this is the safety
     # net for a footprint whose edges do not quite meet. An open loop is a
-    # shape you cannot cut out -- the tail once printed as two dangling stubs
+    # shape you cannot cut out: an open tail prints as two dangling stubs
     # with a hole between them.
     c.stroke(INK, 0.35)
     for chain in chains:
@@ -236,7 +235,7 @@ def generate_print_pdf(layout, outline_xy, params, removed, connector_dir,
                        title="OpenTac-CAD sensor", info=None) -> bytes:
     """Build the 1:1 cutting template.
 
-    Draws the board's REAL manufactured boundary (Edge.Cuts, connector body
+    Draws the board's manufactured boundary (Edge.Cuts, connector body
     included), not the outline the user drew -- the two differ by the tail
     and connector, and cutting out the drawn shape would test the wrong thing.
 
@@ -253,8 +252,8 @@ def generate_print_pdf(layout, outline_xy, params, removed, connector_dir,
     if segments:
         # The board stops at the connector's open edge and the footprint
         # draws the rest of Edge.Cuts, as in the Gerber and KiCad exporters.
-        # Without these the template ended at that edge and printed every
-        # board short by the connector body: 2.25 mm on a 20-pin, 6 mm on a 70.
+        # Without these the template would end at that edge, short of the
+        # board by the depth of the connector body.
         edges = connector_edge_geometries(layout, outline_xy, params, connector_dir)
         segments = list(segments) + list(edges["lines"])
         for start, mid, end in edges["arcs"]:
@@ -299,7 +298,7 @@ def generate_print_pdf(layout, outline_xy, params, removed, connector_dir,
             return _build_pdf([(pw, ph, c.render())])
 
     # Too big for any single sheet: tile it, with an overlap so the pieces can
-    # be aligned and taped rather than butted edge to edge and hoped for.
+    # be aligned and taped rather than butted edge to edge.
     name, pw, ph = TILE_PAGE
     overlap = 10.0
     avail_w = pw - 2 * MARGIN_MM

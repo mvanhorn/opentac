@@ -1,13 +1,13 @@
 """Where the design's name goes on the front silkscreen, and how big.
 
-Nothing on an exported board used to say what it was. A folder of five flex
-sensors is five near-identical amber rectangles, and the only thing that told
-them apart was the ZIP filename -- which does not survive being unzipped, let
-alone being fabricated. So the design name gets printed on the board.
+Without a printed name, a folder of five flex sensors is five near-identical
+amber rectangles, and the only thing that tells them apart is the ZIP
+filename -- which does not survive being unzipped, let alone being
+fabricated. So the design name is printed on the board.
 
 It goes on the tail, just inboard of the connector: the one place on every
 board that is guaranteed to exist, guaranteed to be flat copper-and-mask
-rather than taxels, and the place a person looks when they plug the thing in.
+rather than taxels, and the place a person looks when plugging the board in.
 Silkscreen sits above the soldermask, so printing over the fan-in traces
 underneath it is fine; printing over the connector's own contact fingers is
 not, which is what the clearance below is for.
@@ -15,7 +15,7 @@ not, which is what the clearance below is for.
 The label is sized to fit and then, only if it still does not, truncated. It
 is never allowed off the board: `board_poly` shrunk by the edge clearance is
 the final arbiter, so a short tail or a narrow connector loses the label
-rather than shipping one that the router bit would cut through.
+rather than producing one that the router bit would cut through.
 
 Callers: `export/kicad_pcb.py` (a gr_text on F.SilkS), `export/gerber.py`
 (stroked into board-F_Silkscreen.gto by `stroke_font`), and
@@ -30,7 +30,7 @@ from shapely.geometry import Polygon
 from opentac.cad.export.connector_geometry import connector_geometries, connector_pose
 from opentac.cad.export.stroke_font import text_width
 
-# Matches frontend/design-name.js. Kept in step with it deliberately: the
+# Matches web/design-name.js. Kept in step with it deliberately: the
 # name the user reads in the download field has to be the name on the board.
 MAX_STEM = 48
 

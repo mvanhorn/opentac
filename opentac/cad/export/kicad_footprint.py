@@ -56,9 +56,8 @@ def pixel_geometry(w, h, tracew, gap, center_clear, edge_clear, via_dia) -> Pixe
     via_y = ymid
 
     # A column finger stops center_clear short of the row spine, but the row
-    # via is wider than the spine and pokes out toward the fingers: a column
-    # finger at the via's height passed it at 0.04-0.11 mm (3 and 4 mm taxels
-    # at default rules, 0.1 mm rules on 2 mm) where center_clear is 0.2.
+    # via is wider than the spine and protrudes toward the fingers, so a
+    # column finger at the via's height would pass it closer than center_clear.
     # Such a finger alone stops center_clear short of the via ring (+1 um for
     # the 6-decimal output); a finger that already clears it is unchanged.
     reach = via_dia / 2 + tracew / 2 + center_clear + 0.001

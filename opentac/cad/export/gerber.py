@@ -5,11 +5,10 @@ service, a plain Python image -- so it has to draw exactly what KiCad plots
 from export/kicad_pcb.py's board, layer for layer.
 
 Coordinates: everything here is in the board frame (mm, Y up), and that frame
-IS the Gerber frame, written as is. KiCad's board space is Y down, which is why
+is the Gerber frame, written as is. KiCad's board space is Y down, which is why
 kicad_pcb.py negates Y on the way in; its plotter negates it back on the way
-out, so a KiCad Gerber carries board coordinates unchanged. (Negating Y here as
-well mirrored every layer: a board ordered from these files came out as the
-mirror image of the design.) The one other frame is a taxel footprint's own,
+out, so a KiCad Gerber carries board coordinates unchanged. Do not negate Y
+here: that mirrors every layer. The one other frame is a taxel footprint's own,
 pixel_geometry(), which is KiCad's Y-down footprint frame -- see
 _taxel_point().
 """
@@ -211,8 +210,7 @@ def _generate_copper_layer(layer_name, routes, layout, active_pix, Pxy, g, param
         _flash(lines, *_taxel_point(Pxy[k][0], Pxy[k][1], g.via_x, g.via_y))
 
     # Connector pad copper, including through-hole rectangular terminals.
-    # Use rectangular flashes instead of filled regions; region polygons can
-    # produce viewer-dependent wedge fills around the pinout.
+    # Each connector pad is drawn as its exact footprint rectangle, as a region.
     _flash_connector_pads(lines, am, connector_pads or [], layer_name)
 
     # Route traces
@@ -268,9 +266,9 @@ def _draw_pixel_copper(lines, cx, cy, g):
     """Draw both electrode combs of the taxel centred at (cx, cy).
 
     pixel_geometry() is in the footprint's Y-down frame, so every point goes
-    through _taxel_point: drawn with a plain +y the combs came out flipped
-    within each taxel, and on an even finger count the row and column fingers
-    swapped places relative to KiCad's plot.
+    through _taxel_point: drawn with a plain +y the combs are flipped within
+    each taxel, and on an even finger count the row and column fingers swap
+    places relative to KiCad's plot.
     """
     def seg(lx1, ly1, lx2, ly2):
         _draw_line(lines, *_taxel_point(cx, cy, lx1, ly1), *_taxel_point(cx, cy, lx2, ly2))
@@ -408,8 +406,8 @@ def _generate_edge_cuts(layout, outline_xy, params, connector_dir=""):
 
     # Board outline with cable cutout. Whenever a final board polygon
     # exists, export it stitched to the connector's open edge (all board
-    # modes) — see export/kicad_pcb.py's matching branch for the fixed-mode
-    # Edge.Cuts gap this closes. Legacy branch only when no final outline.
+    # modes), as export/kicad_pcb.py's matching branch does. The fallback
+    # below (drawn outline plus tail walls) runs only without a final outline.
     if layout.final_outline_xy is not None:
         outline_segments = stitched_outline_segments(layout, outline_xy, params, connector_dir)
         if outline_segments is None:
@@ -476,8 +474,8 @@ def _generate_front_silk(layout, outline_xy, params, connector_dir):
 
     KiCad would render this text for us, but only on the kicad-cli path --
     which needs KiCad installed, and the hosted deployment is a plain Python
-    image. This is the path every hosted export actually takes, so the label
-    has to be real geometry here or it does not exist on most boards.
+    image. Every hosted export takes this path, so the label has to be real
+    geometry here or the board carries no label.
 
     One round aperture, one pen width: silkscreen is screen-printed, and a
     single consistent stroke is what survives it.

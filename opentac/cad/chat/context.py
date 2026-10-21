@@ -1,15 +1,15 @@
 """SKILL.md as system instructions.
 
-The Skill is loaded verbatim rather than paraphrased, so the design knowledge
-the model gets cannot drift from the knowledge Claude gets when the Skill is
-edited. Two adjustments: the Setup section goes (it explains which Python
-interpreter to use, which is the server's problem, not the model's), and a
-preamble maps the Python helpers the document discusses onto the tools the
-model actually has.
+The repository's Claude Code skill (`.claude/skills/opentac`) is loaded
+verbatim rather than paraphrased, so the design knowledge the model gets
+cannot drift from the skill when the skill is edited. Two adjustments: the
+Setup section is removed (it explains which Python interpreter to use, which
+concerns the server, not the model), and a preamble maps the Python helpers
+the document discusses onto the tools the model has.
 
-The Skill is read from `.claude/skills/opentac/` at the repository root, the same
-files Claude Code loads, so there is one copy. The hosted demo's image is built
-from the whole repository for that reason.
+The skill is read from `.claude/skills/opentac/` at the repository root, so
+there is one copy. The hosted server's image copies `.claude/skills` from the
+repository for that reason (see deploy/Dockerfile).
 """
 
 from __future__ import annotations

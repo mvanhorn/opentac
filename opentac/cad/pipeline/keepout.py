@@ -108,13 +108,12 @@ def smooth_widths(profile: KeepoutProfile, window_mm: float = SMOOTH_WINDOW_MM) 
 def fixed_keepout_floor(params) -> float:
     """Minimum wiring keep-out width in fixed-outline mode.
 
-    Deliberately NOT routing_margin_mm. That parameter is how far grow-board
-    mode pushes the outline *outward*, and reusing it as the floor on a band cut
-    *inward* gave fixed mode a flat 3.0mm ring that masked keepout.analytic_widths
-    entirely — measured on a 70x50 board, the modelled demand ranged 1.00-3.00mm
-    and never once exceeded the floor, so the shape-following taper the module
-    exists to compute was overridden at every boundary sample. The top edge, where
-    no wires run at all, was reserving the same 3mm as the tail.
+    Deliberately not routing_margin_mm. That parameter is how far grow-board
+    mode pushes the outline *outward*; used as the floor of a band cut
+    *inward*, its 3.0 mm default gives a flat ring that can exceed the
+    modelled demand everywhere, overriding the shape-following taper that
+    keepout.analytic_widths computes. The top edge, where no wires run, would
+    then reserve as much as the tail.
 
     None (the default) means "let the model decide": analytic_widths already
     carries its own safety term, which is the real floor. An explicit value is
@@ -138,9 +137,8 @@ def analytic_widths(profile: KeepoutProfile, params, layout) -> np.ndarray:
     demand at a sample is set by how many of that side's rows sit at or above
     it — few near the top, all of them near the tail. Samples along the bottom
     edge are below every row, so they already inherit that side's full count;
-    an explicit extra term for the tail fan-in was measured to double-count it
-    (85 pixels' worth on a 100mm board) and buy nothing. What the fan-in
-    actually needs beyond this is discovered, not guessed: escaping copper
+    an extra tail fan-in term for the row nets would double-count it. What the
+    fan-in actually needs beyond this is discovered, not guessed: escaping copper
     grows the profile locally through keepout.grow_near().
 
     Everything is computed in the canonical frame rotate_for_cable() produces:
@@ -184,12 +182,10 @@ def analytic_widths(profile: KeepoutProfile, params, layout) -> np.ndarray:
     # Column fan-in. Every column net converges on the pad row, so the tail end
     # of the board carries all of them at once — the same demand grow mode
     # reserves as _routing_demand's `n_col * trace_pitch * 0.35` bottom padding
-    # and `* 0.25` side padding (pipeline/layout.py). This model had no column
-    # term at all: while the floor was routing_margin_mm (3.0mm flat) that was
-    # invisible, because the floor happened to exceed the missing term. With the
-    # floor removed so the taper can actually govern, its absence showed up
-    # immediately as column traces escaping the board edge on shapes whose edge
-    # recedes toward the tail (a disc, a trapezoid, a narrow wide board).
+    # and `* 0.25` side padding (pipeline/layout.py). The default floor is zero
+    # (see fixed_keepout_floor), so without this term column traces escape the
+    # board edge on shapes whose edge recedes toward the tail (a disc, a
+    # trapezoid, a narrow wide board).
     #
     # Weighted by how close the sample is to the pad row: full demand at the
     # array's bottom edge and below, tapering to nothing at the top, since a

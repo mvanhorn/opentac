@@ -1,6 +1,6 @@
 // Read-only 3D preview for the generated case parts.
 //
-// Deliberately NOT the STL-import viewer in stl-viewer.js: that one owns face
+// Deliberately not the STL-import viewer in stl-viewer.js: that one owns face
 // selection, seam picking and the unfold pipeline, and it lives inside the STL
 // input mode. The case is an output, and it must be viewable no matter
 // which input mode built the board (draw / DXF / STL). So this is its own
@@ -49,7 +49,7 @@ function init(el) {
   scene.add(new THREE.AmbientLight(0xffffff, 0.22));
   // A hemisphere light plus two directionals. The bumps are shallow — 2mm on a
   // 50mm sheet — so flat overhead light leaves them nearly invisible. The key
-  // light is deliberately RAKING (low z) because it is the shadowing on the
+  // light is deliberately raking (low z) because it is the shadowing on the
   // bump flanks that makes them read as bumps at all; the counter-light keeps
   // the underside from going black when you orbit beneath to check the recess.
   scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x1a232b, 0.42));
@@ -95,10 +95,10 @@ function frame(object) {
     }
   }
 
-  // Fit by PROJECTING the bounding box rather than dividing a bounding radius
+  // Fit by projecting the bounding box rather than dividing a bounding radius
   // by the field of view. A flat sheet seen from 45 degrees above foreshortens
   // hard, so its bounding radius badly overstates what it occupies on screen —
-  // sizing off the radius left the part filling well under half the viewport.
+  // sizing off the radius leaves the part filling well under half the viewport.
   // A few iterations converge on a snug fit for any shape and any aspect.
   let dist = Math.max(1e-3, box.getSize(new THREE.Vector3()).length());
   for (let i = 0; i < 8; i += 1) {
@@ -133,7 +133,7 @@ export function showBumpStl(el, arrayBuffer) {
     mesh = null;
   }
   // The fit below projects the bounding box, so the aspect ratio has to be
-  // right BEFORE framing — otherwise the first view is fitted to whatever size
+  // right before framing — otherwise the first view is fitted to whatever size
   // the container happened to have when the scene was first built.
   if (container.clientWidth && container.clientHeight) {
     camera.aspect = container.clientWidth / container.clientHeight;

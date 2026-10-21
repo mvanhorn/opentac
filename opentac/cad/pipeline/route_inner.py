@@ -1,4 +1,4 @@
-"""Inner-layer rows for 4-layer boards (PROTOTYPE): the pipeline glue.
+"""Inner-layer rows for 4-layer boards: the pipeline glue.
 
 On a 2-layer board a row's B.Cu bus can only leave the array at its ends, so
 every row wire walks around the side of the field to the connector. On a
@@ -9,13 +9,17 @@ every row wire walks around the side of the field to the connector. On a
   route_rows_inner      In1.Cu (then In2 if asked): every row to the
                         connector pads.
 
-Both are routed by the one engine in inner_engine.py — a top-down sweep over
-the via lattice in which wires keep their order and may step sideways
-between any two rows. This module supplies what the engine needs: where
-inner copper may go, the via lattice, where a row may start and end, and,
-below the field, the 45-degree fan into the drilled connector pads.
+OT_INNER_WIRE selects the wire model (wire_model). Under the default, "hug",
+the rows are routed first by inner_trunk.route_feeds (one bundle steered
+along the via lattice); if that leaves rows on B.Cu, the inner_engine sweep
+routes all the rows again, then, if rows still remain, inner_hug.route_feeds;
+the result leaving the fewest rows on B.Cu is kept. Links are tried likewise:
+inner_trunk.route_links first, then the sweep and inner_hug. This module
+supplies what the sweep needs — where inner copper may go, the via lattice,
+where a row may start and end, and, below the field, the comb from each
+field exit to its connector pad — and selects among the models.
 
-The rule above all others: inner-layer copper runs UNDERNEATH THE TAXELS
+The rule above all others: inner-layer copper runs underneath the taxels
 (inside the pitch-cell field) — copper elsewhere makes grow mode grow the
 board around it. The only exception is the stretch from the bottom of the
 field to the connector, which the F.Cu column fan occupies anyway. On a fixed
@@ -42,18 +46,19 @@ def wire_model():
                     approach; retain sweep when that certificate does not fit.
       "hug"         (the default) rows: inner_trunk.py (one bundle steered along the
                     via lattice, rows joining farthest first, in row order;
-                    the rows In1 refuses on In2 when given), falling back to
-                    the sweep / inner_hug.py for any it leaves; links: nested
-                    U's round each notch (inner_trunk.route_links), falling
-                    back to inner_hug.py / the sweep.
-    All are kept until one wins."""
+                    the rows In1 refuses on In2 when given); if it leaves
+                    rows, the sweep and inner_hug.py are run as alternatives
+                    and the result with the fewest rows on B.Cu is kept;
+                    links: nested U's round each notch (inner_trunk.route_links),
+                    with the sweep and inner_hug.py as alternatives.
+    "hug" is the default; the other models remain selectable for comparison."""
     import os
     return os.environ.get("OT_INNER_WIRE", "hug")
 
 
-# The boards ship with KiCad's default board setup, whose hole clearance
-# (copper to drill-hole edge) is 0.25 mm. With fine trace rules that, not the
-# pad clearance, is what keeps a lane off a via.
+# Copper to drill-hole edge clearance a lane keeps from a via: KiCad's
+# default hole clearance, 0.25 mm. With fine trace rules that, not the pad
+# clearance, is what keeps a lane off a via.
 HOLE_CLEARANCE_MM = 0.25
 
 
@@ -66,7 +71,7 @@ def _via_keepout(params: Params) -> float:
 
 def taxel_cells(layout: Layout, params: Params):
     """Where inner-layer copper may go: the pitch-sized cell under each taxel,
-    nothing else. Deliberately NOT route_hug.field_polygon, which bridges
+    nothing else. Deliberately not route_hug.field_polygon, which bridges
     separate islands of taxels with pitch-wide corridors so the hug contour is
     one ring — a corridor with no taxels over it, which is exactly where
     inner copper must not run."""
@@ -104,7 +109,7 @@ def route_rows_inner(layout: Layout, params: Params, plan,
         # lattice, rows joining farthest first, in row order; a second bundle
         # on In2 for the rows In1 refuses). If it leaves rows behind, the
         # sweep and the inner hug run too, and whichever leaves fewest rows on
-        # B.Cu ships — the trunk on a tie, then the sweep.
+        # B.Cu is kept — the trunk on a tie, then the sweep.
         from .inner_trunk import route_feeds as trunk
         from .inner_hug import route_feeds as hug
         pads_before = dict(layout.pad_to_net)
@@ -239,11 +244,13 @@ def _route_rows(layout: Layout, params: Params, plan, layers, preplaced, model):
     wire. Mutates layout.pad_to_net: placed rows' pads are re-assigned in
     lane order (failed rows keep theirs).
 
-    The wires come from inner_engine.sweep_escapes (they head for the row
-    pads, in order, and leave the field where it ends under them); below the
-    field they fan 45 degrees into the pads. Parallel 45-degree wires need
-    s*sqrt(2) apart but pads are pad_pitch apart, so the pad stubs are
-    staggered into a tent.
+    The wires come from inner_engine.sweep_escapes (inner_lines for the
+    "lines" models): they head for the row pads, in order, and leave the
+    field where it ends under them. Below the field the pads are handed to
+    the exits left to right and each wire hugs the field and the wires laid
+    before it out to its pad (inner_engine.comb_to_pads). With
+    OT_INNER_EXIT=bus the wires instead leave only above the connector tail
+    and drop to the pads with staggered 45-degree jogs (bus_to_pads).
     """
     from shapely.ops import unary_union
 
@@ -276,7 +283,7 @@ def _route_rows(layout: Layout, params: Params, plan, layers, preplaced, model):
     Yr = _cluster(via_xy[:, 1], tol)
     field = taxel_cells(layout, params)
     # The drawn outline (not grow mode's working canvas) plus the tail. The
-    # tail only TOUCHES the outline along the cable edge, so it is inflated a
+    # tail only touches the outline along the cable edge, so it is inflated a
     # hair first — a plain union of the two is two polygons with a seam, and
     # nothing would ever be allowed to cross from the field into the tail.
     drawn_parts = [p for p in (layout.outline_poly,
@@ -304,11 +311,11 @@ def _route_rows(layout: Layout, params: Params, plan, layers, preplaced, model):
         hit = region.intersection(LineString([(x, -1e5), (x, 1e5)]))
         return None if hit.is_empty else float(hit.bounds[1])
 
-    # Where a row wire may leave the taxels. "bus" (OT_INNER_EXIT=bus, trial): only straight
-    # above the connector tail, where a plain drop reaches the pad row inside
-    # the board; below the field the wires are a bus (bus_to_pads). "comb"
-    # (default): anywhere along the bottom
-    # edge, then a hug walk round the field to the pads (comb_to_pads).
+    # Where a row wire may leave the taxels. "comb" (the default): anywhere
+    # along the bottom edge, then a hug walk round the field to the pads
+    # (comb_to_pads). "bus" (OT_INNER_EXIT=bus): only straight above the
+    # connector tail, where a plain drop reaches the pad row inside the
+    # board; below the field the wires are a bus (bus_to_pads).
     import os
     bus = os.environ.get("OT_INNER_EXIT", "comb") == "bus"
     y_row = min(float(r["pad_xy"][1]) for r in rows)
@@ -377,7 +384,7 @@ def _route_rows(layout: Layout, params: Params, plan, layers, preplaced, model):
     failed = {r["net"] for r in left}
     why = {n: why[n] for n in failed}
 
-    # ---- 3) field exit -> pad: a nested comb along the field outline -------
+    # ---- 2) field exit -> pad: a nested comb along the field outline -------
     # Each wire left the taxels on the bottom edge of the field. Pads go to
     # the exits in left-to-right order; then each wire hugs the field and the
     # wires laid before it out to its pad (inner_engine.comb_to_pads), the
@@ -508,7 +515,7 @@ def route_row_links_in2(layout: Layout, params: Params, plan):
     if model == "hug":
         # Nested U's on the lattice first (inner_trunk.route_links); if they
         # leave links, the sweep and the inner hug run too and the result
-        # joining the most nets ships — the U's on a tie, then the sweep (the
+        # joining the most nets is kept — the U's on a tie, then the sweep (the
         # inner hug's walk follows the field edge, and zigzags round vias).
         from .inner_trunk import route_links as lanes
         from .inner_hug import route_links as hug
@@ -528,8 +535,8 @@ def route_row_links_in2(layout: Layout, params: Params, plan):
 
 
 def _row_links(layout: Layout, params: Params, plan, model):
-    """Returns (routes, nets_done, info). routes go on In2.Cu; for nets_done the
-    hug router's B.Cu link hops are no longer needed."""
+    """Returns (routes, nets_done, info). routes go on In2.Cu; nets_done need
+    none of the hug router's B.Cu link hops."""
     Pxy = layout.placements_xy
     g = pixel_geometry(params.pixel_w_mm, params.pixel_h_mm, params.trace_w_mm,
                        params.gap_mm, params.center_clear_mm, params.edge_clear_mm,
@@ -630,7 +637,7 @@ def _row_links(layout: Layout, params: Params, plan, model):
 
     nets_all = {L["net"] for L in links}
     nets_placed = {by_id[k]["net"] for k in polylines}
-    # a net is done only if ALL its links were placed and none failed the check
+    # a net is done only if all its links were placed and none failed the check
     nets_missing = {L["net"] for L in links if L["id"] not in polylines}
     nets_done = nets_placed - nets_missing - bad_nets
 
@@ -643,7 +650,7 @@ def _row_links(layout: Layout, params: Params, plan, model):
         routes.append(Route(net_name=L["net"], pad_num=plan.chains[L["net"]].pad_num,
                             anchor_xy=np.asarray(pts[-1], dtype=float),
                             # the net's pad, like hug's link hops: a route whose
-                            # first point IS its pad_xy is taken for a pad hop
+                            # first point is its pad_xy is taken for a pad hop
                             # and extended to the connector by the tail step
                             pad_xy=np.asarray(layout_pad_xy.get(L["net"], (math.inf, math.inf)), dtype=float),
                             polyline_xy=np.asarray(pts, dtype=float)))

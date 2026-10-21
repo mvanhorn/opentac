@@ -36,8 +36,8 @@ class Params:
     #                     keep-out band inside it, and drop the pixels that
     #                     reach into that band.
     # preserve_sensors/auto_expand_board below are internal flags derived from
-    # this mode (see _params_for_board_mode in backend/main.py); they are no
-    # longer exposed in the UI.
+    # this mode (see _params_for_board_mode in main.py); they are not exposed
+    # in the UI.
     board_mode: str = "expand"
     # Copper layers, the other user-facing choice (either board mode):
     #   2 — columns on F.Cu, rows on B.Cu, every wire run round the field;
@@ -78,10 +78,10 @@ class Params:
     narrow_tail: bool = True
 
 
-# Params keys that saved designs (edit_data, design.json) may still carry from
-# the anchor-hole feature, which was removed before release. Loading drops them;
-# a design that had anchor holes switched ON is refused rather than silently
-# rebuilt without its cutouts.
+# Params keys that saved designs (edit_data, design.json) may carry but this
+# version does not use: the bump anchor-hole options and pack_pattern_x/y.
+# Loading drops them; a design that has anchor holes switched on is refused
+# rather than silently rebuilt without its cutouts.
 REMOVED_PARAM_KEYS = frozenset({
     "anchor_holes", "anchor_hole_dia_mm", "anchor_hole_clearance_mm",
     "anchor_hole_lattice", "anchor_hole_square_cells",

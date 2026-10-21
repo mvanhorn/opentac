@@ -47,14 +47,15 @@ def _largest_polygon(poly) -> Polygon:
 def _routing_demand(params, n_row: int, n_col: int, include_cable_length: bool) -> dict:
     """Per-side routing demand in mm, from the row/column net counts.
 
-    Shared by the two consumers of the same estimate:
-      * _resolved_routing_padding — grow-board mode, pushes the outline outward.
-      * _resolved_routing_keepout — fixed-outline mode, carves the same space
-        inward out of the sensor field.
+    The only caller is _resolved_routing_padding (grow-board mode, which
+    pushes the outline outward); it always passes include_cable_length=True.
+    Fixed-outline mode sizes its inward keep-out separately
+    (keepout.analytic_widths, or route_hug.hug_keepout_widths for the hug
+    router).
 
     include_cable_length only applies to the tail-side (bottom) demand: the
-    cable/tail run lives *outside* the board, so it must be reserved when
-    growing outward but must not be carved out of the sensor field inward.
+    cable/tail run lies *outside* the board, so it is reserved when growing
+    outward.
     """
     base = max(0.0, float(params.routing_margin_mm))
     trace_pitch = params.trace_w_mm + params.clearance_mm
@@ -158,14 +159,14 @@ def cable_shoulder_fill(outline_poly, mid, t_hat, n_out, tail_width: float, dept
 
     The tail is connector-width, usually wider than the cable edge, so it
     sticks out past the outline's cable-edge corners. Where the outline's
-    bottom edge slopes AWAY from the attachment line (e.g. the fingertip wrap
+    bottom edge slopes away from the attachment line (e.g. the fingertip wrap
     band), a wedge opens up between the tail's top edge and the outline —
     board that belongs to neither shape, right where the outermost connector
-    fan wires cross (seen live as real copper-in-open-air DRC flags at 3mm
-    pixels). Close it: take a strip of the tail's width extending from the
-    attachment line INTO the board side, subtract the outline, and keep the
-    pieces touching the attachment line — exactly the wedges. Depth
-    tail_width/2 comfortably covers any slope a sane cable edge produces (a
+    fan wires cross (DRC then flags that copper as lying outside the board).
+    Close it: take a strip of the tail's width extending from the attachment
+    line into the board side, subtract the outline, and keep the pieces
+    touching the attachment line — exactly the wedges. Depth
+    tail_width/2 comfortably covers any slope a usable cable edge produces (a
     narrowed tail passes the depth of the connector-width fill its wires were
     routed in); the touch filter keeps drawn concavities elsewhere in the strip
     untouched.
@@ -212,7 +213,7 @@ def solve_grid_pixel_size(outline_xy, params: Params, fill_xy=None) -> dict:
     packer only keeps a taxel whose four corners are all inside — so the result
     is verified by really packing it, and shrunk in small steps until the
     requested counts appear. Returns the solved values plus what was actually
-    achieved, so the caller can report an honest number rather than the request.
+    achieved, so the caller can report the achieved counts rather than the request.
     """
     cols = int(params.target_cols)
     rows = int(params.target_rows)
@@ -340,15 +341,14 @@ def layout_with_connector(
         tail["mid"], tail["t_hat"], tail["n_out"], tail["tail_width"], tail["connector_width"],
         tail["cable_length"], tail["total_length"])
 
-    # Union robustness: the cable rect's attachment edge lies exactly ON the
+    # Union robustness: the cable rect's attachment edge lies exactly on the
     # outline's cable edge, and unioning polygons that touch along a shared
     # segment (instead of overlapping) can leave a zero-width seam retraced
-    # by the result's exterior ring. Observed on the fingertip wrap band in
-    # fixed mode: board_poly's exterior doubled back along the cable edge, a
-    # phantom boundary ran through the middle of the board there, and the
-    # board-edge DRC flagged four interior row wires crossing into the tail
-    # as 0.04-0.12mm edge violations (the exported Edge.Cuts was fine — the
-    # tail shoulders cover that copper). A 1um inflation of the cable rect
+    # by the result's exterior ring. board_poly's exterior then doubles back
+    # along the cable edge, a phantom boundary runs through the board there,
+    # and the board-edge DRC flags interior row wires crossing into the tail
+    # as edge violations (the exported Edge.Cuts is unaffected — the tail
+    # shoulders cover that copper). A 1um inflation of the cable rect
     # turns edge-contact into area overlap, which unions cleanly; 1um is
     # far below every clearance and the export's own precision. cable_poly
     # itself stays exact — the export and relief logic use it directly.
@@ -448,19 +448,17 @@ def layout_fixed_shape_keepout(
     wherever it started rather than the tightest one, and the result depends on
     the starting width in a way that is backwards: a narrower start packs a
     denser first iteration, whose row count inflates the modelled demand, and
-    np.maximum can never give that width back. Measured on a 70x50 board,
-    starting at 1.0mm converged to a profile 3.80mm wide holding 131 pixels,
-    while starting at 3.0mm converged to 3.00mm holding 135 — the narrower start
-    produced the wider band. So the ratchet is wrapped in a relaxation loop:
+    np.maximum can never give that width back, so a narrower start can converge
+    to a wider band. The ratchet is therefore wrapped in a relaxation loop:
     once it converges, the demand is recomputed from the layout that actually
     resulted (which needs less room than the transient dense one that set the
     width), the band is allowed to drop to it, and the ratchet runs again. Every
     converged candidate is scored and the densest is returned, so this can only
     ever match or beat the single-pass result.
 
-    Returns (layout, profile, info). (The hug router does NOT use this — see
+    Returns (layout, profile, info). (The hug router does not use this — see
     layout_fixed_hug_keepout: its exact plan-driven demand needs no fixed
-    point, and this ratchet death-spirals with joined nets.)
+    point, and with joined nets this ratchet can keep shrinking the field.)
     """
     outline_poly = make_polygon(outline_xy)
     user_fill_poly = make_polygon(fill_xy) if fill_xy is not None else None
@@ -520,10 +518,10 @@ def layout_fixed_shape_keepout(
     # Because the ratchet is path-dependent, *where the search starts* changes
     # which fixed point it lands on, and neither start dominates: a floor of 0
     # lets the model taper freely and usually wins, but on some boards the dense
-    # first iteration inflates the demand enough that starting from the old flat
+    # first iteration inflates the demand enough that starting from a flat
     # routing_margin_mm ring ends up denser. Carving is cheap next to routing —
-    # it is the same pack/measure loop with no router involved — so try both and
-    # keep whichever packs more, rather than committing to one and hoping.
+    # it is the same pack/measure loop with no router involved — so both starts
+    # are tried and the one that packs more is kept.
     if seed_profile is not None:
         starts = [profile]
     else:
@@ -573,20 +571,20 @@ def layout_fixed_shape_keepout(
 
 
 # Lattice phases tried per axis when packing a carved region (hug fixed mode).
-# Which grid rows survive the carve is quantization luck — measured swings of
-# tens of taxels between phases on the same band — and a phase shift adds no
-# nets (region ⊂ outline, so counts never exceed what the band was sized for).
+# Which grid rows survive the carve depends strongly on the lattice phase, and
+# a phase shift adds no nets (region ⊂ outline, so counts never exceed what the
+# band was sized for).
 PHASE_STEPS = 5
 
 
 def _largest_grid_component(placements, params):
     """Indices of the largest connected component of a packed grid.
 
-    The carved REGION can be connected while the packed GRID is not (a waist
+    The carved region can be connected while the packed grid is not (a waist
     too narrow for a pixel). The hug plan is only sound over one connected
     field — terminals of stranded fragments project onto the main contour and
-    its laminarity breaks (measured on the carved U_down: 3 grid islands, 6
-    plan warnings, real ROW crossings in the output).
+    its laminarity breaks, which produces plan warnings and row-wire crossings
+    in the output.
     """
     from shapely.geometry import box as _box
     if len(placements) == 0:
@@ -594,12 +592,11 @@ def _largest_grid_component(placements, params):
     hx, hy = params.pitch_x_mm / 2, params.pitch_y_mm / 2
     # Grow each cell by a hair before the union. Neighbouring cells are meant
     # to share an edge exactly, but the lattice coordinates are accumulated in
-    # floating point, so a shared edge lands ~1e-15mm apart (measured on the T
-    # preset: -12.147011318444399 vs -12.147011318444397). unary_union will not
-    # merge across that, the field reports as two components, and everything
-    # outside the larger one is silently discarded -- the T lost its whole
-    # top-left arm (21 of 123 taxels) to a zero-width seam. The epsilon is far
-    # below any real gap: a genuine break is at least a pitch wide.
+    # floating point, so a shared edge can land ~1e-15mm apart. unary_union
+    # does not merge across that, the field reports as two components, and
+    # everything outside the larger one is silently discarded -- a whole arm
+    # of the field can be lost to a zero-width seam. The epsilon is far below
+    # any real gap: a genuine break is at least a pitch wide.
     eps = 1e-6
     merged = unary_union([
         _box(x - hx - eps, y - hy - eps, x + hx + eps, y + hy + eps)
@@ -612,7 +609,7 @@ def _largest_grid_component(placements, params):
 
 def _best_phase_placements(region_xy, params) -> np.ndarray | None:
     """Pack the carved region at several lattice phases, keep the densest
-    CONNECTED grid. Returns pixel centers (largest component only), or None."""
+    connected grid. Returns pixel centers (largest component only), or None."""
     best = None
     for i in range(PHASE_STEPS):
         for j in range(PHASE_STEPS):
@@ -641,16 +638,16 @@ def layout_fixed_hug_keepout(
 ) -> tuple[Layout, object, dict]:
     """Fixed-outline layout for the hug router: one-shot exact carve.
 
-    The legacy ratchet (layout_fixed_shape_keepout) re-measures demand on each
-    shrunken field and only ever grows — with the hug router's joined nets the
-    net structure shifts under it each iteration (segments merge/split, link
-    corridors move) and the ratchet death-spirals on concave shapes (measured:
-    the C collapsed 74 -> 14 taxels). The hug plan's demand is exact, so no
-    fixed point is needed: compute the band ONCE from the full max-pack
-    layout's routing plan, carve once, pack once. Under-reservation from the
-    carve changing the net structure is corrected by the caller's existing
-    escape-driven retry (grow_near + re-carve via seed_profile), which is
-    local instead of global.
+    The ratchet used with the other routers (layout_fixed_shape_keepout)
+    re-measures demand on each shrunken field and only ever grows — with the
+    hug router's joined nets the net structure shifts under it each iteration
+    (segments merge/split, link corridors move), and on concave shapes the
+    ratchet keeps widening the band until most of the field is lost. The hug
+    plan's demand is exact, so no fixed point is needed: compute the band once
+    from the full max-pack layout's routing plan, carve once, pack once.
+    Under-reservation from the carve changing the net structure is corrected
+    by the caller's escape-driven retry (grow_near + re-carve via
+    seed_profile), which is local instead of global.
     """
     from .route_hug import hug_keepout_widths
 
@@ -817,7 +814,7 @@ def assign_rowcol_nets_segmented(P: np.ndarray, pitch_x: float, pitch_y: float):
 
 
 def assign_rowcol_nets_joined(P: np.ndarray, pitch_x: float, pitch_y: float):
-    """Assign ROW/COL net names where a gap does NOT split the net (hug mode).
+    """Assign ROW/COL net names where a gap does not split the net (hug mode).
 
     Reuses the segmented assignment's clustering exactly, then strips the
     segment suffix: COL_{c}_{0..k} all become COL_{c}. The hug router later
@@ -838,10 +835,9 @@ def assign_rowcol_nets_joined(P: np.ndarray, pitch_x: float, pitch_y: float):
 
 
 # Connectors auto-selected by select_connector_for_nets(): every increment of
-# 10 from 20 to 70. 30/40/50/60/70/20 all use the real mechanically-detailed
-# footprint (latch ear, chamfered lead-in, stiffener zone) generated by
-# `Connector Footprints/gen_fpc_tab.py`; a 32-pos footprint exists on disk
-# (an earlier one-off) but is intentionally excluded from selection here.
+# 10 from 20 to 70. Each uses the mechanically detailed footprint in
+# connectors/ (latch ear, chamfered lead-in, stiffener zone). connectors/ also
+# holds a 32-pos footprint, which is intentionally excluded from selection here.
 CONNECTOR_AUTO_OPTIONS = [20, 30, 40, 50, 60, 70]
 
 # Larger sizes in the same family, offered only for an explicit manual
@@ -892,7 +888,7 @@ CONNECTOR_FIXED_NC = {
 def connector_segment_pad_ranges(conn_pos: int):
     """Return (left_pads, right_pads, fixed_nc) for connector position count.
 
-    The boundary between the two segments IS the connector's centre line:
+    The boundary between the two segments is the connector's centre line:
     build_pad_to_net_map_centered packs the row nets up against it from one
     side and the column nets from the other, and apply_tail_extension centres
     the tail corridor and the connector body on the same split point. So the
@@ -900,10 +896,8 @@ def connector_segment_pad_ranges(conn_pos: int):
     silently slides the whole used-pad block off the connector housing (and
     with it the wire bundle), by half the imbalance.
 
-    Derived from the pad count rather than tabulated per size: the table this
-    replaced had 40-pos split 16/24 and 50-pos split 26/24, which pushed a
-    40-pos board's nets 2.00mm off the connector's centre and a 50-pos board's
-    0.50mm off. Every other size in the table was already exactly centred.
+    Derived from the pad count rather than tabulated per size, so every size
+    splits exactly about its centre.
     """
     if conn_pos not in CONNECTOR_FAMILY and conn_pos != 32:
         raise ValueError(f"No segment definition for connector {conn_pos}")
@@ -1003,14 +997,14 @@ def resize_pad_to_net_map(old_conn_pos: int, new_conn_pos: int, swap: bool, pad_
     """Rebuild pad_to_net for a different connector size on an already-routed
     board — used by the lightweight "use a bigger connector" operation.
 
-    Deliberately does NOT recompute `swap`: it must stay exactly as routed,
+    Deliberately does not recompute `swap`: it must stay exactly as routed,
     since flipping it would swap which physical side row vs. column nets
     land on and invalidate every existing route. Net order within each side
     is reconstructed from the *existing* pad_to_net (sorted by old pad
     number) rather than re-derived from packing/geometry, so this is a pure
     pad-number remap — physical positions of already-used pads are
-    unchanged by connector size (see the "connector centered-pad geometry"
-    project note): only pad *numbers* shift, and only unused/NC pads move.
+    unchanged by connector size: only pad *numbers* shift, and only
+    unused/NC pads move.
     """
     if new_conn_pos not in CONNECTOR_FAMILY:
         raise ValueError(f"connector_pos_override must be one of {CONNECTOR_FAMILY}, got {new_conn_pos}.")

@@ -88,11 +88,8 @@ _UNROUTED_MSG = (
     "Enlarge the outline, coarsen the pitch, or switch to grow-board mode.")
 
 MAX_DXF_UPLOAD_BYTES = 10 * 1024 * 1024
-# Guard for the STL-upload endpoints (/unroll-mesh, /grow-region,
-# /unroll-mesh-chain). This constant was accidentally deleted while those
-# endpoints were dormant (the v2 frontend didn't call them), which made all
-# three 500 with a NameError on any request — keep it defined even if the
-# endpoints go unused again.
+# Upload limit for the STL endpoints (/unroll-mesh, /grow-region,
+# /unroll-mesh-chain).
 MAX_STL_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
@@ -100,11 +97,12 @@ class JsonErrors:
     """Unhandled exceptions as a JSON 500 that still carries the CORS headers.
 
     Starlette turns an exception no handler caught into a plain-text 500 in
-    ServerErrorMiddleware, which sits OUTSIDE every user middleware, CORS
-    included. The hosted page is cross-origin (GitHub Pages -> Render), so that
-    500 reached the browser without Access-Control-Allow-Origin and surfaced as
-    "TypeError: Failed to fetch", indistinguishable from the server being down.
-    Registered before CORSMiddleware so CORS wraps it.
+    ServerErrorMiddleware, which sits outside every user middleware, CORS
+    included. The hosted page is cross-origin (GitHub Pages -> the hosted API
+    server), so that 500 would reach the browser without
+    Access-Control-Allow-Origin and surface as "TypeError: Failed to fetch",
+    indistinguishable from the server being down. Registered before
+    CORSMiddleware so CORS wraps it.
     """
 
     def __init__(self, app):
@@ -374,20 +372,6 @@ class OpenDesignResponse(BaseModel):
 
 
 
-# =========================================================================
-# Server-side STL/3D mesh unrolling.
-#
-# Carried forward from the previous deployment rather than dropped. The v2
-# frontend unfolds STLs in the browser (frontend/face-select.js) and never
-# calls these, so they are dormant as far as the shipped UI is concerned —
-# but they are a different implementation, not an older one: strut-connected
-# multi-region chains and manual corner picking live here and have no
-# client-side equivalent. Keeping them deployed means that work stays
-# reachable (and testable) instead of only existing in git history.
-#
-# Backed by pipeline/mesh_unroll.py.
-# =========================================================================
-
 class UnrollMeshResponse(BaseModel):
     outline: list[list[float]]
     region_face_count: int
@@ -397,20 +381,19 @@ class UnrollMeshResponse(BaseModel):
     # Populated only when this response used a straight-strut connection
     # (the two clicked regions don't touch on the mesh) — each region's own
     # boundary loop as [vertex_index, x, y, z] points, in original mesh
-    # vertex indices, so the frontend can offer a "connect corners
+    # vertex indices, so a client can offer a "connect corners
     # manually" flow without a second round trip to re-fetch this data.
     strut_loop1: list[list[float]] | None = None
     strut_loop2: list[list[float]] | None = None
     # outline[i]'s original mesh vertex index, parallel to outline — only
     # populated once a strut connection has happened (empty otherwise, e.g.
     # a pure mesh-union selection, which can always be re-derived from
-    # region_face_indices alone). Once non-empty, the frontend echoes both
+    # region_face_indices alone). Once non-empty, the caller echoes both
     # this and outline back as prior_outline/prior_outline_vertices on the
     # *next* shift-click, so a 3rd (or later) region can be strut-connected
-    # onto this same running chain — a strut-joined outline isn't a real
-    # mesh region anymore, so it can't be re-unfolded from a face selection
-    # the way a pure mesh-union chain can. See NOTES.md's "STL/3D unroll"
-    # section.
+    # onto this same running chain — a strut-joined outline is not a real
+    # mesh region, so it cannot be re-unfolded from a face selection the
+    # way a pure mesh-union chain can.
     outline_vertex_indices: list[int] = []
 
 
@@ -443,7 +426,7 @@ class UnrollMeshChainResponse(BaseModel):
     connections: list[ChainConnection]
     # Parallel to click_face_indices: each click's own region's
     # developability disagreement (mm), measured before any joining. Near
-    # zero = that surface flattens exactly; large = genuinely doubly curved
+    # zero = that surface flattens exactly; large = doubly curved
     # there, so the UI can point at the specific surface to cut flatter.
     region_developability_mm: list[float] = []
     # corners_first mode only: the 0-based gap index of the first strut
@@ -514,10 +497,10 @@ MAX_ROUTE_RETRIES = 4
 
 
 def _resolve_board_mode(board_mode: str | None, auto_expand_board: bool) -> str:
-    """Resolve the requested board mode, tolerating pre-board_mode clients.
+    """Resolve the requested board mode, accepting requests without board_mode.
 
-    Older requests and stored edit_data carry only the auto_expand_board /
-    preserve_sensors booleans; map those onto the two modes that exist now.
+    Requests and stored edit_data without board_mode carry only the
+    auto_expand_board / preserve_sensors booleans; map those onto the two modes.
     """
     if board_mode is None:
         return "expand" if auto_expand_board else "fixed_keepout"
@@ -529,11 +512,11 @@ def _resolve_board_mode(board_mode: str | None, auto_expand_board: bool) -> str:
 def _params_for_board_mode(params: Params, board_mode: str) -> Params:
     """Derive the internal preserve_sensors/auto_expand_board flags from the mode.
 
-    Neither flag is user-facing any more: expand mode preserves sensors and
-    grows the outline; fixed mode preserves sensors and never grows it (the
-    sensor grid is instead shrunk up front by the keep-out carve). The routers
-    still read preserve_sensors, and expand mode's trial probe still flips it
-    off deliberately — see the /generate expand branch.
+    Neither flag is user-facing: expand mode preserves sensors and grows the
+    outline; fixed mode preserves sensors and never grows it (the sensor grid
+    is instead shrunk up front by the keep-out carve). The routers read
+    preserve_sensors, and expand mode's trial probe flips it off
+    deliberately — see the /generate expand branch.
     """
     return replace(
         params,
@@ -588,8 +571,8 @@ def _route_escapes(layout: Layout, routes: list[Route], params: Params) -> list[
         line = LineString(P)
 
         # Exact geometry, not point sampling: drc_check measures segment-to-edge
-        # distance continuously, so a sampled detector silently passes boards it
-        # then flags (a 22 um near-miss between 0.5mm samples, in practice).
+        # distance continuously, so a sampled detector would pass boards that
+        # drc_check then flags (a near-miss can fall between samples).
         outside = line.difference(board)
         if not outside.is_empty:
             for piece in getattr(outside, "geoms", [outside]):
@@ -622,21 +605,21 @@ MAX_EDGE_PRUNE_ROUNDS = 4
 def _prune_edge_escapes(layout: Layout, outline_xy: np.ndarray, params: Params,
                         col_routes: list[Route], row_routes: list[Route], hug: bool,
                         problem_pix=frozenset()):
-    """Fixed-outline mode's last word on copper that leaves the board.
+    """Fixed-outline mode's final step for copper that leaves the board.
 
     The keep-out retry can only reserve room and re-pack; it cannot move a
     wire whose path does not depend on the packing — e.g. a fan wire that
     rises straight from its connector pad through a waist narrower than the
-    bundle (the eight preset at 3mm: COL_12 ran 0.25mm outside the waist on
-    every attempt and shipped). Whatever still escapes after it, is dropped:
-    the escaping net's wire goes, and so do all of that net's pixels, then
-    the smaller field is re-routed — the same contract as a refused net in
-    grow mode. Repeats until clean or out of rounds.
+    bundle, and so runs outside the waist on every attempt. Whatever still
+    escapes after it is dropped: the escaping net's wire goes, and so do all
+    of that net's pixels, then the smaller field is re-routed — the same
+    contract as a refused net in grow mode. Repeats until clean or out of
+    rounds.
 
     Hug mode drops the pixels of nets the router reported failed
     (`problem_pix`, then each re-route's) the same way: when no attempt is
-    clean, the best one would otherwise ship nets known not to reach the
-    connector — U at 2mm (4Lsep) shipped four, six unconnected items in KiCad.
+    clean, the best one would otherwise output nets known not to reach the
+    connector, which KiCad reports as unconnected items.
 
     Returns (layout, col_routes, row_routes, dropped_escaping, dropped_failed,
     escapes, routing_problem_pix, incomplete).
@@ -687,17 +670,17 @@ def _fixed_keepout_attempt_params(params: Params) -> list[Params]:
 
     The shape-following model in pipeline/keepout.py is what should decide the
     band width, so the first attempt gives it no floor at all and lets it ask
-    for exactly what the wiring needs. That is markedly denser than the old flat
-    routing_margin_mm ring — measured across seven outlines, +8% to +33% sensors
-    with copper-to-edge clearance still several times the DRC minimum.
+    for exactly what the wiring needs. That is markedly denser than a flat
+    routing_margin_mm ring, with copper-to-edge clearance still several times
+    the DRC minimum.
 
     It is not universally safe, though: on a board whose aspect ratio leaves the
-    row router very little height to fan out in (a 90x22 test case), packing to
-    the model's own number produced traces that crossed. Rather than reserve for
-    that everywhere — which is exactly the over-conservatism this replaced — the
-    dense attempt is *verified*, and a board that comes back with real defects
-    falls back to the old conservative floor. So the density is taken only where
-    it demonstrably routes, and no board ends up worse than it was before.
+    row router very little height to fan out in, packing to the model's own
+    number can produce traces that cross. Rather than reserve for that
+    everywhere, the dense attempt is *verified*, and a board that comes back
+    with real defects falls back to the conservative routing_margin_mm floor.
+    So the density is taken only where it demonstrably routes, and no board
+    ends up worse than the conservative floor alone would make it.
 
     An explicit wiring_keepout_floor_mm from the caller is honoured as-is and
     disables the search.
@@ -711,22 +694,20 @@ def _fixed_keepout_attempt_params(params: Params) -> list[Params]:
 
 
 def _drc_crowding(col_routes: list[Route], row_routes: list[Route], params: Params):
-    """Trace-to-trace DRC failures, as (point, shortfall_mm) keep-out growth hints.
+    """Trace-to-trace DRC failures, as (point, shortfall_mm) pairs.
 
-    The fixed-mode retry loop originally judged success on unrouted pixels and
-    copper leaving Edge.Cuts alone, so a board whose traces merely *crossed each
-    other* was reported clean and shipped. That was invisible while the keep-out
-    floor was a flat 3.0mm — the band was wide enough that the routers were never
-    squeezed. Packing to what the shape-following model actually asks for makes
-    the corridors as tight as the model allows, which is exactly when the row
-    router starts running out of lanes, so the loop has to see this signal too.
+    Unrouted pixels and copper leaving Edge.Cuts are not the only failures in
+    fixed-outline mode: a board whose traces merely *cross each other* passes
+    both of those checks. Packing to what the shape-following model asks for
+    makes the corridors as tight as the model allows, which is exactly when the
+    row router starts running out of lanes, so the fixed-mode attempts have to
+    see this signal too.
 
-    NOT fed back into _grow_keepout_for_failures: widening the band in response
+    Not fed back into _grow_keepout_for_failures: widening the band in response
     to a crossing re-packs the array, which re-routes everything and tends to
-    move the congestion rather than relieve it. Measured on a 90x22 board that
-    made it worse, not better (92 pixels/3 violations -> 75 pixels/10). It is
-    used instead as the trigger for the conservative fall-back in
-    _fixed_keepout_layout_and_routes.
+    move the congestion rather than relieve it. It counts instead toward each
+    attempt's defect score in generate()'s fixed-outline branch, which is what
+    selects the conservative keep-out floor over the dense one.
     """
     violations = drc_check(
         col_routes, row_routes, params.trace_w_mm, params.clearance_mm)
@@ -753,15 +734,14 @@ _FIXED_CARVE_KEYS = ("board_mode", "fixed_board_routing", "fixed_keepout_min_mm"
 def _drop_near_escapes(layout: Layout, outline_xy, params: Params, escapes, join_split_nets,
                        max_drop: int = 3):
     """Before the keep-out regrows: drop the taxel(s) nearest the escapes and
-    re-route on the SAME grid.
+    re-route on the same grid.
 
     Regrowing the band means re-packing, and the re-pack is free to choose a
     whole new lattice: a near-miss then costs far more than the taxel next to
-    it. Measured on the T at 3mm, 4 copper layers: the densest packing holds
-    127 taxels with one column wire 0.055mm too close to the tail shoulder;
-    regrow + re-pack ships 121, dropping the one taxel next to the escape
-    keeps 126, clean. Tries 1..max_drop taxels, nearest first; returns the
-    first clean (layout, col_routes, row_routes, plan, incomplete), or None.
+    it, since the re-packed grid can lose several taxels where dropping the one
+    beside the escape loses only that one. Tries 1..max_drop taxels, nearest
+    first; returns the first clean (layout, col_routes, row_routes, plan,
+    incomplete), or None.
     The caller still runs the regrow and keeps whichever clean result holds
     more taxels, so this can only add."""
     P = np.asarray(layout.placements_xy, dtype=float)
@@ -795,7 +775,7 @@ def _grow_keepout_for_failures(profile, layout: Layout, problem_pix: set,
     An escaping wire names its own trouble spot, so the boundary near it is
     widened by however far it overran plus a trace pitch of headroom. A pixel
     the router could not wire names a spot too — the boundary nearest it. Widths
-    elsewhere are untouched, which is the whole point of a shape-following
+    elsewhere are untouched, which is the purpose of a shape-following
     keep-out: the top of the board should not pay for congestion at the tail.
     """
     step = params.trace_w_mm + params.clearance_mm
@@ -825,12 +805,12 @@ def _grow_keepout_for_failures(profile, layout: Layout, problem_pix: set,
 def _without_expansion_padding(params: Params) -> Params:
     """Make auto-expand off mean no generated route/follow padding.
 
-    board_edge_clear_mm is deliberately NOT zeroed here. It is a manufacturing
+    board_edge_clear_mm is deliberately not zeroed here. It is a manufacturing
     clearance between copper and the board cut, not board-growth padding: the
     routers use it to steer away from the edge (route_columns.py /
     route_rows.py) and drc_check only tests copper-to-edge clearance when it is
-    non-zero. Zeroing it in fixed-outline mode let traces sit on — and run past
-    — the Edge.Cuts line with a clean DRC report.
+    non-zero. Zeroing it in fixed-outline mode would let traces sit on — and run
+    past — the Edge.Cuts line with a clean DRC report.
     """
     if params.auto_expand_board:
         return params
@@ -903,16 +883,16 @@ def _build_edit_data(
         }
 
     return {
-        # Bumped only when a key changes MEANING; see export/design.py.
+        # Bumped only when a key changes meaning; see export/design.py.
         "version": 1,
         "schema": DESIGN_SCHEMA,
         "pipeline": PIPELINE_VERSION,
         "outline": np.asarray(outline_xy, dtype=float).tolist(),
         # The sensorize zone, in the same rotated frame as "outline". Held
         # separately from "sensor_outline", which layout.py sets to the
-        # outline rather than to the fill region -- so before this key existed
-        # a fill region was silently dropped by every round trip through
-        # edit_data (redo-padding, a connector swap, an edited export).
+        # outline rather than to the fill region -- so without this key a
+        # fill region would be lost by every round trip through edit_data
+        # (redo-padding, a connector swap, an edited export).
         "fill_region": (np.asarray(fill_xy, dtype=float).tolist()
                         if fill_xy is not None and len(np.asarray(fill_xy)) >= 3 else None),
         "sensor_outline": np.asarray(layout.sensor_outline_xy if layout.sensor_outline_xy is not None else outline_xy, dtype=float).tolist(),
@@ -950,7 +930,7 @@ def _layout_from_edit_data(edit_data: dict) -> tuple[Layout, np.ndarray, Params,
     outline_xy = np.array(edit_data["outline"], dtype=float)
     final_outline_xy = np.array(edit_data.get("final_outline", edit_data["outline"]), dtype=float)
     stored_params = drop_removed_params(dict(edit_data["params"]))
-    # edit_data written before board_mode existed carries only the booleans.
+    # edit_data without board_mode carries only the booleans.
     stored_params["board_mode"] = _resolve_board_mode(
         stored_params.get("board_mode"), bool(stored_params.get("auto_expand_board", True)))
     params = Params(**stored_params)
@@ -970,7 +950,7 @@ def _layout_from_edit_data(edit_data: dict) -> tuple[Layout, np.ndarray, Params,
     else:
         # 1um inflation before the union — edge-contact unions can leave a
         # phantom zero-width seam in the exterior ring; see the comment at
-        # layout.py's base_board_poly construction for the observed failure.
+        # layout.py's base_board_poly construction for the failure it causes.
         # A narrow tail whose connector moved to a drawn extension leaves its
         # landing behind (follow_padding.cable_without_landing).
         board_cable = cable_poly
@@ -979,8 +959,8 @@ def _layout_from_edit_data(edit_data: dict) -> tuple[Layout, np.ndarray, Params,
         board_poly = (unary_union([outline_poly, board_cable.buffer(0.001, join_style=2)])
                       if cable_poly else outline_poly)
         # ...and the shoulder fill that construction adds beside a tail wider
-        # than the cable edge. Left out, every edited export of a fixed board
-        # with a wide connector put the fan wires there outside the board.
+        # than the cable edge. Without it, every edited export of a fixed board
+        # with a wide connector would put the fan wires there outside the board.
         if cable_poly and tail_data.get("width_mm") and tail_data.get("t_hat") and tail_data.get("n_out"):
             strip_mid = (0.5 * (outline_xy[0] + outline_xy[1])
                          + tail_offset_mm(tail_data) * np.asarray(tail_data["t_hat"], dtype=float))
@@ -1014,15 +994,12 @@ def _layout_from_edit_data(edit_data: dict) -> tuple[Layout, np.ndarray, Params,
 
 def _resize_connector_pads(layout: Layout, new_conn_pos: int, routes: list[Route]) -> bool:
     """Swap layout.connector_pos to a different size on an already-routed
-    board, without re-packing or re-routing (see SESSION_NOTES.md at the
-    repo root, "Use a bigger connector" section, for the full reasoning and
-    the user-confirmed design this implements).
+    board, without re-packing or re-routing.
 
     Physical pad *positions* for already-used pads are unchanged by
     connector size (only pad *numbers* shift — see resize_pad_to_net_map's
-    docstring / the "connector centered-pad geometry" project note for the
-    proof). But each Route object carries its own pad_num, assigned at the
-    original routing pass, and apply_tail_extension (for boards with a
+    docstring). But each Route object carries its own pad_num, assigned at
+    the routing pass, and apply_tail_extension (for boards with a
     custom tail path) uses pad_num to compute each route's lane offset
     relative to the connector's center. If pad_num is left stale after a
     resize, that offset is computed against the *new* center using the
@@ -1030,8 +1007,8 @@ def _resize_connector_pads(layout: Layout, new_conn_pos: int, routes: list[Route
     every route's lane silently shifts. Reassigning each route's pad_num to
     match its net's new pad restores that relationship exactly, which is
     what keeps routes physically unmoved (mathematically the same offset
-    as pre-resize) — this is not a routing change, it's correcting the
-    bookkeeping so no *accidental* routing change happens.
+    as pre-resize). This is not a routing change but a bookkeeping
+    correction, so that no *accidental* routing change happens.
 
     Returns True if a resize actually happened. Closing the board outline
     around the new, wider connector body is a separate, later step — see
@@ -1052,8 +1029,8 @@ def _resize_connector_pads(layout: Layout, new_conn_pos: int, routes: list[Route
     layout.connector_pos = int(new_conn_pos)
     # Remember that this board's connector was manually enlarged. layout.tail is
     # serialized into edit_data, so every later request can tell that the board
-    # still needs its connector shoulder even though the size is no longer
-    # *changing* in that request. See _apply_connector_shoulder_if_needed.
+    # still needs its connector shoulder even though the size does not
+    # change in that request. See _apply_connector_shoulder_if_needed.
     layout.tail["connector_pos_override"] = int(new_conn_pos)
 
     # apply_main_follow_padding caches its "main shell + tail pieces" union
@@ -1071,8 +1048,8 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
     containment, follow-padding shrink-wrap) has already produced the final
     layout.board_poly — those passes are connector-width-agnostic and would
     otherwise leave the wider connector's body sticking out past the cut
-    outline. Deliberately does NOT widen the cable/tail rectangle itself
-    (that would blow out a user-chosen, purposely slim cable/tail width) —
+    outline. Deliberately does not widen the cable/tail rectangle itself
+    (that would override a user-chosen, purposely slim cable/tail width) —
     instead unions in a single rectangle covering just the connector-body
     zone (not the cable/tail run leading up to it) at the new connector's
     full width, overlapping 1mm into the existing board so the union always
@@ -1087,7 +1064,7 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
     # Use the connector's *real* open-edge width (read straight from its
     # .kicad_mod file) rather than the CONNECTOR_BODY_ABOVE/BELOW_MM formula
     # below, which doesn't exactly match every real footprint — a mismatch
-    # there is what left stitched_outline_segments (export/kicad_pcb.py,
+    # there leaves stitched_outline_segments (export/kicad_pcb.py,
     # which connects the board outline to this same real open edge when
     # emitting the physical connector footprint) bridging a gap with a
     # stray diagonal instead of a clean step.
@@ -1105,7 +1082,7 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
         # — the corridor's flat cap sits exactly there) on the near side,
         # and past the connector's physical tip (CONNECTOR_BODY_BELOW_MM
         # beyond pad_row_center) on the far side. Stopping exactly at the
-        # open edge on the far side left a sliver of narrow, un-widened
+        # open edge on the far side leaves a sliver of narrow, un-widened
         # corridor between it and the tip (the corridor's cap point is
         # slightly *past* the open edge, not before it), producing a
         # zigzag; stopping at a fixed offset from pad_row_center alone on
@@ -1126,11 +1103,11 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
         shoulder = Polygon([A, B, C, D])
     else:
         # Exactly the new tab's width, so the board's edge runs straight into
-        # the footprint's open endpoints. Padded past it (it used to add
-        # trace_w/2 + board_edge_clear_mm, for wires thought to land at the tab
-        # edge), the shoulder ran on beside the tab and its side lines were cut
-        # as slits. The wires keep the pads they were routed to, one pad pitch
-        # or more inside the old, narrower tab.
+        # the footprint's open endpoints. Padded past it (e.g. by
+        # trace_w/2 + board_edge_clear_mm), the shoulder would run on beside
+        # the tab and its side lines would be cut as slits. The wires keep the
+        # pads they were routed to, one pad pitch or more inside the narrower
+        # tab they were routed for.
         half_w = dims["tab_tip_width_mm"] / 2
         if ext:
             center = np.asarray(ext["pad_row_center"], dtype=float)
@@ -1174,8 +1151,8 @@ def _close_connector_shoulders(layout: Layout, outline_xy: np.ndarray, params: P
             layout.board_poly, fillet_r, zone=shoulder.buffer(3 * fillet_r))
         # Only its area: where a tail extension meets the shoulder at an
         # angle the infill can come back with a bare line in it, which belongs
-        # neither in the board nor in the replayed lock below (a bent tail
-        # then a bigger connector crashed the next export on that line).
+        # neither in the board nor in the replayed lock below (the next
+        # export would fail on that line).
         areas = [g for g in getattr(infill, "geoms", [infill])
                  if g.geom_type == "Polygon" and not g.is_empty]
         if areas:
@@ -1228,19 +1205,16 @@ def _apply_connector_shoulder_if_needed(layout: Layout, outline_xy: np.ndarray,
                                         params: Params, override: int | None = None) -> None:
     """Re-close the board around a manually enlarged connector, every request.
 
-    This used to run only when the connector size actually *changed* in the
-    current request (`if resized:` in /redo-padding, and not at all in
-    /export-edited). That left a hole in the obvious order of operations: grow
-    to a 70-pos connector, then add a tail extension. The second step does not
-    change the connector size, so _resize_connector_pads returns False and the
-    shoulder was never rebuilt -- and the one from the first step was discarded
-    too, because apply_main_follow_padding only reuses its cached tail geometry
-    when the tail-extension state matches what was cached (see
-    _locked_tail_pieces), which it no longer did.
-
-    The result was a tail that stayed cable-width all the way to the tip with no
-    landing for the connector body, so the exporter bridged the narrow board
-    edge to the connector's much wider open edge with two long diagonals.
+    Runs whenever the board carries an enlarged connector, not only when the
+    current request changes its size. A later request that keeps the size but
+    changes the tail (e.g. adds a tail extension) still needs the shoulder:
+    _resize_connector_pads returns False there, and apply_main_follow_padding
+    reuses its cached tail geometry only when the tail-extension state matches
+    what was cached (see _locked_tail_pieces), so without this call the
+    shoulder is lost. The tail then stays cable-width all the way to the tip
+    with no landing for the connector body, and the exporter bridges the
+    narrow board edge to the connector's much wider open edge with two long
+    diagonals.
 
     Must run after every other outline-shaping pass, for the reason given in
     _close_connector_shoulders' own docstring.
@@ -1503,12 +1477,11 @@ def _manufacturing_files_from_kicad(pcb_text: str, copper_layers: int = 2) -> tu
 
             # F.Silkscreen carries the design-name label; B.Silkscreen
             # carries the taxel-core QR and the registration grid. Both are
-            # asked for separately because the board file still uses the
+            # asked for separately because the board file uses the
             # pre-KiCad-6 layer names (F.SilkS / B.SilkS) and an older
-            # kicad-cli may not accept the current ones -- and losing the whole
-            # Gerber set over a legend would be a bad trade. A refused layer
-            # costs the marks, not the board: the retry plots exactly what this
-            # always plotted.
+            # kicad-cli may not accept the current ones, and the whole Gerber
+            # set must not be lost over a legend. A refused layer costs the
+            # marks, not the board: the retry plots the base layers only.
             try:
                 plot(base_layers + ",F.Silkscreen,B.Silkscreen")
             except subprocess.CalledProcessError:
@@ -1556,9 +1529,8 @@ def _drop_connector_zone_edge_flags(violations, layout, outline_xy, params, conn
     removes from the exported outline (the connector body occupies that area).
     The zone is the connector's own placed footprint — pads plus its Edge.Cuts
     outline — buffered 0.6mm: the flags land within the copper-to-edge check
-    distance (0.3mm) of the removed cap, which can sit just outside the pad
-    hull alone (measured 1.74mm out on a long custom tail, exactly on the pad
-    hull for the short auto tail). Trace-to-trace violations are never
+    distance (0.3mm) of the removed cap, which can sit outside the pad hull
+    alone (on a long custom tail). Trace-to-trace violations are never
     touched."""
     if not connector_dir:
         return violations
@@ -1630,10 +1602,10 @@ def _outputs_with_connector_tail(
     """_build_outputs, but a board with no user tail extension is exported
     through a synthetic AUTO_TAIL_EXTENSION_MM one. Without it, traces stop at
     the pad row ~3.3mm short of the connector pad drills and the board cap is
-    not stitched to the connector outline. Applied to deep COPIES only: the
+    not stitched to the connector outline. Applied to deep copies only: the
     caller's layout/routes (and therefore edit_data, the route editor, and the
-    draw-a-tail prompt) are untouched, so a user extension later starts from
-    pristine routes exactly as before."""
+    draw-a-tail prompt) are untouched, so a user extension added later starts
+    from the unmodified routes."""
     sync_pads_to_feeds(layout, row_routes)
     ext = layout.tail.get("tail_extension") if layout.tail else None
     if ext and ext.get("enabled"):
@@ -1931,13 +1903,12 @@ def generate(req: GenerateRequest):
             outline_xy = rotate_for_cable(outline_xy)
 
         # A cable edge that is an interior chord — the outline continues
-        # BELOW it, so the connector sits in a bay with board (and sensors)
-        # on three sides — is a topology neither router orders cleanly
-        # today: the hug plan goes non-planar (its refusal guard then ships
-        # a drastically reduced board) and legacy has no corridors out of
-        # the bay. Found live: an octagon whose chord cable edge produced a
-        # 1-sensor board, while the SAME shape with the cable edge on the
-        # outer boundary routed 119 sensors DRC 0. Say so up front.
+        # below it, so the connector sits in a bay with board (and sensors)
+        # on three sides — is a topology neither router orders cleanly:
+        # the hug plan goes non-planar (its refusal guard then leaves a
+        # drastically reduced board) and legacy has no corridors out of
+        # the bay. Moving the cable edge to the outer boundary avoids this,
+        # so say so up front.
         cable_bay_warning = None
         if float(np.min(outline_xy[:, 1])) < -0.5:
             cable_bay_warning = (
@@ -1950,9 +1921,8 @@ def generate(req: GenerateRequest):
             raise ValueError(f"copper_layers must be 2 or 4, got {req.copper_layers!r}.")
         if req.trace_w_mm + req.clearance_mm > req.pad_pitch_mm + 1e-9:
             # Wires land on neighbouring connector pins pad_pitch apart; closer
-            # than trace + clearance, every other one is refused (a 40x40mm
-            # square kept 2 taxels in grow mode, and shipped 5 unconnected
-            # nets in fixed mode, at 0.25 + 0.28 > 0.5).
+            # than trace + clearance, every other one is refused and most of
+            # the board cannot be wired.
             raise ValueError(
                 f"Trace width + clearance ({req.trace_w_mm + req.clearance_mm:.2f} mm) is more than "
                 f"the connector's pin pitch ({req.pad_pitch_mm:.2f} mm), so wires to neighbouring pins "
@@ -2011,24 +1981,22 @@ def generate(req: GenerateRequest):
             layout = layout_with_connector(outline_xy, params, fill_xy, join_split_nets=True)
             col_routes, row_routes, hug_plan, failed_pix = route_for(params)(layout, outline_xy, params)
             removed = set()
-            # Capability boundary, handled honestly: when the plan itself
-            # reports a non-planar ordering ("forced crossing") or the
-            # emission refuses a large share of the board, this topology is
-            # beyond the hug model's current ordering rules (e.g. the
-            # octagon wrap whose row bundles' contour spans interleave —
-            # 42 forced-crossing warnings, would have shipped 1 sensor).
-            # Neither shipping crossings nor shipping an empty board is
-            # acceptable, so route the SAME request with the legacy router
-            # and say so. The hug ordering redesign that would make these
-            # topologies planar (plan-driven side and pad assignment per
-            # bundle) is tracked in NOTES.
+            # Capability boundary: when the plan itself reports a non-planar
+            # ordering ("forced crossing") or the emission refuses a large
+            # share of the board, this topology is beyond the hug model's
+            # ordering rules (e.g. an outline whose row bundles' contour
+            # spans interleave). Neither emitting crossings nor returning an
+            # almost empty board is acceptable, so route the same request
+            # with the legacy router and say so. Making these topologies
+            # planar would need plan-driven side and pad assignment per
+            # bundle.
             not_planar = any("not planar" in w for w in hug_plan.warnings)
             mass_refusal = len(failed_pix) > 0.25 * max(1, len(layout.placements_xy))
             if failed_pix and (not_planar or mass_refusal):
                 # Only take the fallback when it is a clear win (a clean
                 # legacy board). A legacy result with its own violations is
                 # not an improvement over hug's reduced-but-clean board —
-                # crossings must never ship from either path.
+                # crossings must never be output from either path.
                 try:
                     fallback = generate(req.model_copy(update={"router": "legacy"}))
                 except HTTPException:
@@ -2051,7 +2019,7 @@ def generate(req: GenerateRequest):
                 # The emission refused nets it could not draw without a DRC
                 # violation (route_hug_all docstring). Their pixels are dead:
                 # drop them and re-route the smaller field — repeatedly if a
-                # retry uncovers another refusal — so the board that ships
+                # retry uncovers another refusal — so the returned board
                 # never contains a refused wire.
                 for _ in range(4):
                     removed |= failed_pix
@@ -2068,11 +2036,12 @@ def generate(req: GenerateRequest):
                     failed_pix = {active[i] for i in retry_failed}
                 else:
                     # Retries exhausted with refusals still standing (a
-                    # genuinely non-planar topology can keep uncovering new
+                    # non-planar topology can keep uncovering new
                     # refusals each round). Their routes were already
                     # stripped by route_hug_all; fold their pixels into
                     # `removed` too, or validate_routes counts the routeless
-                    # nets as incomplete and a dirty board ships.
+                    # nets as incomplete and the board is returned with
+                    # violations.
                     removed |= failed_pix
             bad_pix, incomplete = validate_routes(
                 layout, col_routes, row_routes, removed,
@@ -2131,7 +2100,7 @@ def generate(req: GenerateRequest):
             # re-packed — individual pixels are never deleted, which is what
             # keeps the surviving array a clean rectangular grid.
             # The hug router reuses this whole loop: only the demand model (its
-            # plan gives EXACT per-sample wiring widths instead of the legacy
+            # plan gives exact per-sample wiring widths instead of the legacy
             # heuristic), the net assignment (joined), and the routing call
             # differ. The escape check and grow-on-failure retry stay as the
             # safety net for both.
@@ -2141,11 +2110,11 @@ def generate(req: GenerateRequest):
             attempt_params = _fixed_keepout_attempt_params(params)
             if hug_fixed:
                 # Joined nets buy true row/column semantics and fewer pads,
-                # but their link corridors around a concavity live INSIDE the
-                # material in fixed mode, and on tight shapes (the C's 12mm
-                # arms at 4.2mm pitch) they genuinely do not fit. Try joined
-                # first, split nets second — the hug walk routes either — and
-                # the existing scoring keeps the denser clean result.
+                # but their link corridors around a concavity lie inside the
+                # material in fixed mode, and on tight shapes (arms only a few
+                # pitches wide) they do not fit. Try joined first, split nets
+                # second — the hug walk routes either — and the attempt
+                # scoring keeps the denser clean result.
                 attempt_specs = [(p, True) for p in attempt_params] \
                               + [(p, False) for p in attempt_params]
             else:
@@ -2169,7 +2138,7 @@ def generate(req: GenerateRequest):
                     layout, keepout_profile, keepout_info = _fixed_layout(params)
                 except ValueError as exc:
                     if not hug_fixed:
-                        raise   # legacy semantics: first attempt's error propagates
+                        raise   # legacy router: the layout error propagates
                     # Hug variant cannot pack at all (e.g. joined-net link
                     # corridors don't fit this shape) — try the next one.
                     last_layout_err = exc
@@ -2185,8 +2154,8 @@ def generate(req: GenerateRequest):
                             layout, outline_xy, params)
                         # Same capability boundary as the expand branch: a
                         # topology the hug plan cannot order planar falls
-                        # back to the legacy router instead of shipping
-                        # crossings or grinding the field away.
+                        # back to the legacy router instead of emitting
+                        # crossings or shrinking the field away.
                         # Only while nothing clean is in hand: a later spec
                         # (split nets) failing must not throw away a clean
                         # earlier one (joined) for the legacy router's board.
@@ -2242,8 +2211,8 @@ def generate(req: GenerateRequest):
                     if hug_fixed and len(layout.placements_xy) < 0.15 * max(1, baseline_pixels):
                         # Already below the too-small reject threshold; growth
                         # retries only shrink the field further. Abandoning them
-                        # is what keeps infeasible shapes FAST to error instead
-                        # of grinding through every retry before saying no.
+                        # makes an infeasible shape fail fast instead of
+                        # running through every retry first.
                         break
                     keepout_profile = _grow_keepout_for_failures(
                         keepout_profile, layout, routing_problem_pix, escapes, params)
@@ -2253,7 +2222,7 @@ def generate(req: GenerateRequest):
                             baseline_pixels=baseline_pixels)
                     except ValueError:
                         if not hug_fixed:
-                            raise   # legacy semantics unchanged
+                            raise   # legacy router: the layout error propagates
                         break   # growth left no room — keep this attempt's last result
 
                 if near_miss is not None and (
@@ -2272,11 +2241,11 @@ def generate(req: GenerateRequest):
                             hug_plan)
                 if best_attempt is None or score < best_attempt[0]:
                     best_attempt = snapshot
-                # Legacy keeps its first-clean-wins early exit. Hug runs every
-                # spec: a clean joined result can still be much sparser than
-                # split (link corridors eat material), and the score's taxel
-                # term should decide that, not attempt order. Ties prefer the
-                # earlier (joined) spec.
+                # The legacy router stops at the first clean attempt. Hug
+                # runs every spec: a clean joined result can still be much
+                # sparser than split (link corridors use up material), and the
+                # score's taxel term should decide that, not attempt order.
+                # Ties prefer the earlier (joined) spec.
                 if defects == 0 and not hug_fixed:
                     break
 
@@ -2299,16 +2268,15 @@ def generate(req: GenerateRequest):
             layout.tail["dropped_failed_nets"] = int(failed_pruned)
             if hug_fixed:
                 # A defect-laden result on a nearly-empty board is worse than
-                # the honest error legacy raises for the same shapes (the C at
-                # this pitch keeps 9 of 74 taxels with 102 violations): the
-                # outline genuinely cannot hold both sensors and wiring.
+                # the error the legacy router raises for the same shapes: the
+                # outline cannot hold both sensors and wiring.
                 n_kept = len(layout.placements_xy)
                 if _score[0] > 0 and n_kept < 0.15 * max(1, keepout_info["max_pack_pixels"]):
                     raise ValueError(_KEEPOUT_TOO_SMALL_MSG)
                 layout.tail["hug_fixed_nets"] = "joined" if join_nets else "split"
                 if hug_plan is not None and hug_plan.warnings:
                     layout.tail["hug_plan_warnings"] = list(hug_plan.warnings)
-            # Never ship nets known not to reach the connector. By here every
+            # Never return nets known not to reach the connector. By here every
             # attempt (each keep-out floor; joined and split nets on the hug
             # router) has been scored and the best one's failed taxels pruned
             # and re-routed; what is still unconnected has no layout left.
@@ -2333,12 +2301,12 @@ def generate(req: GenerateRequest):
             if hug_fixed:
                 layout.tail["router"] = "hug"
 
-        # 5b. Smooth routing: collapse staircases into long diagonals, then chamfer
-        #     any leftover sharp corners (both guarded; never add violations).
-        #     Skipped for the hug router: its paths are already smooth contour
-        #     hugs, and in grow mode the board covers the concavity, so the
-        #     line-of-sight pass would legally shortcut straight across the void
-        #     — undoing exactly the hugging the router exists to produce.
+        # Smooth routing: collapse staircases into long diagonals, then chamfer
+        # any leftover sharp corners (both guarded; never add violations).
+        # Skipped for the hug router: its paths are already smooth contour
+        # hugs, and in grow mode the board covers the concavity, so the
+        # line-of-sight pass would legally shortcut straight across the void
+        # — undoing exactly the hugging the router exists to produce.
         if req.router != "hug":
             row_sensor_gap = max(params.trace_w_mm + params.clearance_mm, 0.5)
             col_taxel_gap = taxel_copper_keepout_mm(params)
@@ -2367,15 +2335,14 @@ def generate(req: GenerateRequest):
             _finish_board(layout, col_routes, row_routes, params)
             layout.tail["length_reason"] = REASON_TYPED
 
-        # 6. Generate outputs
-        # Record what the ROUTER could not do, alongside the geometric DRC.
+        # Generate outputs.
+        # Record what the router could not do, alongside the geometric DRC.
         # drc["violations"] is len(geometry) + len(incomplete nets), and only
-        # /generate ever knew the second half: /export-edited and
-        # /redo-padding rebuild from edit_data, which did not carry it, so an
-        # edited export of a board with unroutable nets reported DRC 0 while
-        # the copper was unchanged (measured: 4 -> 0 on a 3.4x2.8mm fixed
-        # board, identical 40 segments). Storing it on layout.routing -- which
-        # already round-trips -- makes every path agree.
+        # /generate knows the second half: /export-edited and /redo-padding
+        # rebuild from edit_data, so without this an edited export of a board
+        # with unroutable nets would report DRC 0 for unchanged copper.
+        # Storing it on layout.routing -- which round-trips -- makes every
+        # path agree.
         layout.routing["routing_problem_pix"] = sorted(int(i) for i in routing_problem_pix)
         layout.routing["incomplete_nets"] = sorted(incomplete)
         if cable_bay_warning:
@@ -2389,10 +2356,9 @@ def generate(req: GenerateRequest):
         # Final-artifact guard for fixed-outline mode. The per-attempt check in
         # the keep-out loop scores routing *before* smoothing, post-route
         # containment and follow-padding have run, so a board can pass there and
-        # still come out of step 5b/6 with violations — measured on a 90x22
-        # board, clean at the router and 2 violations by the time the ZIP is
-        # built. Rather than reserve for that on every board, re-run once with
-        # the old conservative floor and keep whichever result is actually
+        # still come out of the smoothing and output steps with violations.
+        # Rather than reserve for that on every board, re-run once with the
+        # conservative routing_margin_mm floor and keep whichever result is
         # cleaner. Bounded: the retry pins wiring_keepout_floor_mm, so the
         # branch below cannot fire a second time.
         if (board_mode == "fixed_keepout"
@@ -2400,12 +2366,11 @@ def generate(req: GenerateRequest):
                 and drc["violations"] > 0):
             safe_req = req.model_copy(update={
                 "wiring_keepout_floor_mm": max(0.0, float(req.routing_margin_mm))})
-            # For the hug router the fallback exists to IMPROVE on the primary
+            # For the hug router the fallback exists to improve on the primary
             # result; if the conservative floor cannot produce a board at all
-            # (the hug too-small guard fires with the fatter band), keep the
-            # primary result instead of letting the fallback's error destroy
-            # it. Legacy keeps its original semantics (a fallback error
-            # propagates) byte-for-byte.
+            # (the hug too-small guard fires with the wider band), keep the
+            # primary result instead of letting the fallback's error replace
+            # it. For the legacy router a fallback error propagates.
             if req.router == "hug":
                 try:
                     fallback = generate(safe_req)
@@ -2418,11 +2383,11 @@ def generate(req: GenerateRequest):
 
         edit_data = _build_edit_data(
             layout, outline_xy, col_routes, row_routes, removed, params, fill_xy)
-        # design.json rides in the ZIP so a downloaded design can be re-opened
-        # exactly, hand-edited routes included. Added after the fact rather
-        # than inside _build_outputs: that runs on a deep COPY of the layout
-        # and edit_data is built here from the original, so this is the first
-        # point where the real editor state exists. See zip_with_design.
+        # design.json goes into the ZIP so a downloaded design can be re-opened
+        # exactly, hand-edited routes included. Added here rather than inside
+        # _build_outputs: that runs on a deep copy of the layout and edit_data
+        # is built here from the original, so this is the first point where
+        # the real editor state exists. See zip_with_design.
         zip_b64 = zip_with_design(zip_b64, design_file(edit_data))
 
         return GenerateResponse(
@@ -2472,7 +2437,7 @@ def bump_sheet(req: BumpSheetRequest):
     """Build the printable shear-sensing overlay for an already-generated board.
 
     Takes the same `edit_data` the board editor holds, so the sheet always
-    wraps the FINAL outline — the grown, follow-padded board that actually gets
+    wraps the final outline — the grown, follow-padded board that actually gets
     manufactured — rather than the shape the user drew. Returns an STL rather
     than adding to the ZIP: it is a separate printed part, on a different
     machine, and users iterate on bump geometry without re-exporting Gerbers.
@@ -2508,7 +2473,7 @@ def bump_sheet(req: BumpSheetRequest):
         base_x, base_y = result.bump_base_dia_mm
         stats = {
             "bumps": int(len(result.bump_centers)),
-            # Every taxel now sits under a bump; these are the bumps whose 2x2
+            # Every taxel sits under a bump; these are the bumps whose 2x2
             # block the outline cut short, so part of them overhangs.
             "partial_bumps": int(result.partial_groups),
             "taxels_total": len(active),
@@ -2583,9 +2548,9 @@ def _case_inputs(edit_data: dict, params: dict | None, bump_params: dict | None)
 def case(req: CaseRequest):
     """Two printable case halves for an already-generated board.
 
-    Separate from /bump-sheet rather than folded into it: that endpoint ships a
-    single tray-shaped part and is wired to its own UI, and breaking it to add a
-    second STL would risk a working feature for no gain. The two share their
+    Separate from /bump-sheet rather than folded into it: that endpoint returns
+    a single tray-shaped part and is wired to its own UI, and changing it to add
+    a second STL would risk a working feature for no gain. The two share their
     geometry through pipeline/case.py importing bump_sheet's helpers, so the
     pocket, the skirt and the cable-edge opening cannot drift apart.
 
@@ -2626,9 +2591,8 @@ def zip_with_case_endpoint(req: ZipWithCaseRequest):
     """The board ZIP with the printed case added under case/.
 
     Called by the Download ZIP button, not by /generate: three lids are three
-    boolean-heavy meshes (measured 0.3s on a typical board and 1.7s on the
-    largest example design, locally; the free tier is ~10x slower), and only a
-    user who downloads needs them. See export/case_zip.py.
+    boolean-heavy meshes, slow to build on the hosted server, and only a user
+    who downloads needs them. See export/case_zip.py.
 
     Never fails because of the case. A board the case cannot be built for
     still gets its ZIP back, with case_error saying why; only a zip_b64 that
@@ -2711,13 +2675,12 @@ def redo_padding(req: RedoPaddingRequest):
 # =========================================================================
 # Re-opening a design that was exported earlier.
 #
-# manifest.json describes the board that was MADE; it was never a set of
-# inputs, so before the "design" block existed a re-import had to guess
-# board_mode, the router and every clearance. Both records now written by the
-# export (see export/design.py) come back through here, which does validation
-# and normalisation ONLY -- it never routes. The caller then drives the same
-# endpoints a hand-built design uses, so there is no second pipeline to keep
-# in sync:
+# manifest.json describes the board that was made, not the inputs that made
+# it; the inputs are carried in its "design" block and in design.json (see
+# export/design.py). Both records come back through here, which does
+# validation and normalisation only -- it never routes. The caller then
+# drives the same endpoints a hand-built design uses, so there is no second
+# pipeline to keep in sync:
 #
 #   mode "restore" -> POST edit_data + routes to /export-edited
 #   mode "recipe"  -> put outline + params in the form and POST /generate
@@ -2734,15 +2697,14 @@ def _recipe_params(params: dict, router: str, connector_pos: int | None) -> dict
     body = {k: v for k, v in (params or {}).items() if k in allowed}
     body["router"] = router if router in ("legacy", "hug") else "legacy"
     # A tail length the pipeline chose is chosen again, for whatever this
-    # pipeline builds; a typed one (every design from before it was automatic)
-    # is kept.
+    # pipeline builds; a typed one is kept.
     if (params or {}).get("cable_length_auto"):
         body["cable_length_mm"] = None
     # Replayed as an override so a connector the user upsized by hand comes
     # back at that size rather than dropping to the smallest that fits.
     if connector_pos:
         body["connector_pos_override"] = int(connector_pos)
-    # target_cols/target_rows are deliberately NOT replayed: the solved taxel
+    # target_cols/target_rows are deliberately not replayed: the solved taxel
     # size and pitch are already in this dict, so re-solving them would be a
     # second answer to a question that has one. See params_to_dict.
     body.pop("target_cols", None)
@@ -2768,7 +2730,7 @@ def open_design(req: OpenDesignRequest):
         # --- a design recovered from a pre-design-block manifest ---
         # Geometry only: no nets, no pads, no routes, so /export-edited and the
         # route editor cannot run on it. Handled before the save-file branch
-        # because it IS a design.json shape and would otherwise be sent down a
+        # because it is a design.json shape and would otherwise be sent down a
         # restore path that needs a layout it does not have.
         if (data.get("edit_data") or {}).get("geometry_only") or is_legacy_manifest(data):
             manifest = data if is_legacy_manifest(data) else None
@@ -2863,17 +2825,12 @@ def open_design(req: OpenDesignRequest):
 
 
 # =========================================================================
-# Server-side STL/3D mesh unrolling.
+# Server-side STL/3D mesh unrolling, backed by pipeline/mesh_unroll.py.
 #
-# Carried forward from the previous deployment rather than dropped. The v2
-# frontend unfolds STLs in the browser (frontend/face-select.js) and never
-# calls these, so they are dormant as far as the shipped UI is concerned —
-# but they are a different implementation, not an older one: strut-connected
-# multi-region chains and manual corner picking live here and have no
-# client-side equivalent. Keeping them deployed means that work stays
-# reachable (and testable) instead of only existing in git history.
-#
-# Backed by pipeline/mesh_unroll.py.
+# The web UI unfolds a connected selection in the browser (web/face-select.js)
+# and calls /unroll-mesh-chain (from web/stl-viewer.js) to join disconnected
+# selections: strut-connected multi-region chains and manual corner picking
+# are computed here. /unroll-mesh and /grow-region are API-only.
 # =========================================================================
 
 @app.post("/unroll-mesh", response_model=UnrollMeshResponse)
@@ -2926,15 +2883,14 @@ async def unroll_mesh(
     normals = np.array(mesh.face_normals)
 
     # click_face_index comes directly from the three.js raycast hit
-    # (hit.faceIndex) on the frontend. This lines up 1:1 with trimesh's face
+    # (hit.faceIndex) on the client. This lines up 1:1 with trimesh's face
     # array: trimesh's default vertex-welding changes vertex indices/count
-    # but preserves triangle order and count exactly (verified against the
-    # raw STL triangle list), so the two loaders agree on "triangle N" even
-    # though STLLoader keeps unwelded per-face vertices and trimesh doesn't.
-    # An earlier nearest-centroid-to-click-point approach was unreliable on
-    # complex/thin geometry (e.g. a wrist splint's close double-wall
-    # surfaces), where a nearby wrong triangle's centroid could be closer to
-    # the click point than the actually-clicked triangle's own centroid.
+    # but preserves the raw STL triangle order and count exactly, so the two
+    # loaders agree on "triangle N" even though STLLoader keeps unwelded
+    # per-face vertices and trimesh doesn't. A nearest-centroid-to-click-point
+    # lookup would be unreliable on complex/thin geometry (e.g. close
+    # double-wall surfaces), where a nearby wrong triangle's centroid can be
+    # closer to the click point than the clicked triangle's own centroid.
     if not (0 <= click_face_index < len(faces)):
         raise HTTPException(status_code=400, detail="click_face_index out of range for this mesh.")
     start_face = click_face_index
@@ -2964,10 +2920,10 @@ async def unroll_mesh(
     if chain_pts is not None and chain_verts:
         # Extending an already strut-connected chain onto a 3rd (or later)
         # region. Once a selection needs its first strut connection, the
-        # resulting outline isn't a real mesh region anymore (some of its
+        # resulting outline is not a real mesh region (some of its
         # boundary is a synthetic strut edge, not real mesh connectivity),
         # so it can't be re-derived from `existing_faces` the way a pure
-        # mesh-union chain can — the frontend echoes the previous response's
+        # mesh-union chain can — the caller echoes the previous response's
         # own outline back instead (see UnrollMeshResponse.outline_vertex_indices).
         # Always strut-connect here, even if this particular click happens
         # to also touch the mesh — simpler and consistent with already
@@ -3059,8 +3015,7 @@ async def unroll_mesh(
         # flat faces separated by a filleted/rounded corner, whose thin,
         # continuously-curving triangles are correctly excluded from both
         # by grow_coplanar_region's angle tolerance. Approximate the real
-        # (possibly irregular, hard-to-select-reliably — see NOTES.md's
-        # "STL/3D unroll" section for the long history of why) connecting
+        # (possibly irregular, hard-to-select-reliably) connecting
         # surface with a straight cut between the two regions' nearest
         # corners instead of trying to select and flatten it: each region
         # unfolds cleanly on its own regardless of how complex the true
@@ -3116,7 +3071,7 @@ async def unroll_mesh(
         region_out = prior | new_region
 
         # Always include both loops' boundaries (not just when auto-picking
-        # is used) so the frontend can offer "connect corners manually" as
+        # is used) so a client can offer "connect corners manually" as
         # a follow-up on *this* response without a second request just to
         # fetch the boundary data.
         loop1_orig, _, p1_3d = region_boundary_loop(vertices, faces, prior_component, prior_start_face)
@@ -3150,7 +3105,7 @@ async def grow_region(
     click_face_index: int = Form(...),
     angle_tol_deg: float = Form(2.0),
 ):
-    """Cheap, connection-free companion to /unroll-mesh: just grows and
+    """Lightweight, connection-free companion to /unroll-mesh: just grows and
     returns one clicked face's coplanar region, for live per-click
     highlighting while the user is still building up a multi-face
     selection (see /unroll-mesh-chain) — no strut/union math at all.
@@ -3187,12 +3142,13 @@ async def unroll_mesh_chain(
     connection_overrides: str = Form(""),
     # JSON list of per-click triangle-index lists, parallel to
     # click_face_indices. When given, click k's region is exactly
-    # click_regions[k] (the caller's own selection — e.g. the v2 frontend's
-    # curved smooth-growth patches, which grow_coplanar_region cannot
-    # reproduce: it only compares normals against the clicked seed face, so
-    # a click can never select a patch that curves away from its seed).
-    # Each list must contain its own click face index and form one
-    # edge-connected patch. Empty string keeps the historical behavior.
+    # click_regions[k] (the caller's own selection — e.g. the web UI's
+    # curved smooth-growth patches from web/face-select.js, which
+    # grow_coplanar_region cannot reproduce: it only compares normals against
+    # the clicked seed face, so a click can never select a patch that curves
+    # away from its seed). Each list must contain its own click face index
+    # and form one edge-connected patch. Empty string: each click's region
+    # is grown with grow_coplanar_region.
     click_regions: str = Form(""),
     # When true, corner picking is mandatory: a strut-needed connection
     # without an entry in connection_overrides stops the walk and returns
@@ -3203,22 +3159,19 @@ async def unroll_mesh_chain(
     angle_tol_deg: float = Form(2.0),
 ):
     """Computes an entire multi-face selection's outline in one request,
-    rather than incrementally per click — see NOTES.md's "STL/3D unroll"
-    section for why: incrementally auto-connecting after every click meant
-    "Connect Corners Manually" could only ever fix the *most recent*
-    connection (once you'd clicked a 3rd face, the 1st-2nd connection was
-    already permanently baked in), and the running chain had no per-origin
-    identity for coloring, so a multi-region chain's own boundary always
-    rendered as a single-color blob in the corner-picker regardless of how
-    many original clicks it actually spanned. This endpoint instead takes
-    the *whole* ordered click list plus an optional sparse map of manual
-    corner overrides per connection, and returns the final outline plus,
-    for each connection that needed a strut, that pair's own two boundary
-    loops (each point tagged with a `group_id` — see ChainConnection) so a
-    "fix this connection" UI always shows genuinely distinct per-original-
-    region colors, however deep into the chain it is. The frontend now
-    only ever needs to resend this same whole-chain request (with an
-    updated overrides map) to apply a fix — no incremental replay state.
+    rather than incrementally per click. Auto-connecting after every click
+    would fix each earlier connection in place, so manual corner picking
+    could only correct the *most recent* connection, and the running chain
+    would have no per-origin identity for coloring: a multi-region chain's
+    boundary would render in a single color in the corner-picker.
+    This endpoint instead takes the *whole* ordered click list plus an
+    optional sparse map of manual corner overrides per connection, and
+    returns the final outline plus, for each connection that needed a strut,
+    that pair's own two boundary loops (each point tagged with a `group_id`
+    — see ChainConnection) so a "fix this connection" UI can color each
+    original region distinctly, however deep into the chain it is. The
+    caller only resends this same whole-chain request (with an updated
+    overrides map) to apply a fix; there is no incremental replay state.
     """
     import json
     import trimesh
@@ -3313,10 +3266,10 @@ async def unroll_mesh_chain(
         regions = [grow_coplanar_region(faces, normals, c, angle_tol_deg, vertices=vertices) for c in clicks]
 
     warnings = []
-    # Per-surface honesty check, computed on each click's own region before
-    # any joining: near-zero means that surface flattens exactly; a large
-    # value means real double curvature (e.g. a domed fingertip tip) and the
-    # flat sensor will not lie on it without distortion.
+    # Per-surface developability check, computed on each click's own region
+    # before any joining: near-zero means that surface flattens exactly; a
+    # large value means real double curvature (e.g. a domed fingertip tip) and
+    # the flat sensor will not lie on it without distortion.
     region_developability = []
     for k, (c, region) in enumerate(zip(clicks, regions)):
         uv_r, visited_r, orig_idx_r = unfold_face_region(vertices, faces, region, c)
@@ -3367,7 +3320,7 @@ async def unroll_mesh_chain(
         # Display-only reduced copies for the corner-picker's clickable
         # markers — current_loop_orig/loop2_orig (used below for the
         # actual connection math) stay full-resolution; reducing *those*
-        # broke the automatic heuristic (see region_boundary_loop's
+        # would break the automatic heuristic (see region_boundary_loop's
         # docstring), but the picker only needs a handful of well-
         # separated real corners, and vertices[v] works for any original
         # mesh vertex index regardless of which (full or reduced) loop it

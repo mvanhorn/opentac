@@ -60,7 +60,7 @@ def _tail_direction(layout, fallback):
 
 # How far off a wire's straight run into its pad a lane may turn and still
 # count as turning on it: the router's runs are straight to a few microns over
-# tens of millimetres, not exactly (a calibration square: 12 um over 20 mm).
+# tens of millimetres, not exactly.
 RUN_TOL_MM = 0.05
 
 
@@ -243,9 +243,8 @@ def apply_tail_extension(layout, routes, params, connector_dir=""):
     # turn before the pad row, on their wires' straight runs; where a run is too
     # short for that (a 4-layer row feed turns into its pad 1 mm before it), the
     # drawn path starts that much further down the tail (_lane_lead_in). Offset
-    # square to the first segment alone, each lane started beside its pad and
-    # was joined to it by a jump across its neighbours' lanes (a 45 degree path:
-    # dozens of crossings).
+    # square to the first segment alone, each lane would start beside its pad
+    # and be joined to it by a jump across its neighbours' lanes, crossing them.
     tail_n = _tail_direction(layout, dirs[0])
     drawn = path.copy()
     if (resolved and resolved.get("enabled") and "lead_in_mm" in resolved
@@ -276,13 +275,14 @@ def apply_tail_extension(layout, routes, params, connector_dir=""):
 
     for route in routes:
         P = np.asarray(route.polyline_xy, dtype=float)
-        # Only tracks that actually BEGIN at the connector belong to the tail
+        # Only tracks that actually begin at the connector belong to the tail
         # fan. The hug router emits several tracks per net: the pad hop starts
         # at the pad, but link tracks (bridging a concavity gap) start at a
-        # sensor-field terminal — extending those bolted a full tail lane onto
-        # the middle of the board. Legacy routes always start at their pad
-        # (and re-application starts at the previously moved pad, which
-        # pad_xy tracks too), so this skip changes nothing for them.
+        # sensor-field terminal, and extending those would attach a full tail
+        # lane to the middle of the board. Routes from the column/row routers
+        # always start at their pad (and re-application starts at the
+        # previously moved pad, which pad_xy tracks too), so the skip never
+        # applies to them.
         if len(P) == 0 or np.linalg.norm(P[0] - np.asarray(route.pad_xy, dtype=float)) > 1.0:
             continue
         offset = _route_pad_offset(route, layout, params, start, start_t)
@@ -301,7 +301,7 @@ def apply_tail_extension(layout, routes, params, connector_dir=""):
             continue
         turn = extension[-1]
         if len(P) > 1 and (np.linalg.norm(turn - P[0]) < 0.25 or _on_segment(turn, P[0], P[1])):
-            # the lane turns at the old pad, or on the wire's straight run
+            # the lane turns at the pad being replaced, or on the wire's straight run
             # before it (the inside of the turn): the run past the turn goes
             new_poly = np.vstack([extension, P[1:]])
         else:

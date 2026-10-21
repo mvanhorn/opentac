@@ -5,9 +5,8 @@ its 3 edge lengths (law of cosines), with zero distortion, regardless of the
 overall surface family (cylinder, prism, cone, pyramid, or an irregular
 faceted shape) — no axis-fitting or shape classification needed.
 
-Used by main.py's POST /unroll-mesh endpoint. See NOTES.md's "STL/3D unroll"
-section for the full design writeup, validation results, and real-STL bugs
-found/fixed during development.
+Used by main.py's /unroll-mesh, /unroll-mesh-chain and /grow-region
+endpoints.
 """
 
 import numpy as np
@@ -18,8 +17,8 @@ def _edge_key(a, b):
 
 
 def _cross2d(a, b):
-    """Scalar z-component of the 2D cross product (numpy 2.x dropped
-    implicit 2D support from np.cross)."""
+    """Scalar z-component of the 2D cross product (numpy 2.x deprecates
+    2D input to np.cross)."""
     return a[0] * b[1] - a[1] * b[0]
 
 
@@ -74,18 +73,14 @@ def grow_coplanar_region(faces: np.ndarray, face_normals: np.ndarray, start_face
 
     When `vertices` is given, also refuses to grow *into* a degenerate
     sliver triangle (quality below `min_quality` — see `_triangle_quality`)
-    even if its normal is within tolerance. Found live: a real STL can
-    have a near-zero-area sliver triangle sitting right at a flat region's
-    boundary, technically coplanar enough to pass the angle check, whose
-    inclusion makes the selected region's own edge visibly jagged — a
-    single stray spike poking off an otherwise clean straight edge — which
-    then also becomes a bad, easy-to-misclick candidate corner for the
-    manual connect-corners picker (see NOTES.md's "STL/3D unroll"
-    section). Skipping sliver triangles during growth (rather than trying
-    to clean them up after the fact) keeps the selected region's boundary
-    clean in the first place. `vertices` is optional and defaults to no
-    filtering (`None`) only for callers that don't have it handy and don't
-    need this — every real call site in this app does pass it.
+    even if its normal is within tolerance. A near-zero-area sliver at a
+    flat region's boundary can be coplanar enough to pass the angle check;
+    including it puts a single stray spike on an otherwise straight edge of
+    the selected region, which also becomes a misleading candidate corner
+    for the manual connect-corners picker. Skipping slivers during growth,
+    rather than removing them afterwards, keeps the region's boundary clean
+    from the start. `vertices` is optional; when it is `None`, no quality
+    filtering is applied. main.py's call sites pass it.
     """
     edge_faces = _build_face_adjacency(faces)
     start_normal = face_normals[start_face]
@@ -229,9 +224,8 @@ def find_boundary_loops(faces: np.ndarray) -> list:
     into ordered vertex-index loops. A patch with holes (e.g. bolt holes on
     a real part) has more than one loop — one outer perimeter plus one per
     hole — so this finds *all* of them, repeating the walk from any
-    not-yet-consumed boundary edge, matching the demo viewer's JS logic
-    (see NOTES.md's "STL/3D unroll" section for why finding only the first
-    loop is a real bug on real parts, not a hypothetical one).
+    not-yet-consumed boundary edge. Returning only the first loop would
+    lose the outer perimeter whenever a hole loop is traced first.
     """
     edge_count = {}
     for a, b, c in faces:
@@ -285,13 +279,11 @@ def _loop_signed_area(loop, uv):
 def simplify_outline_points(outline: np.ndarray, simplify_tol: float = 0.3) -> np.ndarray:
     """Douglas-Peucker-simplify an already-assembled Nx2 outline (Shapely),
     removing small zigzag/jitter from raw mesh-tessellation detail without
-    meaningfully changing the shape — factored out of `extract_outline`
-    (below) so strut-connected outlines can use the same cleanup: unlike
-    a plain unfolded patch, a strut-joined outline never went through
-    `extract_outline` at all (it's assembled directly from two loops'
-    "far" arcs plus straight struts), so it never got this treatment,
-    which is exactly what showed up live as a small pointless zigzag in an
-    otherwise-straight strut-adjacent boundary segment. See
+    meaningfully changing the shape. Shared by `extract_outline` (below)
+    and strut-connected outlines: a strut-joined outline is assembled
+    directly from two loops' "far" arcs plus straight struts and never
+    passes through `extract_outline`, so without this call it keeps small
+    zigzags in otherwise-straight boundary segments. See
     `extract_outline`'s docstring for the tolerance-choice rationale.
     """
     if simplify_tol <= 0 or len(outline) <= 3:
@@ -315,10 +307,10 @@ def remove_needle_spikes(outline: np.ndarray, tip_tol: float = 0.5,
     These come from real needle-sliver triangles at a selected region's
     boundary (e.g. `finger_tip_soft.stl`'s flat side walls carry ~4.8mm-long,
     ~0.12mm-wide slivers whose quality ~0.05 passes grow_coplanar_region's
-    0.02 floor, found while chaining 4 surfaces). Whether such a spike
-    reaches the final outline depends on which arcs the strut cuts happen to
-    keep, so it appears and disappears with unrelated corner choices.
-    Douglas-Peucker can't remove one (its deviation IS the spike length),
+    0.02 floor). Whether such a spike reaches the final outline depends on
+    which arcs the strut cuts happen to keep, so it appears and disappears
+    with unrelated corner choices.
+    Douglas-Peucker can't remove one (its deviation is the spike length),
     hence this dedicated pass. A sub-`tip_tol`-wide outline feature can
     never be meaningful board geometry at sensor scale (trace width and
     clearance are ~0.2mm each, so nothing routable fits inside it).
@@ -326,7 +318,7 @@ def remove_needle_spikes(outline: np.ndarray, tip_tol: float = 0.5,
     Applied to *final assembled* outlines only — same policy as
     `simplify_outline_points`, and for the same reason: earlier loops'
     per-point vertex identity must survive for corner picking. Run this
-    BEFORE `simplify_outline_points`, which then merges the near-coincident
+    before `simplify_outline_points`, which then merges the near-coincident
     neighbor pair the removed spike leaves behind. Iterates until stable
     (removing one spike can expose another).
     """
@@ -363,21 +355,17 @@ def _reduce_boundary_loop(loop_orig: list, loop_uv: list, tol: float = 0.5):
     vertices, dropping tessellation-jitter points in between — the same
     cleanup idea as `simplify_outline_points`, but constrained to only ever
     select a subset of the *original* vertices rather than introduce new
-    interpolated ones: every consumer of a region's boundary loop
-    (`_two_connection_pairs`'s automatic corner heuristic, and — the reason
-    this exists — the manual corner-picker's clickable markers) needs a
-    real mesh vertex index, not an arbitrary point on the boundary. Applied
-    once, at the source (`region_boundary_loop` for a fresh region,
-    `connect_loop_to_region` for its own assembled result before an even
-    later region chains onto it) — every consumer downstream is
-    automatically clean, rather than needing its own cleanup pass.
+    interpolated ones, because the manual corner-picker's clickable
+    markers need a real mesh vertex index, not an arbitrary point on the
+    boundary. It is applied only to display-only copies of a loop (see
+    main.py's /unroll-mesh-chain); the connection math keeps the
+    full-resolution loop (see `region_boundary_loop`).
 
-    Found live: a real STL's boundary loop for a small/thin/jaggedly-
-    tessellated region can pack many boundary vertices within a couple mm
-    of each other, so a corner-picker built from the raw per-vertex list
-    is easy to misclick — two visually-adjacent dots can be several
-    array-positions apart, and the "wrong" one still looks like a
-    plausible corner.
+    The boundary loop of a small, thin or jaggedly tessellated region can
+    pack many vertices within a couple of mm of each other, so a
+    corner-picker built from the raw per-vertex list is easy to misclick:
+    two visually adjacent dots can be several array positions apart, and
+    the wrong one still looks like a plausible corner.
 
     Implementation: run Shapely's Douglas-Peucker simplify (as
     `simplify_outline_points` does) to find which points matter, then snap
@@ -417,21 +405,18 @@ def extract_outline(faces: np.ndarray, uv: dict, simplify_tol: float = 0.3) -> n
     """The outer-perimeter boundary loop of an unfolded patch, as an Nx2
     array in the same coordinate frame as `uv` — directly usable as the
     pipeline's outline_xy. Any inner hole loops (bolt holes, etc.) are
-    intentionally ignored for v1 — the outer perimeter is whichever
-    boundary loop has the largest enclosed area (same "largest wins"
-    convention as importers/dxf.py's multi-loop handling).
+    ignored — the outer perimeter is whichever boundary loop has the
+    largest enclosed area (same "largest wins" convention as
+    importers/dxf.py's multi-loop handling).
 
     `simplify_tol` (mm) removes small zigzag/jitter from the raw boundary
-    trace via Shapely's Douglas-Peucker simplification. Found live on a
-    real STL: even a topologically clean boundary trace (verified no
-    branch points, no non-manifold edges — every boundary vertex has
-    exactly 2 boundary edges) faithfully reproduces genuinely rough
-    small-scale detail in the source mesh's tessellation, which shows up
-    as a visually jittery/zigzagging outline segment — technically a valid
-    simple polygon, but not a usable board shape. Verified this doesn't
-    meaningfully alter the shape: on that same case, tol=0.3mm cut a
-    169-point outline down to ~19 points while changing enclosed area by
-    under 1%.
+    trace via Shapely's Douglas-Peucker simplification. Even a
+    topologically clean boundary trace (no branch points, no non-manifold
+    edges — every boundary vertex has exactly 2 boundary edges) faithfully
+    reproduces rough small-scale detail in the source mesh's tessellation,
+    which appears as a jittery, zigzagging outline segment — a valid
+    simple polygon, but not a usable board shape. The 0.3 mm default
+    removes that jitter without meaningfully changing the enclosed area.
     """
     loops = find_boundary_loops(faces)
     if not loops:
@@ -520,15 +505,14 @@ def region_boundary_loop(vertices: np.ndarray, faces: np.ndarray, region: set, s
     duplicating the extraction logic.
 
     Deliberately returns the *full-resolution* boundary walk, not reduced
-    via `_reduce_boundary_loop` — tried reducing here once, and it broke
-    the automatic same/crossed corner heuristic (`_two_connection_pairs`)
-    on a real case that worked fine at full resolution: reducing removes
-    exactly the fine-grained detail (the true closest point between two
-    regions, a cluster's true extreme) the heuristic depends on, so it's
-    only safe to reduce *after* the connection math is done — either on
-    the final assembled outline, or on a display-only copy for a corner-
-    picker's markers. See `main.py`'s `/unroll-mesh-chain` for the
-    display-only reduction.
+    via `_reduce_boundary_loop`: the automatic same/crossed corner
+    heuristic (`_two_connection_pairs`) depends on exactly the
+    fine-grained detail that reduction removes (the true closest point
+    between two regions, a cluster's true extreme), and can choose wrong
+    corners on a reduced loop. Reduction is therefore safe only *after*
+    the connection math is done — either on the final assembled outline,
+    or on a display-only copy for a corner-picker's markers. See
+    `main.py`'s `/unroll-mesh-chain` for the display-only reduction.
     """
     uv, _, orig_idx = unfold_face_region(vertices, faces, region, start_face)
     region_list = [start_face] + [f for f in region if f != start_face]
@@ -565,8 +549,8 @@ def connect_loop_to_region(vertices: np.ndarray, faces: np.ndarray,
                             connection_pairs=None):
     """The outline of an already-flattened loop (`loop1_orig`/`loop1_uv` —
     original mesh vertex indices and their 2D positions, in one consistent
-    frame) and `region2` (unfolded independently here, exactly as validated
-    for a single flat region) joined by two straight struts, approximating
+    frame) and `region2` (unfolded independently here, the same way as a
+    single flat region) joined by two straight struts, approximating
     whatever real connecting surface exists between them (a fillet, a
     chamfer, several irregular facets — this doesn't care) with a
     straight-line cut instead.
@@ -574,41 +558,34 @@ def connect_loop_to_region(vertices: np.ndarray, faces: np.ndarray,
     Taking `loop1` as an already-flattened loop rather than a fresh mesh
     region is what makes a 3rd (or later) region connectable onto a running
     chain: once the *first* strut connection happens, the combined shape
-    isn't a real mesh region anymore (some of its "boundary" is a synthetic
-    strut, not real mesh edges), so it can't be re-unfolded from a face set
-    the way a single region can — the caller must instead pass the
-    previous response's own outline back in. `connect_regions_with_strut`
-    is the common-case wrapper for the *first* strut (region1 is still a
-    real mesh region there).
+    is not a mesh region (part of its "boundary" is a synthetic strut, not
+    mesh edges), so it cannot be re-unfolded from a face set the way a
+    single region can — the caller must instead pass the previous
+    response's own outline back in. `connect_regions_with_strut` is the
+    common-case wrapper for the *first* strut (region1 is still a mesh
+    region there).
 
-    Returns `(outline, outline_vertex_indices)`: `outline` is an Nx2 array
-    exactly as before; `outline_vertex_indices` is a parallel list of each
-    point's *original mesh vertex index* (every outline point — whether
-    from `loop1` or the newly-unfolded `region2` — is a real mesh vertex;
-    only the two strut *edges* connecting them are synthetic). A caller
-    extending the chain again passes this same pair back in as the next
-    call's `loop1_orig`/`loop1_uv` (well, `loop1_uv` needs `outline`
-    directly — `outline_vertex_indices` is what makes `vertices[...]`
-    lookups against it meaningful for picking further connection points).
+    Returns `(outline, outline_vertex_indices)`: `outline` is an Nx2
+    array; `outline_vertex_indices` is a parallel list of each point's
+    *original mesh vertex index* (every outline point — whether from
+    `loop1` or the newly-unfolded `region2` — is a real mesh vertex; only
+    the two strut *edges* connecting them are synthetic). A caller
+    extending the chain passes `outline` back in as the next call's
+    `loop1_uv` and `outline_vertex_indices` as its `loop1_orig`; the
+    indices make `vertices[...]` lookups against the outline meaningful
+    when picking further connection points.
 
-    Replaced `bridge_gap` (a shortest-path/distance-ellipse search that
-    tried to select and include the actual connecting mesh faces) as the
-    way `/unroll-mesh` handles two disjoint flat selections, after
-    repeated real-world failures: every fix to the face-selection approach
-    (uniform-width assumption, wandering onto unrelated curved geometry,
-    non-determinism, a hair-thin pinch point, a genuinely jittery boundary
-    trace from faithfully reproducing rough small-scale mesh detail) was
-    followed by a *new*, different failure on the next real test case —
-    see NOTES.md's "STL/3D unroll" section for the full history. Trying to
-    faithfully select and flatten the true connecting geometry turned out
-    to be fundamentally fragile; approximating the connection with a
-    straight cut sidesteps the whole problem, because both endpoints
-    (region1 and region2 individually) were *never* the source of any of
-    those failures — each region alone always unfolded cleanly. This
-    trades a small amount of shape fidelity (the true fillet/chamfer curve
-    becomes a flat cut) for something that just works, which matches the
-    existing "holes are ignored" v1 stance: approximate now, let the user
-    manually adjust in the next step if they need more precision.
+    This is how `/unroll-mesh` and `/unroll-mesh-chain` join two disjoint
+    flat selections. The connection is approximated by a straight cut
+    rather than by selecting and flattening the actual connecting mesh
+    faces: selecting the true
+    connecting geometry is fragile (non-uniform widths, growth onto
+    unrelated curved geometry, non-determinism, hair-thin pinch points,
+    jittery traces of rough small-scale mesh detail), whereas each flat
+    region alone unfolds cleanly. The cost is a small loss of shape
+    fidelity (a fillet or chamfer curve becomes a flat cut), consistent
+    with ignoring holes in `extract_outline`; the user can adjust the
+    outline in the next step if more precision is needed.
 
     Algorithm: find each region's own boundary loop (already always a
     single clean loop for a flat region grown from one click) and unfold
@@ -632,40 +609,35 @@ def connect_loop_to_region(vertices: np.ndarray, faces: np.ndarray,
     "same" (loop1's closest-pair point <-> loop2's closest-pair point,
     loop1's cluster-extreme <-> loop2's cluster-extreme) and "crossed"
     (loop1's closest-pair point <-> loop2's cluster-extreme, and vice
-    versa). Which one yields a non-self-intersecting strut depends on the
-    two loops' relative facing-edge widths, found the hard way: "same"
-    is right when both loops' facing edges are comparable widths (the
-    synthetic fillet test, both ~40mm), but on a real asymmetric pair
-    (an 8mm-wide small patch facing a 22mm-wide large wall,
-    `finger_tip_soft.stl` faces 21478 + 6371) "same" pairing put two
-    *nearly coincident* points on whichever loop's own closest-pair point
-    and extreme happened to be close together, which forced the other
-    loop's "far" arc to sweep across nearly its entire boundary to close
-    the polygon — reading as two lobes pinched at a single point (a
-    boomerang), not a self-intersection `Polygon.is_valid` would catch,
-    so earlier attempts that only checked validity kept silently
-    shipping that pinch. "Crossed" pairing fixed it because it keeps both
-    loops' two strut points anchored to that loop's *own* natural
-    facing-cluster width instead of an artifact of which point happened
-    to be globally closest overall.
+    versa). Which one yields a usable outline depends on the two loops'
+    relative facing-edge widths. "Same" is right when both loops' facing
+    edges have comparable widths. On an asymmetric pair (a narrow patch
+    facing a much wider wall), "same" pairing can put two *nearly
+    coincident* points on whichever loop's closest-pair point and extreme
+    lie close together, which forces the other loop's "far" arc to sweep
+    across nearly its entire boundary to close the polygon. The result is
+    two lobes pinched at a single point (a boomerang); that is not a
+    self-intersection, so `Polygon.is_valid` does not reject it, and a
+    validity check alone would accept the pinch. "Crossed" pairing avoids
+    it because it anchors each loop's two strut points to that loop's
+    *own* facing-cluster width instead of to whichever point happens to
+    be globally closest.
 
     **`connection_pairs`** (optional): `((v_a1, v_b1), (v_a2, v_b2))`, using
     *original mesh vertex indices* (not loop-local ones) — when given, the
     automatic corner-selection heuristic above (including the same/crossed
-    trial) is skipped entirely, and strut 1 connects `v_a1` (must be on
+    search) is skipped entirely, and strut 1 connects `v_a1` (must be on
     region1's boundary) to `v_b1` (must be on region2's), strut 2 connects
     `v_a2` to `v_b2`. This is for a manual "pick the two connection corners
     yourself" UI flow — the correspondence is then fully determined by the
     user's click order, so there's no same-vs-crossed ambiguity left to
-    search over; the role/direction trial (below) still runs, since that
+    search over; the role/direction search (below) still runs, since that
     part resolves a real remaining ambiguity (which arc is "far") rather
     than guessing at correspondence. Raises ValueError if a given vertex
     isn't actually on the corresponding region's boundary loop.
 
-    Raises ValueError if no valid (non-self-intersecting) polygon can be
-    formed in any combination tried — in practice this hasn't been
-    observed, but a highly unusual mutual geometry could in principle
-    produce one.
+    Raises ValueError if no combination tried forms a valid
+    (non-self-intersecting) polygon.
     """
     from shapely.geometry import Polygon
 

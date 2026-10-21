@@ -1,19 +1,19 @@
 """Route smoothing — collapse Manhattan staircases into long straight diagonals,
-then chamfer any remaining sharp corners. Runs AFTER routing + validation.
+then chamfer any remaining sharp corners. Runs after routing + validation.
 
 Two purely-geometric passes:
 
 1. line-of-sight simplify (`los_simplify_layer`) — string-pulling. For each trace we
    replace the longest possible run of points with a single straight segment whenever
-   that segment stays clear. In open space a whole staircase becomes ONE diagonal;
+   that segment stays clear. In open space a whole staircase becomes one diagonal;
    where the path genuinely hugs pixels it stays stepped.
 2. chamfer (`chamfer_layer`) — cut any leftover ~90° corners into 45° miters.
 
 A candidate segment is accepted only if it keeps full clearance (>= G) from every
-OTHER trace on the same layer and this route's own non-replaced segments (so no real
+other trace on the same layer and this route's own non-replaced segments (so no real
 trace short is ever created), stays inside the board, clears other-net pads, and does
-not cut DEEP into pixel copper (shallow grazing is allowed — the ~0.1 mm tolerance the
-router itself already uses). Checks run against every trace's CURRENT geometry, so the
+not cut deep into pixel copper (shallow grazing is allowed — the ~0.1 mm tolerance the
+router itself already uses). Checks run against every trace's current geometry, so the
 passes never introduce a new trace-to-trace DRC violation.
 """
 
@@ -30,9 +30,9 @@ def taxel_copper_keepout_mm(params) -> float:
     """The pixel_keepout_mm for F.Cu (column) smoothing: it makes each pixel
     core the taxel's comb copper (its square inset by edge_clear_mm) grown by
     a wire's half width plus the clearance. On F.Cu both electrodes are combs,
-    so the default core (grazing _PIX_ALLOW into the square) let a column
-    shortcut cut a neighbouring taxel's corner 0.025-0.05 mm from its row comb
-    (2L fixed 17x09 and 29x06, legacy fallback; only KiCad saw it)."""
+    so the default core (grazing _PIX_ALLOW into the square) would let a
+    column shortcut cut a neighbouring taxel's corner closer than the
+    clearance to its row comb."""
     return (_PIX_ALLOW - params.edge_clear_mm + params.trace_w_mm / 2
             + params.clearance_mm + 0.01)
 
@@ -67,18 +67,17 @@ def _seg_clear(a, b, ri, polys, P_self, skip_lo, skip_hi, my_net,
 
     board_poly here is the *safe* board (already eroded by the copper-to-edge
     clearance — see _board_safe), so plain containment of the shortcut is the
-    clearance test. Testing raw containment instead let a smoothed diagonal cut
-    a corner to within a fraction of the clearance of the cut line: legal by
-    containment, a DRC edge violation in fact.
+    clearance test. Testing raw containment instead would let a smoothed
+    diagonal cut a corner to within a fraction of the clearance of the cut
+    line: legal by containment, a DRC edge violation in fact.
     """
     if not board_poly.covers(LineString([a, b])):
         return False
     # Not too deep into pixel copper, or into an expanded pixel keepout.
     #
     # pix_core is a plain list of (xlo, ylo, xhi, yhi) tuples and never changes
-    # during a pass, but this used to build a fresh shapely box() for every
-    # pixel on every call -- ~257k constructions on a 16x16 board, 2.5s of pure
-    # object churn (profiled). A segment can only touch a box whose AABB the
+    # during a pass. Building a shapely box() for every pixel on every call
+    # would dominate the pass. A segment can only touch a box whose AABB the
     # segment's own AABB overlaps, so reject on cheap float comparisons first
     # and only build geometry for the handful that survive.
     seg_xlo, seg_xhi = (a[0], b[0]) if a[0] <= b[0] else (b[0], a[0])

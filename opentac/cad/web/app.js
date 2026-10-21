@@ -18,12 +18,12 @@ let fillVertices = [];
 let editTarget = "outline"; // "outline" | "fill"
 let foldLines = [];
 // The cable edge (edge 0->1, where the connector tail exits) must be an
-// EXPLICIT choice for hand-drawn outlines: the old silent "first edge you
-// drew" default put a user's connector on an interior chord they never
-// intended (a board that routed 1 sensor instead of 119). Drawing or
-// reshaping the outline clears this; pressing "Set cable edge" sets it;
-// imported/unfolded/preset outlines arrive with a deliberate first edge
-// and count as set. Generate refuses to run while unset.
+// explicit choice: an implicit "first edge drawn" default can place the
+// connector on an interior chord the user never intended, leaving few or no
+// sensors routable. Drawing or reshaping the outline clears this; pressing
+// "Set cable edge" sets it. Presets and restored designs carry a designed
+// cable edge and count as set; STL unfolds and DXF imports do not. Generate
+// refuses to run while unset.
 let cableEdgeConfirmed = false;
 let selected = null;
 let mode = "select";
@@ -371,9 +371,9 @@ function drawOutlinePolygon() {
   if (vertices.length >= 3) ctx.fill();
   ctx.stroke();
 
-  // The cable edge is highlighted only once the user has SET it. Before
-  // that, edge 0->1 is just another edge — a tentative dashed preview was
-  // tried and read as "already selected", confusing the required step.
+  // The cable edge is highlighted only once the user has set it. Before
+  // that, edge 0->1 is drawn like any other edge: a tentative highlight
+  // would read as "already selected" and obscure the required step.
   if (vertices.length >= 2 && cableEdgeConfirmed) {
     const [ax, ay] = mmToPx(...vertices[0]);
     const [bx, by] = mmToPx(...vertices[1]);
@@ -969,7 +969,7 @@ clearOutlineBtn.addEventListener("click", () => {
   syncDimensionFields();
   updateCadButtons();
 });
-// Preset outlines. The FIRST edge (vertex 0 -> 1) becomes the cable edge, same
+// Preset outlines. The first edge (vertex 0 -> 1) becomes the cable edge, same
 // rule as hand-drawn outlines.
 const PRESET_SHAPES = {
   "preset-square": [[-20, -20], [20, -20], [20, 20], [-20, 20]],
@@ -1013,17 +1013,11 @@ window.addEventListener("otc:face-outline", (e) => {
   updateTargetButtons();
   vertices = e.detail.outline.map((p) => [p[0], p[1]]);
   foldLines = (e.detail.foldLines || []).map(([a, b]) => [a.slice(), b.slice()]);
-  // The unfold flow rotates a deliberately-chosen lowest edge into the cable
-  // slot, so edge 0->1 is a sensible DEFAULT — but it's still a guess about
-  // where the user wants their cable to exit on the real part, not something
-  // they chose. Every other outline source (drawn, DXF) requires an explicit
-  // Set cable edge press before it counts as decided; STL unfolds silently
-  // skipped that and rendered the edge orange/confirmed immediately, which
-  // reads as "the app picked your connector location for you" — inconsistent
-  // with the rest of the app and reported as surprising. Same explicit-choice
-  // requirement here now: the computed edge is already selected as edge 0->1
-  // (still the natural first thing to confirm or override), just not
-  // pre-confirmed.
+  // The unfold flow rotates a deliberately chosen lowest edge into the cable
+  // slot, so edge 0->1 is a sensible default, but it is still a guess about
+  // where the cable exits on the real part. Unfolded outlines need the same
+  // explicit Set cable edge as drawn and DXF outlines: the computed edge is
+  // placed at 0->1 as the natural first candidate, but not pre-confirmed.
   cableEdgeConfirmed = false;
   selected = null;
   angleReferenceEdge = null;
@@ -1060,9 +1054,8 @@ window.addEventListener("otc:dxf-outline", (e) => {
   updateTargetButtons();
   vertices = e.detail.outline.map((p) => [p[0], p[1]]);
   foldLines = [];
-  // A DXF loop's first edge is an accident of the file's vertex order —
-  // exactly the unreliable default being abolished. Its banner has always
-  // asked the user to confirm; now that confirmation is required.
+  // A DXF loop's first edge is an accident of the file's vertex order, so
+  // the user must confirm the cable edge before Generate runs.
   cableEdgeConfirmed = false;
   selected = null;
   angleReferenceEdge = null;
@@ -1081,12 +1074,10 @@ window.addEventListener("otc:dxf-outline", (e) => {
 // that are real /generate inputs but have no control on this page, so they
 // have to ride along as overrides instead of being silently dropped.
 //
-// The type dispatch is the load-bearing part. This used to be a bare
-// `el.value = String(value)`, which is a no-op on a checkbox (setting .value
-// changes the submitted value, not the tick) and misses radio groups
-// entirely, because a group is addressed by NAME and only board_mode was
-// special-cased, so checkbox and radio settings in a design file imported as
-// "whatever the form happened to be showing".
+// The type dispatch is the load-bearing part. A bare `el.value = String(value)`
+// is a no-op on a checkbox (setting .value changes the submitted value, not
+// the tick) and misses radio groups entirely, because a group is addressed by
+// name, so checkbox and radio settings from a design file would be lost.
 function applyParamsToForm(params) {
   const extras = {};
   for (const [key, value] of Object.entries(params || {})) {
@@ -1118,8 +1109,8 @@ function applyParamsToForm(params) {
     }
     // No control owns this one — pad_pitch_mm, wiring_keepout_floor_mm and
     // connector_pos_override are all real inputs with no field on the page.
-    // Dropping them here is how a re-imported design used to come back with
-    // the smallest connector that fits instead of the one it was built with.
+    // Dropping them would bring a re-imported design back with the smallest
+    // connector that fits instead of the one it was built with.
     if (value !== null && value !== undefined) extras[key] = value;
   }
   return extras;
@@ -1136,12 +1127,12 @@ window.addEventListener("otc:load-example", (e) => {
     // The sensorize zone, when the design carried one. Same frame as
     // `outline`; absent for every built-in example.
     fillRegion = null,
-    // A real robot surface is a SHAPE, not a finished design: which edge the
-    // connector exits is a decision about the reader's own build, so those
+    // A real robot surface is a shape, not a finished design: which edge the
+    // connector exits is a decision about the user's own build, so those
     // examples require the same explicit Set cable edge as a DXF import (and
-    // so can't auto-generate, since Generate is blocked until it's set). The
-    // simple built-in shapes above still ship a designed cable edge and
-    // generate immediately, which is what makes them a one-click demo.
+    // so cannot auto-generate, since Generate is blocked until it is set).
+    // The simple built-in shapes carry a designed cable edge and generate
+    // immediately, which makes them a one-click demonstration.
     requireCableEdge = false,
     autoGenerate = true,
   } = e.detail || {};
@@ -1160,7 +1151,7 @@ window.addEventListener("otc:load-example", (e) => {
   angleReferenceEdge = null;
   const extras = applyParamsToForm(params);
   // Examples and design files both store explicit taxel sizes, never row/column
-  // targets — a stored recipe carries the SOLVED size, so re-solving it here
+  // targets — a stored recipe carries the solved size, so re-solving it here
   // would be a second answer to a question that already has one.
   if (gridSizeModeInput) gridSizeModeInput.checked = true;
   enforcePitchFloor();
@@ -1186,7 +1177,7 @@ window.addEventListener("otc:load-example", (e) => {
 // size intact, so nothing is re-routed and nothing can come out different.
 //
 // It arrives as a rebuilt board rather than as inputs, so this is deliberately
-// NOT a variant of otc:load-example: the canvas and form are synced to it for
+// not a variant of otc:load-example: the canvas and form are synced to it for
 // further editing, but the preview and ZIP are the restored ones.
 window.addEventListener("otc:restore-design", (e) => {
   const { outline, params = {}, fillRegion = null, editData, svg, stats, drc,
@@ -1291,29 +1282,28 @@ function renderRecoveredStats(editData, notes) {
 }
 
 // ---- server status ----
-// On the hosted site (GitHub Pages) API_BASE is a free-tier Render service. It
+// On the hosted site (GitHub Pages) API_BASE points to the hosted server. It
 // sleeps after ~15 minutes without requests and takes 30-60 s to start, and a
 // request sent meanwhile is held until it is up. A local `opentac cad` serves
 // this page itself (API_BASE is ""), so it is already up and never sleeps, and
 // the notice below never shows there.
 //
-// Generate waits for the server rather than firing into a sleeping one. It
-// used to go out at once and sit for a minute under "Generating… (may take a
-// few seconds)" while the badge said "working", which read as a hang. Now the
+// Generate waits for the server rather than firing into a sleeping one: the
 // status says it is waiting for the server, and the request goes out when
-// /health answers.
+// /health answers. A request sent into a sleeping server would otherwise sit
+// for a minute with no explanation, which reads as a hang.
 //
-// Three rules keep the badge honest (each was a real false "unreachable"):
+// Three rules prevent a false "unreachable" badge:
 //  * It never latches: after the wake window it re-probes every 30 s, so a
 //    server that comes up late still turns it green.
-//  * A successful API response marks the server up: a response IS proof of
+//  * A successful API response marks the server up: a response is proof of
 //    life, whatever the last probe said.
-//  * While our own request is in flight it does not probe: the single worker
-//    is busy computing that request and cannot answer /health, which is
-//    business as usual, not an outage.
+//  * While the page's own request is in flight it does not probe: the single
+//    worker is busy computing that request and cannot answer /health, which
+//    is expected, not an outage.
 const HOSTED = API_BASE !== "";
 const WAKE_DEADLINE_MS = 90000;          // covers a cold start with room to spare
-const IDLE_SLEEP_MS = 14 * 60 * 1000;    // a little under Render's 15 minutes
+const IDLE_SLEEP_MS = 14 * 60 * 1000;    // a little under the server's 15-minute idle timeout
 const NOTICE_DELAY_MS = 1500;            // an awake server answers well within this
 const healthEl = document.getElementById("health");
 const serverNoticeEl = document.getElementById("server-notice");
@@ -1328,9 +1318,8 @@ let upWaiters = [];
 // all: an ad or privacy blocker cancels requests to .../health
 // (net::ERR_BLOCKED_BY_CLIENT). A sleeping server holds the request open while
 // it boots instead. With the probe blocked the page cannot know the server's
-// state, so it stops waiting on it: requests go straight out, as they did
-// before this check existed, and the first one after a quiet spell simply
-// takes about a minute.
+// state, so it stops waiting on it: requests go straight out, and the first
+// one after a quiet spell takes about a minute.
 let probeBlocked = false;
 let fastProbeFailures = 0;
 const PROBE_FAST_FAIL_MS = 1500;
@@ -1387,8 +1376,6 @@ function markBackendAlive() {
   waiting.forEach((resolve) => resolve());
 }
 
-// Probe /health until it answers. Retries rather than probing once, because
-// the first visitor after a quiet spell always hits a booting service.
 function giveUpProbing() {
   probeBlocked = true;
   probing = false;
@@ -1401,6 +1388,8 @@ function giveUpProbing() {
   waiting.forEach((resolve) => resolve());
 }
 
+// Probe /health until it answers. Retries rather than probing once, because
+// the first visitor after a quiet spell always hits a booting server.
 function startProbing() {
   if (probeBlocked) { giveUpProbing(); return; }
   if (probing) return;
@@ -1460,7 +1449,7 @@ function startProbing() {
 }
 
 // Whether a request can go out now. On the hosted site a server this page has
-// not heard from for longer than Render's idle timeout has most likely gone
+// not heard from for longer than the server's idle timeout has most likely gone
 // back to sleep, so it counts as not ready until /health answers again.
 function serverReadyNow() {
   if (probeBlocked) return true;
@@ -1491,7 +1480,7 @@ const zipNoteEl = document.getElementById("zip-status");
 // True while Download ZIP waits on the backend for the case. Like
 // generateInFlight, it stops the health ping reading a busy worker as down.
 let zipInFlight = false;
-// The case takes a few seconds locally and ~10x that on the free tier. Past
+// The case takes a few seconds locally and far longer on the hosted server. Past
 // this, give up on it and hand over the board ZIP rather than keep waiting.
 const CASE_TIMEOUT_MS = 120000;
 
@@ -1516,8 +1505,8 @@ function setZipNote(text, warn = false) {
 
 // The ZIP the user downloads carries the printed case (case/: the bottom and
 // all three lids). It is added here, at download time, by /zip-with-case, not
-// by /generate: building three lids would slow every generate on the free-tier
-// backend, and most generates are never downloaded. The case is built from the
+// by /generate: building three lids would slow every generate on the hosted
+// server, and most generates are never downloaded. The case is built from the
 // case panel's settings (its defaults if untouched).
 //
 // It never holds back the board: if the case cannot be built, or the request
@@ -1594,8 +1583,8 @@ function selectedBoardMode() {
 }
 
 // Copper layers: 2 or 4, independent of the board mode. Only the hug router
-// wires the inner layers (the legacy router knows 2), so picking 4 holds the
-// router checkbox on.
+// wires the inner layers (the legacy router uses 2); the page always requests
+// the hug router.
 const copperLayerInputs = Array.from(document.querySelectorAll('input[name="copper_layers"]'));
 function selectedCopperLayers() {
   const picked = copperLayerInputs.find((el) => el.checked);
@@ -1603,13 +1592,9 @@ function selectedCopperLayers() {
 }
 
 
-// Hug routing works in both board modes now (fixed-outline sizes its wiring
-// keep-out band exactly from the hug routing plan), so the checkbox is never
-// greyed out.
-
 // Sensor grid: either the taxel size is given and the count follows, or the
 // count is given and the backend solves the size (grow-board mode only — see
-// _apply_target_grid in backend/main.py).
+// _apply_target_grid in main.py).
 const gridModeInputs = Array.from(document.querySelectorAll('input[name="grid_mode"]'));
 const gridSizeInputIds = ["pixel_w_mm", "pixel_h_mm", "pitch_x_mm", "pitch_y_mm"];
 const gridSizeFieldsNote = document.getElementById("grid-size-note");
@@ -1689,9 +1674,6 @@ for (const [pxId, pitchId] of pitchFloorPairs) {
   document.getElementById(pitchId)?.addEventListener("change", enforcePitchFloor);
 }
 enforcePitchFloor();
-// Everything below is expansion-only shaping: in fixed-outline mode the drawn
-// outline is the board, so these are forced off exactly as they were when
-// auto-expand was a checkbox the user could clear.
 function readParams() {
   const ids = ["pixel_w_mm", "pixel_h_mm", "pitch_x_mm", "pitch_y_mm",
     "trace_w_mm", "gap_mm", "clearance_mm", "edge_keepout_mm", "board_edge_clear_mm",
@@ -1722,8 +1704,8 @@ function readParams() {
     p.target_cols = Math.max(1, Math.round(parseFloat(document.getElementById("target_cols").value) || 1));
     p.target_rows = Math.max(1, Math.round(parseFloat(document.getElementById("target_rows").value) || 1));
   }
-  // Legacy flags, still sent so an older backend keeps behaving; the current
-  // backend derives both from board_mode and ignores them.
+  // Also sent for a backend that predates board_mode; the current backend
+  // derives both from board_mode (_params_for_board_mode in main.py).
   p.preserve_sensors = true;
   p.auto_expand_board = p.board_mode === "expand";
   // Printed on the front silkscreen just inboard of the connector. The backend
@@ -1736,7 +1718,7 @@ function readParams() {
 }
 
 // ---- pixel footprint preview ----
-// Mirrors backend/export/kicad_footprint.py's pixel_geometry() exactly (same
+// Mirrors export/kicad_footprint.py's pixel_geometry() exactly (same
 // variable names/formulas) so this preview always matches the footprint a
 // real Generate call would produce.
 const pixelPreviewIds = ["pixel_w_mm", "pixel_h_mm", "trace_w_mm", "gap_mm", "center_clear_mm", "edge_clear_mm", "via_drill_mm", "via_dia_mm"];
@@ -1862,8 +1844,9 @@ function generateBody(overrides) {
   return body;
 }
 
-// Backend messages that predate the taxel wording, in the words the page uses.
-// The backend's own text is left alone: the pipeline matches on it.
+// Backend messages that use the internal "pixel" terminology, restated in the
+// page's "taxel" wording. The backend's own text is left alone: the pipeline
+// matches on it.
 function readableError(err) {
   const msg = String(err?.message || err);
   if (/^No pixels packed/.test(msg)) {
@@ -1903,8 +1886,8 @@ async function runGenerate(overrides = {}) {
   lastZipB64 = null;
   setZipNote("");
   clearPrinted();
-  // Any previously built case belongs to the OLD board. Drop it before the new
-  // one lands, so a stale STL can never be downloaded as if it fitted.
+  // Any case already built belongs to the board being replaced. Drop it before
+  // the new one lands, so a stale STL can never be downloaded as if it fitted.
   window.otcCaseInvalidate?.();
   try {
     const resp = await fetch(`${API_BASE}/generate`, {
@@ -1963,7 +1946,7 @@ function revealResult() {
 
 // ---- mirror ----
 // Flips the whole design in place: outline, sensorize zone and any fold lines
-// together, about the OUTLINE's bounding-box centre. Mirroring only the piece
+// together, about the outline's bounding-box centre. Mirroring only the piece
 // you happen to be editing would slide the sensorize zone off the board.
 //
 // The winding fix is the subtle part. Mirroring reverses a polygon's
@@ -1971,9 +1954,9 @@ function revealResult() {
 // pins vertex 0 and reverses the rest, so handing it a clockwise polygon does
 // not merely flip the winding back -- it silently swaps the cable edge for the
 // other edge meeting vertex 0, and the board generates fine with its tail in
-// the wrong place. Reversing the cycle while rotating it to start at the old
-// vertex 1 restores counter-clockwise AND keeps edge 0->1 the same physical
-// edge, just traversed the other way, so the cable edge survives the flip.
+// the wrong place. Reversing the cycle while rotating it to start at the
+// pre-mirror vertex 1 restores counter-clockwise and keeps edge 0->1 the same
+// physical edge, traversed the other way, so the cable edge survives the flip.
 function mirrorCycleCCW(pts, flip) {
   const m = pts.map(flip);
   if (m.length < 3) return m;
@@ -2012,12 +1995,11 @@ cadMirrorVBtn?.addEventListener("click", () => mirrorDesign("v"));
 
 // ---- 1:1 printable PDF ----
 // The PDF is built by the same call that builds the ZIP and arrives inside the
-// generate response, so this only hands over bytes it already has. It was
-// briefly a separate endpoint that rebuilt the layout from edit_data; that
-// reconstruction did not match what the export does — it skipped the tail
-// extension, post-route containment, follow-padding and connector shoulder —
-// and produced a plausible-looking template of the wrong shape. One artefact,
-// one producer.
+// generate response, so this only hands over bytes it already has. Rebuilding
+// the layout separately from edit_data would not match what the export does
+// (tail extension, post-route containment, follow-padding and connector
+// shoulder) and could produce a plausible-looking template of the wrong
+// shape. One artefact, one producer.
 const downloadPdfBtn = document.getElementById("download-pdf");
 const pdfStatus = document.getElementById("pdf-status");
 let lastPdf = null;
@@ -2034,8 +2016,8 @@ function setPrintPdf(stats) {
     : "";
 }
 
-// Route edits rebuild the board, so the template that shipped with the
-// original generate is then for the wrong outline.
+// Route edits rebuild the board, so the template returned by the original
+// generate is then for the wrong outline.
 window.otcPrintPdfUpdated = (stats) => setPrintPdf(stats);
 
 downloadPdfBtn?.addEventListener("click", () => {
@@ -2253,7 +2235,7 @@ function renderDrcDetails(drc) {
 // itself is rebuilt by /export-edited only when the board was changed after
 // Generate or Open (a moved or chamfered route, a tail extension, Redo
 // padding); otherwise the ZIP already in hand is the same board, and
-// rebuilding it was a slow extra round trip on the free-tier server. The
+// rebuilding it would be a slow extra round trip on the hosted server. The
 // button says it is working for the whole wait.
 downloadBtn.addEventListener("click", async () => {
   if (zipInFlight || downloadBtn.disabled) return;

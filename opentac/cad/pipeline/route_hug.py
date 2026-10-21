@@ -1,7 +1,7 @@
 """Hug router — routes wires as close to the sensor field as possible.
 
-Selected by GenerateRequest.router == "hug"; the default routers in
-route_columns.py / route_rows.py are never touched by this module.
+Selected by GenerateRequest.router == "hug", the default. The legacy routers
+in route_columns.py / route_rows.py are never touched by this module.
 
 Model
 -----
@@ -9,7 +9,7 @@ Rows and columns live on opposite faces of the flex, so each face is an
 independent single-copper-layer planar problem. Within a face, planarity
 forces everything: there is no search, only an order.
 
-Every net is routed as one or more HOPS. A pad hop runs from the net's
+Every net is routed as one or more hops. A pad hop runs from the net's
 connector pad to the segment of the net nearest the connector; a link hop
 bridges two segments of a net that a concavity cut apart, hugging around the
 concavity. Each hop hugs a known span of the sensor-field contour, so the hop's
@@ -21,8 +21,9 @@ innermost-first is therefore simply shortest-span-first: each wire hugs the
 union of the field and all previously routed copper on its face, and lane
 stacking emerges from the order instead of being computed.
 
-This file currently contains the PLAN phase (terminals, contour, spans, order,
-consistency checks). Geometry emission builds on top of it.
+The module holds both phases: the plan (build_plan: terminals, contour,
+spans, order, consistency checks) and the geometry emission that walks each
+face's hops in plan order (route_face_wires, route_hug_all).
 """
 
 from dataclasses import dataclass, field as dc_field
@@ -98,28 +99,25 @@ def field_polygon(layout: Layout, params: Params, warnings: list | None = None) 
     Pitch-sized (not pixel-sized) so adjacent cells share edges and the union
     is one connected polygon whose boundary follows the packed field.
 
-    A packed field can come apart into ISLANDS: an outline with a narrow
+    A packed field can come apart into islands: an outline with a narrow
     waist (a strut-joined wrap) at a pitch where no cell fits through the
     junction, or fixed mode's keep-out carving a corridor clean through.
-    An earlier version silently hugged only the largest part — the island
-    nets' anchors then projected onto the main contour at nonsense params
-    (u collapsing to the cut, span (0,0)) and their wires were emitted as
-    bare diagonals across the whole connector fan (live report: COL/COL
-    crossings on F.Cu on a strut-joined fingertip wrap, both modes,
-    pixel-size dependent). Instead: bridge each island to the main body
-    with a thin capsule across their narrowest gap, so ONE contour covers
-    every pixel and island wires hug through the waist exactly like any
-    other lane — the same "hug around, don't teleport" answer the link-hop
-    machinery gives to a split net.
+    Hugging only the largest part is not enough: the island nets' anchors
+    would project onto the main contour at meaningless params (u collapsing
+    to the cut, span (0,0)) and their wires would be emitted as bare
+    diagonals across the whole connector fan, crossing other wires.
+    Instead, each island is bridged to the main body with a pitch-wide
+    capsule across their narrowest gap, so one contour covers every pixel
+    and island wires hug through the waist like any other lane — the same
+    "hug around, don't teleport" approach the link-hop machinery takes for
+    a split net.
     """
     # Cells are oversized by a 5µm weld: staggered packing routinely leaves
-    # two cells touching only at a CORNER, and an exact union then reports
+    # two cells touching only at a corner, and an exact union then reports
     # the field as "islands at distance zero". Bridging such a point-touch
-    # stamped a pitch/2-radius disc on the contour — every passing wire and
-    # the board outline hugged around it, a half-circle "bubble" bulging
-    # out of a flat field edge over nothing (user report; visible on the
-    # rect preset @3.0/3.2, whose bottom-edge corner-touch made the whole
-    # row bundle dome mid-run). The weld fuses point-contacts into one
+    # would stamp a pitch/2-radius disc on the contour: every passing wire
+    # and the board outline would hug around it, a half-circle bulge out of
+    # a flat field edge over nothing. The weld fuses point-contacts into one
     # polygon — a ~10µm neck the base-clearance buffer smooths over — while
     # real gaps stay separate and still get capsule bridges below.
     weld = 0.005
@@ -132,14 +130,13 @@ def field_polygon(layout: Layout, params: Params, warnings: list | None = None) 
             warnings.append(
                 f"sensor field is split into {len(parts)} islands — hug contour "
                 f"bridged across the narrowest gaps; check the waist routing")
-        # The bridge must be a real corridor, PITCH-wide, not a filament: a
+        # The bridge must be a real corridor, pitch-wide, not a filament: a
         # hair-thin bridge puts the contour's two sides through the waist
         # ~0.1mm apart, making anchor projections and the arc-side chooser
-        # ambiguous between them — island wires then hairpin the wrong way
-        # around (measured: 114 violations with a 0.15mm bridge on the same
-        # board a pitch-wide bridge routes clean). Pitch-wide, the junction
-        # behaves like one more column of cells and lanes stack on each
-        # side of the waist exactly like along any other stretch of field.
+        # ambiguous between them, and island wires then hairpin the wrong way
+        # around. Pitch-wide, the junction behaves like one more column of
+        # cells and lanes stack on each side of the waist as along any other
+        # stretch of field.
         bridge_hw = min(params.pitch_x_mm, params.pitch_y_mm) / 2
         main = parts[0]
         rest = list(parts[1:])
@@ -204,7 +201,7 @@ def _col_terminals(Pxy, seg, params):
 
 
 def _row_via(Pxy, seg, params, side):
-    """Legacy-style via anchor: near the LEFT edge of the end pixel on either
+    """Legacy-style via anchor: near the left edge of the end pixel on either
     flank (route_rows.py puts the via at end-pixel-center + via_x_off for both
     sides; the wire enters it horizontally)."""
     y_mid = float(np.mean(Pxy[seg, 1]))
@@ -234,8 +231,7 @@ def _pad_fan(layout: Layout, params: Params, field_poly, pad_x_left: float, pad_
     straight rise from an outer pad clips the shoulder where the tab meets
     the outline. Widening the keep-out cannot fix it: only the field
     shrinks, the wire stays where it is, and fixed mode ends up falling back
-    to its uniform conservative band (agilex jaw: 338 -> 289 taxels for one
-    such wire).
+    to its uniform conservative band, losing taxels for one such wire.
 
     So, in the tail below the shoulder, the used pads are fanned in: each is
     moved the least it can be so that all of them, still in order and as far
@@ -419,11 +415,9 @@ def build_plan(layout: Layout, outline_xy: np.ndarray, params: Params) -> HugPla
     # the contour sits right over the connector), wires to the far side of
     # the field are near-equidistant both ways, and independent choices
     # interleave directions across the pad row: neighbors take opposite
-    # ways around the board and their fan verticals/arcs cross (live: 98
-    # F.Cu violations on a strut-joined wrap at 3.5mm — COL_0/1 sent over
-    # the top while COL_2..10 went along the bottom). The comb is only
-    # sound when each direction group occupies a contiguous run of the pad
-    # row, so choose the SPLIT, not the wires: pads left of the split go
+    # ways around the board and their fan verticals/arcs cross. The comb is
+    # only sound when each direction group occupies a contiguous run of the
+    # pad row, so choose the split, not the wires: pads left of the split go
     # "left", the rest go "right", picking the split with the smallest
     # total contour travel. On plain fields this reproduces the per-wire
     # choice exactly; in the ambiguous cases it keeps one bundle together.
@@ -456,7 +450,7 @@ def build_plan(layout: Layout, outline_xy: np.ndarray, params: Params) -> HugPla
         if side == "right":
             segments = segments[::-1]      # feed the rightmost segment first
         anchor = _row_via(Pxy, segments[0], params, side)
-        # Project the APPROACH point (the fed segment's edge on the feeding
+        # Project the approach point (the fed segment's edge on the feeding
         # side), not the via: the via can sit deep inside a narrow segment
         # (e.g. a waist row) and snap to the wrong contour wall. The wire hugs
         # the contour to this edge, then enters horizontally over its own
@@ -522,30 +516,28 @@ def build_plan(layout: Layout, outline_xy: np.ndarray, params: Params) -> HugPla
                         f"{face}/{direction}: pad order breaks nesting between "
                         f"{pads[k-1].net} (x={xs[k-1]:.2f}) and {pads[k].net} "
                         f"(x={xs[k]:.2f}) — fan-out would cross")
-        # Routing order: innermost first. For links that is shortest SPAN
-        # first. A pad hop's real run starts at its PAD, not at the cut, so
+        # Routing order: innermost first. For links that is shortest span
+        # first. A pad hop's real run starts at its pad, not at the cut, so
         # its measure is the span corrected by where its pad sits relative
         # to the cut: a right-going wire whose pad lies right of the cut
-        # enters the contour that much PAST the cut (shorter run), one
+        # enters the contour that much past the cut (shorter run), one
         # whose pad lies left of it enters before the cut (longer run) —
         # eff = span - o for "right", span + o for "left", with
         # o = pad_x - cut_x measured along the pad row. This is the same
         # fan-annulus refinement the legacy comb encodes (near the
         # connector a wire whose pad sits beyond another wire's anchor must
-        # route after it), but computed from the pad's x directly. Do NOT
-        # compute it by projecting the pad onto the ring: a pad's nearest
+        # route after it), but computed from the pad's x directly. It is
+        # not computed by projecting the pad onto the ring: a pad's nearest
         # ring point can be an unrelated feature — an island-bridge lobe,
         # the far wall of a notch — and the projected measure then inverts
-        # the peel order (the L preset @2.5mm braided 14 row pairs when
-        # ROW_16's pad projected 25mm off its overhead point). Plain span
-        # length without the offset is no better: it drops the annulus
-        # refinement and collapses shapes whose bundles interleave at the
-        # cut (T @3mm went 194 -> 19 sensors). The measure is a LENGTH —
-        # take the absolute value: span - o goes negative when the pad
-        # sits beyond its own anchor, and such a wire's run is |span - o|
-        # long on the far side; ordering by the signed value routes the
-        # longest such wire first and buries its neighbors' anchors under
-        # its lane (T @3mm stem cols, COL_10 sealing COL_11's anchor).
+        # the peel order and braids neighbouring wires. Plain span length
+        # without the offset is no better: it drops the annulus refinement
+        # and loses many sensors on shapes whose bundles interleave at the
+        # cut. The measure is a length, so the absolute value is taken:
+        # span - o goes negative when the pad sits beyond its own anchor,
+        # and such a wire's run is |span - o| long on the far side;
+        # ordering by the signed value routes the longest such wire first
+        # and buries its neighbors' anchors under its lane.
         cut_x = float(cut_xy[0])
         for h in hops:
             span_len = h.span[1] - h.span[0]
@@ -572,7 +564,7 @@ def build_plan(layout: Layout, outline_xy: np.ndarray, params: Params) -> HugPla
 def _pad_entry(ring: LineString, h) -> tuple[Point, tuple | None]:
     """Where a pad hop joins the corridor, as (entry point, elbow-or-None).
 
-    The wire must START with a vertical rise at its own pad's x — that is the
+    The wire must start with a vertical rise at its own pad's x — that is the
     fan-comb invariant the whole connector zone relies on: pad order equals
     lane order, so vertical stubs at distinct x can never cross each other,
     and each stub stops one pitch short of every earlier wire's arc. (A
@@ -582,31 +574,28 @@ def _pad_entry(ring: LineString, h) -> tuple[Point, tuple | None]:
 
     Two cases keep that invariant for every pad:
 
-    - The rising ray hits the corridor boundary: entry is the FIRST point
+    - The rising ray hits the corridor boundary: entry is the first point
       crossed (directly above the pad), elbow is None — the classic comb.
     - The ray misses: the pad sits beyond the corridor's footprint on this
       side (a wide connector next to a field that narrows toward the tail —
       e.g. a 30-pos connector under an arch whose bottom rows step inward).
       There is no boundary above the pad, but the comb generalizes: rise
-      vertically at the pad's x to the height of the corridor's EXTREME
+      vertically at the pad's x to the height of the corridor's extreme
       point q on the pad's side — the ring point whose x is closest to the
       pad's x, lowest such — then run horizontally to q. The returned elbow
       is (pad_x, q.y) and entry is q. The horizontal run spans only x
       values beyond the corridor's extent, and every interior pad (one
       whose ray hits) lies under that extent, so the run provably cannot
-      cross an interior pad's vertical; the Euclidean-NEAREST ring point
+      cross an interior pad's vertical; the Euclidean-nearest ring point
       does not have this property (it can sit past an interior vertical
-      and lower, sending the horizontal straight through it — the residual
-      ROW_0/ROW_3 crossings when this fix was first attempted that way).
+      and lower, sending the horizontal straight through it).
       The caller prepends the elbow to the hugged arc so the run is
       buffered like any other routed copper; the next spilled pad's
-      extreme point then lands on THIS wire's stub cap one pitch further
+      extreme point then lands on this wire's stub cap one pitch further
       out, and the bundle self-organizes into the same nested staircase
-      lanes form everywhere else. This case used to fall back to a bare
-      nearest-point projection, which drew a long diagonal from the pad
-      across every neighbor's vertical — the "trace order looks messed up"
-      DRC failures on U-shaped wraps with 3mm pixels (row/row crossings
-      pinned to the spilled pads' stub lines).
+      lanes form everywhere else. A bare nearest-point projection here
+      would instead draw a long diagonal from the pad across every
+      neighbor's vertical.
     """
     x, y = float(h.a_xy[0]), float(h.a_xy[1])
     ray = LineString([(x, y), (x, y + 1e4)])
@@ -633,19 +622,18 @@ def route_face_wires(plan: HugPlan, face: str, base_clear: float, wire_pitch: fl
     """Route one face's hops in plan order; each wire hugs the union of the
     field and all previously routed wires on this face.
 
-    The wire's path IS a stretch of the boundary of
+    The wire's path is a stretch of the boundary of
         buffer(field, base_clear) ∪ buffer(routed wires, wire_pitch)
     between the projections of its two terminals, walked on the side the plan's
     span dictates. A wire therefore cannot cross anything routed before it
-    ALONG ITS HUGGED ARC — but a path also contains straight jumps (the pad
+    along its hugged arc — but a path also contains straight jumps (the pad
     stub, the anchor stub) whose safety rests on the fan-comb and disc
     arguments, and a plan whose projections are wrong for an unforeseen
-    topology can degenerate the arc into more jumps. Every crossing bug this
-    router has had lived in exactly that gap between model and emission, so
-    emission no longer trusts the model: each wire is CHECKED against every
-    previously emitted wire of the face, and one that would cross or come
-    closer than the DRC minimum fails its whole net instead of being
-    emitted. Callers drop or retry failed nets; garbage never ships.
+    topology can degenerate the arc into more jumps. Emission therefore does
+    not trust the model: each wire is checked against every previously
+    emitted wire of the face, and one that would cross or come closer than
+    the DRC minimum fails its whole net instead of being emitted. Callers
+    drop or retry failed nets, so no crossing reaches the output.
 
     `order` replaces the plan's routing order and `flip` (hop keys) takes the
     other arc for those hops — both only for route_face_wires_repaired.
@@ -654,14 +642,14 @@ def route_face_wires(plan: HugPlan, face: str, base_clear: float, wire_pitch: fl
     """
     hops = order if order is not None else (plan.order_col if face == "col" else plan.order_row)
     obstacle = plan.field_poly.buffer(base_clear, quad_segs=8)
-    # Verification threshold: the DRC centerline minimum. Lanes are BUILT at
+    # Verification threshold: the DRC centerline minimum. Lanes are built at
     # wire_pitch = min + DISCRETIZATION_MARGIN, so legitimate geometry passes
     # with the margin to spare and anything under the DRC line is refused.
     min_gap = wire_pitch - DISCRETIZATION_MARGIN - 1e-6
     emitted = []          # (net, LineString) accepted so far, this face
     failed_nets = set()
 
-    # Field-side terminals of OTHER nets are clearance discs: another net's
+    # Field-side terminals of other nets are clearance discs: another net's
     # anchor can sit almost on top of my pad's vertical line (0.5mm pad grid vs
     # 4.2mm column grid, at the connector split), and a wire passing it must
     # clear the connection stub that will land there. Within a bundle nesting
@@ -688,7 +676,7 @@ def route_face_wires(plan: HugPlan, face: str, base_clear: float, wire_pitch: fl
             R = max(R.geoms, key=lambda g: g.area)
         ring = LineString(R.exterior.coords)
         L = ring.length
-        # Project via the PLAN contour's approach points (u_a/u_b), not the raw
+        # Project via the plan contour's approach points (u_a/u_b), not the raw
         # terminals: a terminal deep in a narrow region (a waist via) is nearer
         # the wrong wall, and a direct projection would send the wire the long
         # way around. Pad hops enter vertically above their own pad instead.
@@ -743,14 +731,14 @@ def route_face_wires(plan: HugPlan, face: str, base_clear: float, wire_pitch: fl
             continue
         emitted.append((h.net, path_ls))
         out.append((h, path))
-        # Buffer the arc plus the FIELD-side stub (arc end -> anchor), so later
+        # Buffer the arc plus the field-side stub (arc end -> anchor), so later
         # wires keep their pitch from the connection stub too — the discs above
         # guarantee no terminal ever ends up inside this buffer. The pad-side
-        # vertical is deliberately NOT buffered: adjacent pads sit only one pad
+        # vertical is deliberately not buffered: adjacent pads sit only one pad
         # pitch (0.5mm) apart, a hair over the wire pitch, and the ordered fan
         # comb already keeps pad verticals apart; buffering them leaves later
-        # entry rays nothing to rise through. (A spilled pad's HORIZONTAL run
-        # is in coords via its elbow and so IS buffered — that is what makes
+        # entry rays nothing to rise through. (A spilled pad's horizontal run
+        # is in coords via its elbow and so is buffered — that is what makes
         # the next spilled pad's stub stack outside it instead of through it.)
         blocked = coords + [tuple(h.b_xy)]
         if h.kind == "link":
@@ -769,7 +757,7 @@ def route_face_wires_repaired(plan: HugPlan, face: str, base_clear: float, wire_
     then X routed just before Y's first hop, and keep a change only when the
     face then refuses fewer nets. Bounded (max_repairs kept changes, two tries
     per refusal); every wire is still checked by the emission, so a repair can
-    never ship a crossing. The plan's order is wrong where a pad sits beyond
+    never produce a crossing. The plan's order is wrong where a pad sits beyond
     its own anchor near the cut (eff_len's straight-x offset against an arc
     length), and the midpoint arc test can take the long way round a U; both
     show up exactly as such a refusal."""
@@ -826,19 +814,19 @@ def route_face_wires_repaired(plan: HugPlan, face: str, base_clear: float, wire_
 
 # The walk places wires by sampling a buffered boundary, and every step of that
 # discretization (ring sampling chords, buffer polygonization, final simplify)
-# pulls points slightly INSIDE the exact offset. Routing at exactly the required
+# pulls points slightly inside the exact offset. Routing at exactly the required
 # clearance therefore fails DRC by a few hundredths everywhere. This allowance
 # is added on top of the exact requirement so the discretized result still
-# clears it. Measured: at 0.25mm sampling / quad_segs=8 / simplify 0.02 the
-# worst shortfall is well under this.
+# clears it. At 0.25mm sampling / quad_segs=8 / simplify 0.02 the worst
+# shortfall is well under this.
 DISCRETIZATION_MARGIN = 0.08
 
 
 def _wire_clearances(params: Params) -> tuple[float, float]:
-    """(base, pitch) the hug walk actually routes with — extracted verbatim
-    from route_hug_all so hug_keepout_widths models the identical geometry.
+    """(base, pitch) the hug walk routes with — shared by route_hug_all and
+    hug_keepout_widths so the keep-out models the identical geometry.
 
-    Base lane: clear the pixel copper, AND clear the column anchors that hang
+    Base lane: clear the pixel copper, and clear the column anchors that hang
     trace_w below the pixel edge (i.e. hang below the cell contour by
     trace_w - slack). A base lane closer than that traps a not-yet-connected
     anchor between the innermost passing wire and the field — the wire dips
@@ -862,10 +850,10 @@ def hug_keepout_widths(profile, params: Params, layout: Layout) -> np.ndarray:
 
     The hug walk places the k-th wire passing a stretch of the field contour
     at base + k*pitch from it, so the band the drawn outline must reserve at
-    each boundary sample is computable BEFORE any copper exists: project the
+    each boundary sample is computable before any copper exists: project the
     sample onto the plan contour and count the hops whose span covers that
     param. Rows and columns live on opposite copper faces, so the band is the
-    MAX of the two faces' stacks, not their sum. On top of the outermost
+    maximum of the two faces' stacks, not their sum. On top of the outermost
     wire's centerline: its own half-width + board edge clearance, plus one
     pitch of safety for the walk's rounded end caps and step-arounds. Samples
     no wire passes fall back to the explicit floor (0 by default — the model
@@ -888,12 +876,12 @@ def hug_keepout_widths(profile, params: Params, layout: Layout) -> np.ndarray:
     row_spans = ([] if int(getattr(params, "copper_layers", 2) or 2) == 4
                  else [h.span for h in plan.order_row])
     # Samples on the cable/tail region need no band at all: the fan near the
-    # connector legitimately hangs THROUGH the cable edge into the tail, which
+    # connector legitimately hangs through the cable edge into the tail, which
     # is board. Reserving the full fan depth inside the outline there is what
     # the demand would otherwise say, and it carves the bottom of the sensor
-    # field away for room the wires never use (measured: collapsed the C to
-    # 20 of 74 taxels). Escaping copper anywhere this relief is too generous
-    # is caught by the retry loop's escape check and grown back locally.
+    # field away for room the wires never use. Escaping copper anywhere this
+    # relief is too generous is caught by the retry loop's escape check and
+    # grown back locally.
     relief = (layout.cable_poly.buffer(0.5)
               if layout.cable_poly is not None and not layout.cable_poly.is_empty
               else None)
@@ -916,8 +904,8 @@ def route_hug_all(layout: Layout, outline_xy: np.ndarray, params: Params, repair
     """Full hug routing at real clearances.
     Returns (col_routes, row_routes, plan, failed_pixels).
 
-    repair=True routes each face with route_face_wires_repaired (opt-in; the
-    4-layer prototype uses it — off, the output is unchanged).
+    repair=True routes each face with route_face_wires_repaired; the 4-layer
+    router (route_4layer.route_hug_4layer) passes it, 2-layer boards do not.
 
     A net with links yields several Route entries sharing its net name — the
     pad hop plus one track per bridged gap; DRC skips same-net pairs. Base
@@ -925,14 +913,13 @@ def route_hug_all(layout: Layout, outline_xy: np.ndarray, params: Params, repair
     cell edge and pixel copper ((pitch - pixel)/2) is credited against the
     required copper-to-copper clearance.
 
-    failed_pixels: pixel indices belonging to nets the emission REFUSED
+    failed_pixels: pixel indices belonging to nets the emission refused
     (route_face_wires' hard invariant — a wire that would cross or
     under-clear previously routed copper is never emitted). Callers must
     treat these as routing problem pixels: drop them / grow the keep-out
-    and retry, exactly like a legacy routing failure. Empty on every board
-    the model handles, which is all of them until a new topology finds the
-    next gap between plan and emission — this is the guarantee that such a
-    gap costs sensors, never shipped crossings.
+    and retry, as for a legacy routing failure. Empty whenever plan and
+    emission agree; where a topology opens a gap between them, the gap
+    costs sensors, never crossings in the output.
     """
     plan = build_plan(layout, outline_xy, params)
     base, pitch = _wire_clearances(params)
@@ -949,9 +936,9 @@ def route_hug_all(layout: Layout, outline_xy: np.ndarray, params: Params, repair
             pts = [tuple(p) for p in path]
             anchor = np.asarray(h.b_xy, dtype=float)
             if face == "col":
-                # Spine entry, exactly like the legacy router's final segment
+                # Spine entry, like the legacy router's final segment
                 # (route_columns.py appends anchor + pixel_h/2): a column
-                # terminal sits trace_w OUTSIDE the pixel edge, and the spine
+                # terminal sits trace_w outside the pixel edge, and the spine
                 # copper starts inside it, so a wire that stops at the terminal
                 # is ~2*trace_w short of actually connecting. Extend the tip
                 # pixel_h/2 into its own pixel to overlap the spine. Pad hops
@@ -963,28 +950,26 @@ def route_hug_all(layout: Layout, outline_xy: np.ndarray, params: Params, repair
                 if h.kind == "link":
                     pts.insert(0, (h.a_xy[0], h.a_xy[1] - half_h))   # a: top terminal
             elif h.kind == "link":
-                # Row links attach at a segment's gap-facing PIXEL EDGE, but a
+                # Row links attach at a segment's gap-facing pixel edge, but a
                 # row's only B.Cu copper is its bus, which spans via-to-via —
-                # and the via sits near each pixel's LEFT edge. So a link
-                # landing on a segment's RIGHT end stops
+                # and the via sits near each pixel's left edge. So a link
+                # landing on a segment's right end stops
                 # pixel_w - 2*edge_clear - trace_w/2 - via_dia/2 short of any
-                # row copper: 2.53mm at 3mm pixels, 3.53mm at 4mm (measured on
-                # the U preset, whose notch cuts rows; user-reported from an
-                # exported board). DRC never caught it because it checks
-                # clearance, not connectivity.
+                # row copper (2.53mm at 3mm pixels, 3.53mm at 4mm). DRC does
+                # not detect this because it checks clearance, not
+                # connectivity.
                 #
-                # Extend each link tip inward to its own segment's via, exactly
-                # like the column spine entry above. The plan's terminals are
-                # left untouched, so routing order and every hugged path stay
-                # bit-identical — this only appends copper along the row
+                # Extend each link tip inward to its own segment's via, like
+                # the column spine entry above. The plan's terminals are left
+                # untouched, so routing order and every hugged path are
+                # unaffected — this only appends copper along the row
                 # centreline inside the net's own pixels, where nothing but its
                 # own bus lives (DRC skips same-net pairs).
                 #
-                # The left-hand end already overlapped its via by a hair
+                # The left-hand end already overlaps its via by a hair
                 # (0.075mm short, closed by the 0.2mm trace width), but it is
                 # extended too: "a link tip lands on its segment's via" is the
-                # real invariant, and leaning on that accidental overlap is
-                # what made this bug survive so long.
+                # invariant, and it should not rest on an incidental overlap.
                 chain = plan.chains[h.net]
                 k = h.gap_index
                 a_side = "right" if chain.feed_side == "left" else "left"
@@ -993,10 +978,11 @@ def route_hug_all(layout: Layout, outline_xy: np.ndarray, params: Params, repair
                 pts.insert(0, tuple(_row_via(Pxy, chain.segments[k - 1], params, a_side)))
                 b_via = _row_via(Pxy, chain.segments[k], params, b_side)
                 pts.append(tuple(b_via))
-                # The anchor is where the track lands on its net's copper, and
-                # that is now the via — validate_routes checks a row route's
-                # last point against it within 0.5mm, so leaving it on the old
-                # pixel-edge terminal reports every linked row as incomplete.
+                # The anchor is where the track lands on its net's copper,
+                # which is the via: validate_routes checks a row route's last
+                # point against it within 0.5mm, so an anchor left on the
+                # pixel-edge terminal would report every linked row as
+                # incomplete.
                 anchor = b_via
             if h.kind == "pad" and plan.chains[h.net].pad_num in plan.pad_stubs:
                 # the wire starts at its stub's top: run the stub down to the pad

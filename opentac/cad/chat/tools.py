@@ -2,8 +2,8 @@
 
 In process: this calls `main.generate()` directly, the same entry point the
 /generate route uses, so a described board goes through the identical
-board-mode policy, fixed-outline retry loop and post-route smoothing as a
-drawn one.
+board-mode policy and fixed-outline retry loop as a drawn one. It always
+requests the hug router, for which generate() skips post-route smoothing.
 
 Provider-neutral by construction — plain JSON Schema in, plain dicts out — so
 swapping Gemini for another model touches chat/gemini.py only.
@@ -241,24 +241,23 @@ GEN_PARAMS = {
     "target_cols", "target_rows", "copper_layers",
 }
 
-# Grow mode, as SKILL.md recommends: the board fits the wiring, and it is also the
-# fast mode (a 574-taxel insole in ~5 s on a laptop, 2 or 4 layers).
+# Grow mode, as SKILL.md recommends: the board fits the wiring, and it is also
+# the faster mode, on 2 or 4 layers.
 DEFAULT_BOARD_MODE = "expand"
 
 
 def _hosted() -> bool:
-    """On the shared hosted demo (Render sets RENDER=true), where one free
-    0.1-CPU, 512 MB instance serves everyone. OTC_HOSTED=1 forces it."""
+    """On the shared hosted server (its platform sets RENDER=true), where one
+    small instance (0.1 CPU, 512 MB) serves everyone. OTC_HOSTED=1 forces it."""
     return bool(os.environ.get("OTC_HOSTED") or os.environ.get("RENDER"))
 
 
 # Work cap for fixed-outline runs, which re-route the whole board once per
-# keep-out attempt (nine 4-layer routes on a dense insole). Measured on a
-# laptop, size-9 insole: fixed 2 layers 6.8 s at ~240 predicted taxels and 13 s
-# at ~630; fixed 4 layers 9 s at ~240 but 43 s at ~630, which is past ten
-# minutes on the free tier (roughly 15x slower). Grow mode stays at 3-5 s for
-# all four and is not capped. Units: preflight's predicted taxels, x3 on four
-# layers. 0 disables the cap, which is the default off the hosted demo.
+# keep-out attempt. Their cost grows with the taxel count, faster on four
+# layers, and the hosted server is many times slower than a laptop, so a large
+# fixed 4-layer board would hold it for many minutes. Grow mode is not capped.
+# Units: preflight's predicted taxels, weighted x3 on four layers. 0 disables
+# the cap, which is the default off the hosted server.
 FIXED_WORK_LIMIT = int(os.environ.get("OTC_CHAT_FIXED_WORK_LIMIT",
                                       "1200" if _hosted() else "0"))
 
@@ -311,14 +310,14 @@ def _build_shape(a: dict):
         pts = np.asarray(a["points"], float)
         if pts.ndim != 2 or pts.shape[1] != 2 or len(pts) < 3:
             raise ValueError("points must be at least 3 [x, y] pairs in mm.")
-        # Smoothing defaults ON. Anything reaching "polygon" is a shape with no
+        # Smoothing defaults on. Anything reaching "polygon" is a shape with no
         # primitive of its own, which in practice means organic, and a curve
-        # should not depend on the model remembering an optional flag - the
-        # same request produced a splined insole one run and a faceted one the
-        # next. Straight-edged shapes can still opt out, and resample_closed
-        # falls back to linear whenever the spline leaves the source outline's
-        # envelope, so an L or an unrolled STL face survives even if nobody
-        # does.
+        # should not depend on the model remembering an optional flag, or the
+        # same request can give a splined outline on one run and a faceted one
+        # on the next. Straight-edged shapes can still opt out, and
+        # resample_closed falls back to linear whenever the spline leaves the
+        # source outline's envelope, so an L or an unrolled STL face keeps its
+        # corners even when the flag is left at its default.
         return pts, bool(a.get("smooth", True))
     raise ValueError(f"unknown shape {shape!r}")
 
@@ -419,8 +418,8 @@ class Session:
         for d in drc.get("details", []):
             kinds[d["type"]] = kinds.get(d["type"], 0) + 1
 
-        # Only the newest board is ever sent to the page; older SVGs are dead
-        # weight in a server with 512 MB and no session expiry.
+        # Only the newest board is ever sent to the page; older SVGs would only
+        # occupy memory on a 512 MB server with no session expiry.
         for older in self.designs:
             older["svg"] = None
         self.designs.append({

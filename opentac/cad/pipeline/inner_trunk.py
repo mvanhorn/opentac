@@ -1,18 +1,18 @@
 """Inner-layer row feeds for 4-layer boards: one steered bundle from the
 connector.
 
-The wires run on the via lattice: down LANES (x positions in the gaps between
+The wires run on the via lattice: down lanes (x positions in the gaps between
 two via columns, a via keep-out clear of both, a trace pitch apart — about
-four per gap) and across BAND LANES (the same between two via rows). A lane
+four per gap) and across band lanes (the same between two via rows). A lane
 never comes near a via, so a wire may go wherever the field is, in straight
 axis-aligned legs.
 
 One bundle carries the rows to the connector, in row order:
 
   - rows join from the top down — the farthest first — each on the bundle's
-    OUTER side (one side, the same for every row), so the wires, and the pads
+    outer side (one side, the same for every row), so the wires, and the pads
     they are handed, come out in row order;
-  - a row joins at ANY of its vias beside that outer side: a crown bump or a
+  - a row joins at any of its vias beside that outer side: a crown bump or a
     short row joins wherever it has one;
   - the bundle wants to lie packed against one lane, the trunk. Between two
     via rows a wire may jog sideways along a band lane toward its place, or
@@ -25,7 +25,7 @@ One bundle carries the rows to the connector, in row order:
     right, are handed the connector pads in that order and fanned down.
 
 Nothing is searched: the trunk lane and the side are chosen by building the
-bundle for each and keeping the one that ships the most rows (then the
+bundle for each and keeping the one that places the most rows (then the
 fewest jogs, then the nearest the pads), and every leg is checked. A row
 that cannot join is refused; given a second layer (In2, round the links
 already there), route_feeds builds a second bundle there for the refused
@@ -449,10 +449,11 @@ def route_feeds(layout, params, plan, layers=("In1.Cu",), preplaced=None):
         if board is not None and not board.is_empty:
             board_in = board.buffer(-(params.trace_w_mm / 2 + params.board_edge_clear_mm) + 1e-3)
     lift = sp.a + _M
-    # where a wire may leave the field: on a fixed board, where a fan can
-    # still reach the pads — a straight line from the field's bottom there to
-    # the nearest pad stays on the board, no flatter than the fans' steepest
-    # slant (60 degrees from vertical)
+    # where a wire may leave the field: with OT_TRUNK_WINDOW=1 on a fixed
+    # board, only where a fan can still reach the pads — a straight line from
+    # the field's bottom there to the nearest pad stays on the board, no
+    # flatter than the fans' steepest slant (60 degrees from vertical);
+    # otherwise anywhere along the bottom edge
     window = (-np.inf, np.inf)
     if os.environ.get("OT_TRUNK_WINDOW", "0") == "1" and board_in is not None and np.isfinite(yb).any():
         from shapely.prepared import prep
@@ -556,11 +557,11 @@ def route_feeds(layout, params, plan, layers=("In1.Cu",), preplaced=None):
 
         # every trunk lane (the inner edge of each gap) and both sides; the
         # builds placing the most are finished (fans included); most rows
-        # shipped wins, then (a later layer) the first layer's direction,
+        # placed wins, then (a later layer) the first layer's direction,
         # then the fewest rows joined inside the bundle (out of order), then
-        # the exits nearest the pads (in pitches), then the fewest jogs
-        # a later layer's bundle grows the way the first one did, so its rows
-        # come out in the same direction (the pads below stay in row order)
+        # the exits nearest the pads (in pitches), then the fewest jogs.
+        # A later layer's bundle grows the way the first one did, so its rows
+        # come out in the same direction (the pads below stay in row order).
         d_first = next(iter(shipped.values()))[0][0] if shipped else None
         built = []
         for d in (1, -1):
@@ -609,7 +610,7 @@ def route_feeds(layout, params, plan, layers=("In1.Cu",), preplaced=None):
     # One pad order across the layers: the first layer's wires in the order
     # they leave the field, each other layer's row slotted in where its via
     # row falls in that order; the pads, left to right, in that sequence.
-    # Kept only if every layer still ships all its wires on those pads.
+    # Kept only if every layer still places all its wires on those pads.
     if len(shipped) > 1:
         Ls = list(shipped)
         d0 = shipped[Ls[0]][0][0]

@@ -1,18 +1,20 @@
-"""Flat<->3D correspondence for the sim export (manifest v6).
+"""Flat<->3D correspondence for the optional sim3d block (manifest v6), which
+export/sim_pack.build_sim3d builds and export_manifest writes only when a
+caller supplies it.
 
 The unfold already computes, per selected face region, where every mesh vertex
-lands in the flat frame. That map is what turns the manifest from a 2D drawing
-into a 3D sensor description: with it, a taxel centre picked on the flat board
-can be put back onto the surface of the part it will be glued to.
+lands in the flat frame. That map is what turns a 2D board description into a
+3D sensor description: with it, a taxel centre picked on the flat board can be
+put back onto the surface of the part it will be glued to.
 
 Two rules this module exists to enforce:
 
   * **Record the map as the unfold runs; never reconstruct it afterwards.**
-    unfold_face_region already returns it and the existing callers throw it
-    away. The _edge_cuts_points docstring in export/manifest.py documents the
-    same "derive it again later" mistake being made in four separate places.
+    unfold_face_region already returns it, whereas re-deriving the
+    correspondence later from the flat and 3D geometry would only approximate
+    it.
 
-  * **Everything here is in the CABLE frame.** uv arrives from the unfold in an
+  * **Everything here is in the cable frame.** uv arrives from the unfold in an
     arbitrary frame and is carried into the canonical frame by cable_transform
     before anything is located in it, so taxel centres (which are already
     canonical) can be looked up directly. Mixing the two frames produces a

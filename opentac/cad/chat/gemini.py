@@ -1,8 +1,7 @@
 """Gemini provider, on the google-genai SDK.
 
 Automatic function calling is deliberately disabled: the loop is run by hand
-so every call and result can be logged to the terminal and handed back to the
-UI, which is the whole point of a debugging prototype.
+so every call and result can be logged (at DEBUG) and returned to the UI.
 """
 
 from __future__ import annotations
@@ -32,21 +31,21 @@ ToolFn = Callable[[str, dict], dict]
 
 logger = logging.getLogger(__name__)
 
-# gemini-2.5-flash is retired for new API keys: generateContent returns 404
-# pointing here, even though the model still appears in models.list().
+# gemini-2.5-flash is not served to new API keys: generateContent returns 404
+# for it, even though the model still appears in models.list().
 DEFAULT_MODEL = "gemini-3.6-flash"
 MAX_TOOL_ROUNDS = 12          # a generate is slow; a runaway loop is expensive
 
-# The free tier rate-limits per minute AND per day, and the two need opposite
-# handling. A per-minute 429 clears on its own, so it is worth waiting out. A
-# per-day 429 does not clear until midnight Pacific, so retrying it just burns
-# five minutes before failing anyway - fail fast and say what to change.
+# The Gemini free tier rate-limits per minute and per day, and the two need
+# opposite handling. A per-minute 429 clears on its own, so it is worth waiting
+# out. A per-day 429 does not clear until midnight Pacific, so retrying it only
+# delays the failure by minutes - fail fast and say what to change.
 MAX_RETRIES = 6
 BACKOFF_S = (2, 5, 12, 25, 45, 60)
 
-# Free-tier daily caps are small (20/day on gemini-3.6-flash) and one design
-# conversation can spend a dozen requests, so running out is routine. Each
-# model has its own pool, which makes switching model the quickest unblock.
+# Free-tier daily caps are small and one design conversation can use a dozen
+# requests, so running out is routine. Each model has its own pool, which
+# makes switching model the quickest remedy.
 ALTERNATIVES = ("gemini-3.5-flash", "gemini-3.5-flash-lite",
                 "gemini-3.1-flash-lite", "gemini-3-flash-preview")
 
@@ -161,8 +160,8 @@ class GeminiProvider:
                 return Turn(text=_text_of(content), tool_calls=calls_made,
                             usage=usage)
 
-            # Say the interim thought out loud - "let me preflight that first"
-            # is useful in the transcript even though the turn continues.
+            # Run every requested tool; the results go back to the model
+            # together, as one turn.
             parts = []
             for call in calls:
                 args = dict(call.args or {})
@@ -181,11 +180,11 @@ class GeminiProvider:
 
 
 class QuotaExhausted(RuntimeError):
-    """Today's free-tier allowance for this model is gone.
+    """Today's free-tier allowance for this model is exhausted.
 
     Carries its own remedy, because the raw 429 does not distinguish "wait a
-    moment" from "wait until tomorrow", and the difference is the whole
-    answer.
+    moment" from "wait until tomorrow", and the remedy depends on which one
+    applies.
     """
 
     def __init__(self, model: str, limit: str | None):
@@ -238,8 +237,7 @@ def _add_usage(usage: dict, resp) -> None:
     """Accumulate one response's token counts.
 
     Each tool round resends the whole conversation, system instructions
-    included, so input tokens grow quadratically across a turn - which is the
-    number that decides what this costs to host.
+    included, so input tokens grow quadratically with the rounds in a turn.
     """
     usage["requests"] += 1
     md = getattr(resp, "usage_metadata", None)
@@ -279,7 +277,7 @@ def _retry_delay(exc) -> float | None:
     if m:
         secs = float(m.group(1)) / (1000 if m.group(2) == "ms" else 1)
         best = max(best, secs)
-    # A sub-second delay on a per-minute quota just burns another attempt.
+    # A sub-second delay on a per-minute quota only wastes another attempt.
     return min(max(best, 2.0), 60.0) if best else None
 
 

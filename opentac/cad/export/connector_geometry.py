@@ -30,11 +30,11 @@ def local_to_world(lx, ly, t_hat, n_out, pad1_world):
 def connector_export_dir(layout, connector_dir: str) -> str:
     """Return connector_dir only when physical connector export is enabled.
 
-    Used to also require an enabled tail extension, which meant a board
-    exported WITHOUT drawing a custom tail silently shipped with no connector
-    footprint at all. connector_pose and the Edge.Cuts stitcher both handle
-    the no-extension case (the base tail_geometry pose), so the only real
-    requirements are a supported size and a footprint file on disk.
+    The requirements are a supported size and a footprint file on disk. A
+    custom tail extension is not required: connector_pose and the Edge.Cuts
+    stitcher both handle the no-extension case (the base tail_geometry pose),
+    so a board exported without a drawn tail still carries its connector
+    footprint.
     """
     if not connector_dir:
         return ""
@@ -240,14 +240,14 @@ def stitched_outline_segments(layout, outline_xy, params, connector_dir):
 
     The connector footprint Edge.Cuts are intentionally open on the side facing
     the tail; the board outline must end exactly at those two open endpoints.
-    An earlier version dragged the endpoints of ONE outline edge (the "cap")
-    onto the open endpoints -- but the board carries material DEEPER than the
-    open edge (the base tail's connector-body allowance, and the landing of the
+    Dragging the endpoints of one outline edge (the "cap") onto the open
+    endpoints does not work: the board carries material deeper than the open
+    edge (the base tail's connector-body allowance, and the landing of the
     export's tail extension, which runs on to the pad drills), and dragging the
-    deepest cap folds ~4mm segments back inward across the corridor. Instead:
-    build the connector body region (its Edge.Cuts path closed along the open
-    edge), subtract it from the board polygon so the outline is cut along the
-    open edge, drop the opening segment itself, and snap the two cut vertices
+    deepest cap folds segments back inward across the corridor. Instead, this
+    builds the connector body region (its Edge.Cuts path closed along the open
+    edge), subtracts it from the board polygon so the outline is cut along the
+    open edge, drops the opening segment itself, and snaps the two cut vertices
     exactly onto the connector's open endpoints.
 
     That only meets the footprint cleanly while the board is no wider than the

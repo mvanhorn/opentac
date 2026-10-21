@@ -56,9 +56,9 @@ let modelRadius = 1;
 
 // Disconnected selections are joined server-side by /unroll-mesh-chain
 // (straight-strut cuts between surfaces that don't share mesh edges). The
-// backend needs the raw STL bytes (its face indices match three.js's — see
-// NOTES.md's real-face-index fix), the selections in click order, and any
-// manually-picked corner pairs per connection.
+// backend needs the raw STL bytes (its face indices match three.js's), the
+// selections in click order, and any manually-picked corner pairs per
+// connection.
 let stlBuffer = null;
 // frameObject() recenters the displayed geometry; backend coordinates stay
 // in the file's original frame, so 3D points it returns (corner-picker
@@ -276,20 +276,18 @@ function loadArrayBuffer(buffer, filename) {
     `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)} mm${warning}`;
 }
 
-// Point the camera at the selected patch from ITS OWN side, at `distanceScale`
+// Point the camera at the selected patch from its own side, at `distanceScale`
 // of the app's standard framing distance.
 //
 // A patch on the far side of the part is occluded by the part itself from any
-// fixed viewing angle — confirmed live twice: the Yubi pad's selection sits
-// entirely in -x while the default camera sits at +x, so its highlight
-// rendered perfectly and stayed invisible behind the mesh, both in gallery
-// thumbnails and when opening the example in the viewer. Averaging the
+// fixed viewing angle: a selection that faces away from the default camera is
+// highlighted correctly but stays invisible behind the mesh. Averaging the
 // selected triangles' normals gives the direction the patch faces.
 //
 // Scaling the app's own frameObject distance (homePos) rather than deriving
 // one from modelRadius matters for elongated parts: their bounding sphere is
 // dominated by the long axis, so a radius-derived "tight" distance can land
-// inside the mesh (seen as an unrecognizable close-up sliver).
+// inside the mesh (which renders as an unrecognizable close-up sliver).
 function aimCameraAtSelection(triangles, distanceScale) {
   const avgNormal = new THREE.Vector3();
   for (const t of triangles) avgNormal.add(surfaceModel.triNormals[t]);
@@ -307,25 +305,21 @@ function aimCameraAtSelection(triangles, distanceScale) {
   controls.update();
 }
 
-// Landing-gallery handoff: fetch a catalog STL, show it in the normal 3D
-// viewer, and highlight the surface this example was built from — so opening
-// an example keeps the part visible and rotatable while its outline is being
-// turned into a board, instead of dropping the user into a bare 2D canvas.
-// The outline itself is handed over separately (and instantly, from the
-// manifest), so a slow or unreachable backend costs only the 3D preview, not
-// the example.
+// Landing-gallery handoff: fetch the example's preview mesh, show it in the
+// normal 3D viewer, and highlight the surface this example was built from —
+// so opening an example keeps the part visible and rotatable while its
+// outline is being turned into a board, instead of dropping the user into a
+// bare 2D canvas. The outline itself is handed over separately (and
+// instantly, from the manifest), so a failed mesh fetch costs only the 3D
+// preview, not the example.
 window.otcShowExampleInViewer = async function (meshUrl, triangles, label) {
   init();
   infoEl.textContent = `Loading ${label}…`;
   try {
-    // A same-origin STATIC file (frontend/example-meshes/), not a backend
-    // endpoint: the curated originals are print-quality — 17.5MB in total,
-    // up to 87k triangles — and live in the backend repo, which the Render
-    // image does not even contain (its Docker build context is backend/
-    // alone, so /example-stl 404'd for every part on the deployed site).
-    // These previews keep the selected faces at full resolution and decimate
-    // only the rest, which is 5.8MB for all 32 and identical on GitHub Pages
-    // and locally, with no backend round trip or cold start.
+    // A static file under web/example-meshes/ (34 files), served by the same
+    // origin as the page, so no API call or server start-up is needed. The
+    // originals in examples/stl/ are print-quality; these previews keep the
+    // selected faces at full resolution and decimate only the rest.
     const resp = await fetch(meshUrl);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     loadArrayBuffer(await resp.arrayBuffer(), meshUrl);
@@ -334,8 +328,8 @@ window.otcShowExampleInViewer = async function (meshUrl, triangles, label) {
     selectedRegions = new Set();
     rootTriangleId = selectedTriangles.values().next().value ?? null;
     refreshHighlight();
-    // Open facing the highlighted surface (full framing distance — this is
-    // the interactive viewer, not a thumbnail, so leave room to orbit).
+    // Open facing the highlighted surface, at the full framing distance so
+    // there is room to orbit.
     aimCameraAtSelection(selectedTriangles, 1.0);
     // The example arrives already unfolded; this viewer is for context and
     // inspection, so don't invite a second unfold of the same selection.
@@ -718,7 +712,7 @@ function orderedClickEntries() {
   return entries.reverse();
 }
 
-// Guided flow for disconnected selections: corner picking is a REQUIRED
+// Guided flow for disconnected selections: corner picking is a required
 // step, not a fix-up. "Join surfaces" walks the chain cut by cut — the
 // backend (corners_first) stops at the first cut without user-picked
 // corners and returns its marker loops; the automatic corner heuristic
@@ -761,9 +755,9 @@ async function unfoldViaBackendChain() {
     showError(error.message);
     return;
   } finally {
-    // Clear BEFORE rendering the panel: its buttons bake `disabled` in at
-    // render time, so rendering while busy left "Use this shape" (and the
-    // pick buttons) permanently disabled.
+    // Clear before rendering the panel: its buttons bake `disabled` in at
+    // render time, so rendering while busy would leave "Use this shape" (and
+    // the pick buttons) permanently disabled.
     chainBusy = false;
     unfoldBtn.disabled = false;
   }
@@ -1296,9 +1290,9 @@ selectAllBtn.addEventListener("click", () => {
 });
 
 // The client-side unfold is synchronous and can block the page for tens of
-// seconds on a large curved selection (measured: ~65s for a 17k-triangle
-// patch) — without this deferred start the button click freezes the tab with
-// no feedback at all and reads as a crash. Paint the status first, then work.
+// seconds on a large curved selection; without this deferred start the
+// button click freezes the tab with no feedback and reads as a crash. Paint
+// the status first, then work.
 unfoldBtn.addEventListener("click", () => {
   const triangleCount = combinedSelectedTriangles().size;
   // Only the connected, client-side unfold blocks the thread; the

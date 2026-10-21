@@ -48,7 +48,7 @@ document.getElementById("landing-help-btn")?.addEventListener("click", () => sho
 
 // If the user jumps straight to the Tool view via the header nav without
 // ever picking a mode from the landing cards, default to Draw so the tool
-// isn't showing every input section at once.
+// is not showing every input section at once.
 window.addEventListener("otc:view-shown", (e) => {
   if (e.detail?.view === "tool" && !selectedMode) applyModeVisibility("draw");
 });

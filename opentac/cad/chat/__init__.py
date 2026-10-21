@@ -6,8 +6,8 @@ instructions and three function-calling tools, and every board comes out of
 invent a PCB.
 
 Import is deliberately failure-tolerant at the call site (see main.py): if
-google-genai is not installed or GEMINI_API_KEY is unset, the site must keep
-working exactly as before, with chat simply unavailable.
+google-genai is not installed or GEMINI_API_KEY is unset, the rest of the
+site keeps working, with chat unavailable.
 """
 
 from __future__ import annotations
@@ -22,8 +22,9 @@ from pydantic import BaseModel
 
 try:
     # Local convenience only: put GEMINI_API_KEY in opentac/cad/.env and the
-    # double-click launcher picks it up. On Render the env vars are real and
-    # there is no file, so a missing dotenv is not an error.
+    # double-click launcher picks it up. On the hosted server the environment
+    # variables are set directly and there is no file, so a missing dotenv is
+    # not an error.
     from dotenv import load_dotenv
 
     load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -47,8 +48,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 SESSIONS: dict[str, dict] = {}
 _provider: GeminiProvider | None = None
 
-# Keeps one visitor from spending the account on a single conversation. The
-# hard cap is the billing account's prepaid balance; this is the polite one.
+# Limits the number of turns per conversation.
 MAX_TURNS_PER_SESSION = int(os.environ.get("OTC_CHAT_MAX_TURNS", "40"))
 
 
@@ -124,7 +124,7 @@ def progress(session_id: str = "default"):
     sess = SESSIONS.get(session_id)
     if sess is None:
         # known=False after a turn was sent means the server lost its memory:
-        # it restarted mid-turn (on the free tier, almost always out of memory).
+        # it restarted mid-turn (for example after running out of memory).
         return {"busy": False, "steps": [], "known": False}
     return {"busy": sess.get("busy", False), "steps": sess.get("progress", []),
             "known": True}
@@ -185,14 +185,14 @@ def chat(body: ChatIn):
         newest = designs[-1] if designs else None
         logger.debug("ASSISTANT: %s", turn.text[:200])
         # Round-tripped through json here, inside the try: a value FastAPI
-        # cannot encode (a numpy scalar in stats) would otherwise fail AFTER
+        # cannot encode (a numpy scalar in stats) would otherwise fail after
         # this handler returned, as a bare 500 the page cannot read.
         out = _jsonable({
             "text": turn.text,
             "tool_calls": [{"name": c["name"], "args": c["args"]}
                            for c in turn.tool_calls],
             # Only the newest board is returned: the page loads it into the
-            # editor, and the SVG is large enough that shipping the whole
+            # editor, and the SVG is large enough that returning the whole
             # history every turn would be wasteful.
             "design": None if newest is None else {
                 "name": newest["name"],

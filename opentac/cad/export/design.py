@@ -1,27 +1,28 @@
-"""The design record: what an export has to carry for OTC to re-open it.
+"""The design record: what an export has to carry for OpenTac-CAD to re-open it.
 
-manifest.json describes the board that was MADE — taxel positions, the taxel
+manifest.json describes the board that was made — taxel positions, the taxel
 footprint, the real cut boundary. That is deliberately a description of the
 *result*, and it is not enough to keep working on a design: `/generate` takes
-about thirty-five inputs and the manifest carried seven of them, so anything
-re-importing it had to guess board_mode, the router and every clearance. The two records here close that gap, and they answer
+about thirty-five inputs and the board description covers only a few of
+them, so a re-import from it alone would have to guess board_mode, the router
+and every clearance. The two records here close that gap, and they answer
 two different questions:
 
-  `design_block()` -> the "design" key inside manifest.json. The RECIPE:
+  `design_block()` -> the "design" key inside manifest.json. The recipe:
       every /generate input, next to the outline the manifest already stores.
       Re-running it rebuilds the board from scratch on whatever pipeline is
       current. Small, human-readable, survives a pipeline change — and loses
       anything done by hand after generation.
 
-  `design_file()`  -> design.json, its own entry in the ZIP. The SAVE FILE:
+  `design_file()`  -> design.json, its own entry in the ZIP. The save file:
       the editor's `edit_data` plus the live routes, which is exactly the
       state /export-edited, /redo-padding, the bump sheet and the case
       builder already run on. Restores hand-dragged routes, a tail extension
       and a swapped connector — but it is a snapshot of one pipeline version,
       so it carries a version stamp and is refused rather than silently
-      misread when that no longer matches.
+      misread when that stamp does not match the current pipeline.
 
-Note on `removed_pix`: it is an OUTPUT, not a user edit. Nothing in the UI
+Note on `removed_pix`: it is an output, not a user edit. Nothing in the UI
 lets a user delete a taxel; the set is what the router could not wire, and a
 recipe replay with the same params re-derives it. It is recorded anyway
 because design.json has to restore the exact board, and because it tells a
@@ -41,8 +42,8 @@ import numpy as np
 
 from opentac.cad.pipeline.types import Params
 
-# Bump when a field's MEANING changes, not when one is added: unknown keys are
-# ignored by every consumer, but a re-used key that now means something else
+# Bump when a field's meaning changes, not when one is added: unknown keys are
+# ignored by every consumer, but a re-used key that means something else
 # would be read wrong. The importer refuses a schema it does not know.
 DESIGN_SCHEMA = 1
 
@@ -134,9 +135,9 @@ def design_block(layout, params: Params, removed, fill_region=None) -> dict:
         # re-import instead of dropping back to the smallest that fits.
         "connector_pos": (int(layout.connector_pos) if layout is not None else None),
         "params": params_to_dict(params),
-        # The sensorize zone, in the same rotated frame as `outline`. Nothing
-        # in the export carried it before: layout.sensor_outline_xy is set to
-        # the outline, not to this, so a fill region was lost on export.
+        # The sensorize zone, in the same rotated frame as `outline`. The
+        # manifest records it nowhere else: layout.sensor_outline_xy is set to
+        # the outline, not to this, so without this key a replay would lose it.
         "fill_region": _points(fill_region),
         # See the module docstring: an output, not a user edit.
         "removed_pix": sorted(int(i) for i in (removed or ())),
@@ -152,7 +153,7 @@ def design_file(edit_data: dict, routes=None) -> dict:
         "pipeline": PIPELINE_VERSION,
         "edit_data": edit_data,
         # Held beside edit_data rather than merged into it because these are
-        # the LIVE routes: on an edited export they are the user's dragged
+        # the live routes: on an edited export they are the user's dragged
         # polylines, which is exactly what edit_data["routes"] is not.
         "routes": routes if routes is not None else (edit_data.get("routes") or []),
     }
@@ -162,7 +163,7 @@ def zip_with_design(zip_b64: str, design: dict) -> str:
     """Return the export ZIP with design.json added.
 
     Done by rewriting the archive rather than threading a payload into
-    _build_outputs, because the ZIP is built there on a deep COPY of the
+    _build_outputs, because the ZIP is built there on a deep copy of the
     layout while edit_data is built afterwards from the original (see
     `_outputs_with_connector_tail` in main.py). Rewriting
     leaves the export chain — the part that actually gets manufactured —

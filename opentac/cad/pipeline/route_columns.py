@@ -9,15 +9,14 @@ from .types import Layout, Route, Params
 #
 # Each pass of that loop replaces one 2-point vertical segment with a 4-point
 # L-jog, so the polyline *grows* every time it fires. If the new jog lands too
-# close to yet another trace the next pass jogs again, and nothing bounds the
-# recursion: on a waisted outline (two lobes joined by a neck) a single
-# column-routing pass ran over 20 minutes of CPU without finishing, so /generate
-# never returned and the worker stayed pinned.
+# close to yet another trace the next pass jogs again, and nothing else bounds
+# the recursion: on a waisted outline (two lobes joined by a neck) an uncapped
+# loop need not terminate, so /generate would never return.
 #
-# The structurally identical repair loop further down this file already caps
-# itself at 20; these two were missed. Hitting the cap leaves the route as it
-# stands, which the DRC/validate pass reports and the removal loop acts on --
-# the same contract as any other unroutable net, and far better than hanging.
+# The horizontal-crossing repair loop further down this file has the same cap
+# of 20, and route_rows.py's L-step loop shares this constant. Hitting the cap
+# leaves the route as it stands, which the DRC/validate pass reports and the
+# removal loop acts on -- the same contract as any other unroutable net.
 MAX_LSTEP_FIXES = 20
 
 from .geometry import remove_collinear
@@ -84,7 +83,7 @@ def _route_once(layout, outline_xy, params, G, board_poly, skip_pix):
         P = [[cur_x, cur_y]]
 
         for _iter in range(100):
-            # === Phase 1: GO UP at cur_x ===
+            # === Phase 1: go up at cur_x ===
             best_y = float('inf')
             best_xlo = float('-inf')
             best_xhi = float('inf')
@@ -168,7 +167,7 @@ def _route_once(layout, outline_xy, params, G, board_poly, skip_pix):
                 else:
                     dodge_x = best_xlo - G
 
-            # === Phase 2: GO HORIZONTAL — check vertical blockers ===
+            # === Phase 2: go horizontal — check vertical blockers ===
             d = 1 if dodge_x > cur_x else (-1 if dodge_x < cur_x else 0)
             actual_x = dodge_x
 
