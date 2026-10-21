@@ -149,7 +149,7 @@ def draw_taxels(ax, xy, w, h, values, cmap, vmin, vmax, outline=None, edge="none
 
 def fig_modes():
     """The Arch example in grow mode (the default) on 2 and on 4 copper layers, at one scale."""
-    runs = [("expand", 2, "Grow, 2 layers"), ("expand", 4, "Grow, 4 layers")]
+    runs = [("expand", 2, "2 layers"), ("expand", 4, "4 layers")]
     panels = []
     for mode, layers, label in runs:
         svg, man, stats, drc = generate(ARCH, board_mode=mode, copper_layers=layers, **GRID_3MM)
