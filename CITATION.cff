@@ -34,7 +34,9 @@ authors:
     given-names: "Nitish V."
 repository-code: "https://github.com/opentac/opentac"
 url: "https://opentac.github.io/"
-license: MIT
+license:
+  - MIT
+  - Apache-2.0
 preferred-citation:
   type: article
   title: "OpenTac: An Open Ecosystem for Customizable, Scalable, and Transferable 3D Tactile Sensing"

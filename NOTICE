@@ -16,7 +16,8 @@ The rest of the repository is licensed as stated in README.md: code under the
 MIT License (LICENSE), hardware designs under CERN-OHL-P-2.0
 (LICENSE-hardware), documentation and media under CC BY 4.0 (LICENSE-docs).
 
-The NOTICE file of TactileSim follows; its name for OpenTac-CAD is updated.
+The NOTICE file of TactileSim follows, with its name for OpenTac-CAD updated and
+without its paragraph on the finite-element code, which is not included here.
 
 --------------------------------------------------------------------------------
 
@@ -30,7 +31,3 @@ modifies their parameters, validation, interfaces and packaging.
 
 OpenTac-CAD (formerly OpenTactileCAD) defines the sensor manifest conventions used by the loader.
 Packaged signal profiles retain their original calibration-source metadata.
-
-Elastic nodal-force assembly follows MuJoCo 3.12's mj_flexPassiveStretch in
-src/engine/engine_passive.c, Copyright DeepMind Technologies Limited,
-licensed under Apache-2.0: https://github.com/google-deepmind/mujoco.
