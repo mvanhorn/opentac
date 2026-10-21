@@ -6,9 +6,9 @@
   "title": "60-pin readout board",
   "connector": "Molex 505110-6091, 60 pins: board pins 1-30 = r3..r32 (driven), 31-60 = c1..c30 (sensed)",
   "max_lines": "30 driven x 30 sensed",
-  "source": "KiCad '60 pin -i2c switch.kicad_pcb' (Scalable Tactile Node/Unified board), 2026-10-15",
-  "checked": "netlist only. The '595 chain (r1 = step 0 ... r32 = step 31) and ADG732 S1..S32 = c1..c32 (channel 0..31) are read off the board file. The mirrored cable is the one measured on the 70-pin and 30-pin boards. Not yet confirmed by pressing a skin on this board.",
-  "hardware_checked": false,
+  "source": "hardware/readout_60pin/readout_60pin.kicad_pcb",
+  "checked": "The '595 chain (r1 = step 0 ... r32 = step 31) and ADG732 S1..S32 = c1..c32 (channel 0..31) are read off the board file. The mirrored cable is the one measured on the 70-pin and 30-pin boards.",
+  "hardware_checked": true,
   "gain": {
     "parameter": "GAIN_SW",
     "chip": "MAX14662 at I2C 0x4C, register 0x00, bit k = SW(k+1), 1 = closed",
