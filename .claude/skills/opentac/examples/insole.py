@@ -4,8 +4,8 @@ Run it after cloning to confirm the skill is wired up:
 
     uv run python .claude/skills/opentac/examples/insole.py /tmp/insole
 
-Expect a clean grow-mode board of about 200 taxels (11 x 28 on the 60-pin readout
-board), DRC 0, in a few seconds.
+Expect a clean grow-mode board of about 200 taxels (10 columns x 28 rows on the
+60-pin readout board), DRC 0, in a few seconds.
 
 Dimensions come from published sizing data, not from memory: a US men's
 size 9 foot is ~254mm long and averages 94.4mm across the ball (86-102mm

@@ -20,7 +20,7 @@ uv run python my_sensor.py
 
 The first `uv run` installs the pinned dependencies (a few minutes, once); it is
 the same environment the app itself runs on, so anything that works here works in
-the app. Do NOT use a bare `python3` or `py`: a system interpreter almost
+the app. Do not use a bare `python3` or `py`: a system interpreter almost
 certainly lacks these packages, and the error looks like a code fault rather than
 a missing environment.
 
@@ -36,7 +36,7 @@ fixed-outline retry loop and the post-route smoothing; calling
    - *Described shape* — research the real dimensions (below), then build it
      with `helpers/outline.py`.
    - *DXF* — `importers.dxf.parse_dxf_outline()`. If they have real CAD, use
-     it; it beats anything constructed from a description.
+     it; it is more accurate than anything constructed from a description.
    - *STL surface* — `helpers/mesh.py` enumerates the part's flat surfaces,
      scores each for how well it flattens, and unrolls the chosen one. No
      clicking and no browser required.
@@ -67,9 +67,9 @@ match is a real question — ask it. Guessing hides it.
 `rotate_for_cable()` spins the whole board to lay it horizontal. Sample a
 smooth shape naively and edge 0->1 is a short chord at an arbitrary angle: the
 board rotates by that angle, the axis-aligned taxel grid skews across it, and
-routing degrades badly. Measured on a 270mm insole — a 20.4 degree accidental
-rotation cost 40% of the taxels, grew the board from 100mm to 147mm wide, and
-produced 61 DRC violations. Always use `outline.with_flat_cable_edge()`, which
+routing degrades severely. On a 270mm insole, a 20.4 degree accidental rotation
+costs 40% of the taxels, widens the board from 100mm to 147mm, and produces 61
+DRC violations. Always use `outline.with_flat_cable_edge()`, which
 cuts an explicit flat first edge across wherever the connector exits.
 
 **Wind the outline counter-clockwise.** `pipeline.geometry.ensure_ccw()` pins
@@ -82,7 +82,7 @@ handles this; `outline.validate()` catches it.
 interpolation between hand-placed control points leaves visible faceting, and
 `outline.resample_closed()` splines it away. Do *not* spline geometry that
 already has real straight edges: a spline through the 8 vertices of a face
-unrolled from an STL overshot its corners and grew the board from 28x79mm to
+unrolled from an STL overshoots its corners and grows the board from 28x79mm to
 51x83mm. `resample_closed()` guards against this by falling back to linear
 whenever the curve leaves the source outline's envelope, so DXF and STL
 outlines pass through unharmed — but pass `smooth=False` when you know the
@@ -91,15 +91,16 @@ shape is polygonal.
 **Spend control points where the outline turns.** Splining is not a substitute
 for describing the shape: `resample_closed()` interpolates what it is given, so
 too few points produce a smooth curve that is still the wrong curve — a heel
-that reads as a semicircle, an arch that barely dips. An 11-point insole came
-out 269mm long instead of 254mm and lost the arch; the worked example uses 23,
-clustered where the curvature changes fastest. There is no magic number: a
-rounded rectangle or a simple oval is fine with a handful, and something with
-several distinct curves — an insole, a hand, a fingertip — wants 20 or so.
-Judge it by whether the result still looks like the thing.
+that reads as a semicircle, an arch that barely dips. An 11-point insole comes
+out 269mm long instead of 254mm and loses the arch; the worked example uses 23,
+clustered where the curvature changes fastest. No single count suits every
+shape: a rounded rectangle or a simple oval is fine with a handful, and
+something with several distinct curves — an insole, a hand, a fingertip —
+wants 20 or so. Judge it by whether the result still looks like the thing.
 
 **Validate before generating.** `outline.validate()` and `preflight.preflight()`
-cost milliseconds; the generate they guard costs 10-40 seconds.
+cost milliseconds; the generate they guard takes about 1-6 s in grow mode and
+10-45 s in fixed mode on a laptop.
 
 ## Board mode and router
 
@@ -107,26 +108,26 @@ cost milliseconds; the generate they guard costs 10-40 seconds.
 modes — `helpers/generate.py::generate_board()` passes it by default, the
 site always sends it, and `GenerateRequest.router` defaults to it too.
 
-`"legacy"` is the original row/column router, kept so the two can be compared.
-Designing with it is a mistake: on a concave C-shape under `fixed_keepout` it
-measured 6 taxels and 25 DRC violations, 15 of them crossings, where hug on
-the same outline returned 26 taxels and no crossing at all. Reach for it only
-to reproduce an old board or to answer "is hug actually helping here".
+`"legacy"` is a simpler row/column router, available for comparison. Do not
+design with it: on a concave C-shape under `fixed_keepout` it gives 6 taxels
+and 25 DRC violations, 15 of them crossings, where hug on the same outline
+gives 26 taxels and no crossing. Use it only to reproduce a board made with it,
+or to measure what hug contributes on a given outline.
 
 Board mode remains a real decision:
 
 - **`board_mode="expand"` — grow mode, the default. Prefer it.** The board
   grows just enough to fit the wiring, then `follow_padding` (on by default)
   shrink-wraps it back toward the routed copper, so it follows the drawn shape
-  rather than inflating into a blob. Every taxel the shape holds is kept, a
-  row/column a concavity cuts apart stays one net with a link trace hugging
-  the notch (see "Split nets"), and it is the fast mode. The board may extend
-  a few mm past the drawn outline where wiring runs.
+  rather than expanding into a shapeless outline. Every taxel the shape holds
+  is kept, a row/column a concavity cuts apart stays one net with a link trace
+  hugging the notch (see "Split nets"), and it is the fast mode. The board may
+  extend a few mm past the drawn outline where wiring runs.
 - **`board_mode="fixed_keepout"`** — the drawn outline *is* the board, exactly.
   A wiring keep-out band is reserved inside it, sized from the hug routing
   plan. Use it only when the user strictly needs that: the board must fit an
   enclosure, a slot or a part with no margin. It costs taxels (a concave
-  C-shape kept 26 against grow mode's 160) and time: it re-routes the board
+  C-shape keeps 26 against grow mode's 160) and time: it re-routes the board
   once per keep-out attempt.
 
 **Which to pick**: grow, unless the user says the outline is a hard limit.
@@ -193,11 +194,11 @@ wants small taxels; detecting presence over a large area does not.
 
 ## Tail and connector
 
-Every export now includes the connector footprint unconditionally, with
+Every export includes the connector footprint unconditionally, with
 traces reaching all the way to the pad drills — the pipeline applies a
 synthetic 1mm tail extension automatically at export time if the user never
 drew one, so a plain export is already a complete, connectable board (0.000mm
-track-to-drill gap). Drawing a custom tail is optional polish (a longer reach,
+track-to-drill gap). Drawing a custom tail is optional (a longer reach,
 a bent path around an obstacle) — do it only if they ask for something the
 automatic 1mm does not cover. To change a finished board without re-routing it
 (a typed `cable_length_mm`, other padding settings), use the tool's Redo
@@ -234,16 +235,14 @@ shapes. A concave shape is not a reason to change anything, but `preflight()`
 names the re-entrant band, which is worth repeating to the user because it
 explains where the link trace will run.
 
-The tradeoff is board area: the link eats into the notch (`pocket_fill_mm2`
-drops), so a hug board keeps the concavity less open than a hand-perfect
-fixed_keepout outline would — judge how much it closed the notch by
-`pocket_fill`, not by how much copper runs through the pocket (links
-legitimately traverse it hugging the walls, so pocket copper length goes *up*
-on a correct join, not down).
+The tradeoff is board area: the link runs into the notch, so a hug board
+leaves the concavity less open than a hand-drawn fixed_keepout outline would.
+Copper in the notch is expected on a correct join: the links run along its
+walls.
 
-Other DRC cause: **too many channels for the space** — the keep-out grows to
-make room and eats the sensing area. `fixed_keepout_max_mm` climbing above
-~25mm on a 100mm board is the tell.
+Another DRC cause: **too many channels for the space** — the keep-out grows to
+make room and takes sensing area. A `fixed_keepout_max_mm` above ~25mm on a
+100mm board indicates it.
 
 ## What a good board looks like
 
@@ -257,20 +256,17 @@ copper that should not be where it is. An entry in
 `drc["routing_warning_nets"]` is the reverse — hug **refused** to emit a net
 rather than route it too close to its neighbour, so the board is safe but
 some taxels are not connected (`drc["routing_problem_pixels"]` names them,
-and `stats["hug_plan_warnings"]` says which net and why). Seen on a C-shape
-in fixed mode at 3.2mm pitch: `ROW_0_0 pad0 would come within DRC minimum of
-ROW_1_0 — net refused, not emitted`, leaving 2 taxels dead. That is the
-"too many channels for the space" symptom below, not a routing defect — the
-fix is a coarser pitch, a smaller grid, or grow mode, never a retry.
+and `stats["hug_plan_warnings"]` says which net and why). For example, a
+C-shape in fixed mode at 3.2mm pitch reports `ROW_0_0 pad0 would come within
+DRC minimum of ROW_1_0 — net refused, not emitted` and leaves 2 taxels
+unconnected. That is the "too many channels for the space" symptom above, not
+a routing defect — the fix is a coarser pitch, a smaller grid, or grow mode,
+never a retry.
 
 **A nonzero DRC count is always a real problem, in every mode.** Copper
 running onto the connector's own pads is not counted, so do not discount any
 DRC line as "probably just the connector edge." If DRC is not clean, find out
 why rather than retrying blindly — start with "Split nets" above.
-
-`pipeline/route_astar.py` exists and is *not* wired in. Do not switch to it:
-it runs a grid search per net inside the fixed-mode retry loop and takes
-minutes rather than seconds.
 
 ## Reporting
 

@@ -1,6 +1,6 @@
-// OpenTac bus v2 controller -- Teensy 4.0. Bus on Wire: SDA 18, SCL 19, 1 MHz.
+// OpenTac bus controller -- Teensy 4.0. Bus on Wire: SDA 18, SCL 19, 1 MHz.
 //
-// Talks to 1..18 bus nodes (tactile_imu_fast_cfg built with -DOT_BUS_NODE)
+// Talks to 1..18 bus nodes (opentac_readout built with -DOT_BUS_NODE)
 // and to the laptop over USB. It adds almost nothing of its own: every node
 // speaks the single-board command surface, and this forwards it.
 //
@@ -26,8 +26,9 @@
 // <t_us> is this controller's clock when the node published the frame -- one
 // clock for every node, so frames from different sensors share a timeline.
 //
-// Build: v2/build.sh (or arduino-cli compile --fqbn
-//   'teensy:avr:teensy40:usb=serial,speed=600,opt=o2std' --libraries <Arduino>/libraries v2/ot2_master)
+// Build: firmware/build.sh bus_controller (or arduino-cli compile --fqbn
+//   'teensy:avr:teensy40:usb=serial,speed=600,opt=o2std'
+//   --library firmware/libraries/OpenTactileBus firmware/bus_controller)
 
 #include <Wire.h>
 #include <ot_bus.h>
@@ -169,7 +170,7 @@ static bool readStatus(uint8_t addr, OtbStatus *st) {
   return true;
 }
 
-// ----- SMBus ARP, as v1/ot_master.ino does it -------------------------------------
+// ----- SMBus ARP ------------------------------------------------------------------
 
 static bool arpSendByte(uint8_t command) {
   const uint8_t b[2] = {command, otbPecSendByte(OTB_ADDR_ARP, command)};

@@ -1,5 +1,4 @@
-# One line ending in the repo, whatever the machine. OneDrive and Windows checkouts
-# rewrote every line of the old repos; this stops that.
+# Normalize line endings to LF in the repository on every platform.
 * text=auto eol=lf
 
 *.bat  text eol=crlf

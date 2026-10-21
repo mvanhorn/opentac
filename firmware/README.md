@@ -3,7 +3,7 @@
 The readout boards run one sketch, `opentac_readout/`, built once per board.
 The daisy-chain controller, a Teensy 4.0, runs `bus_controller/`.
 
-To put firmware on a board, see [docs/use/flash.md](../docs/use/flash.md)
+To put firmware on a board, see [Flash the firmware](https://opentac.github.io/use/flash/)
 (`uv run opentac flash`). This page is about what is in this folder and how it
 is built.
 
@@ -19,8 +19,8 @@ is built.
 
 The board name in the binary (`READOUT60`, `NODE16`, `READOUT32`) is what the
 board reports to `?`, and what `opentac flash` checks before writing. The
-60-pin board does not run as a daisy-chain node yet: a 30 x 30 sensor does not
-fit the node build's memory.
+60-pin board does not run as a daisy-chain node: a 30 x 30 sensor does not fit
+the node build's memory.
 
 ## Folder
 
@@ -61,7 +61,7 @@ It needs:
 
 - arduino-cli 1.x.
 - The STM32 core, `STMicroelectronics:stm32` version **2.7.1** (the commands
-  are in [docs/use/flash.md](../docs/use/flash.md), "arduino-cli"). The board
+  are in [Flash the firmware, arduino-cli](https://opentac.github.io/use/flash/#3-arduino-cli)). The board
   is *Generic STM32G4 series*, part *Generic G431KBUx*, USB CDC.
 - For the controller only, the Teensy core (`teensy:avr`). Without it the
   `bus_controller` target is skipped.

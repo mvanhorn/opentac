@@ -8,7 +8,8 @@
 // point NODE_PATH at its node_modules), and Google Chrome. It drives the current
 // OpenTac-CAD the way a visitor would (the example cards, the robot gallery, the
 // case panel) and the website's QR decoder page, and writes WebP screenshots at
-// twice the CSS size into docs/assets/screens/. Nothing is edited by hand.
+// twice the CSS size into docs/assets/screens/ in the website checkout
+// (OPENTAC_SITE_ROOT, default ../opentac.github.io). Nothing is edited by hand.
 //
 //   OT_CAD   the running OpenTac-CAD (default http://127.0.0.1:8231/)
 //   OT_SITE  the previewed website, for the QR decoder (default http://127.0.0.1:8217/)

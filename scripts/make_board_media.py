@@ -5,7 +5,8 @@
     uv run python scripts/make_board_media.py --step 10    # quicker draft spin
 
 Re-run it whenever a board in hardware/ changes. Needs kicad-cli (KiCad 10) and
-ffmpeg on PATH. Writes into docs/assets/boards/:
+ffmpeg on PATH. Writes into docs/assets/boards/ in the website checkout
+($OPENTAC_SITE_ROOT, default ../opentac.github.io):
 
     readout60.png, readout60_spin.mp4                    60-pin board
     readout30.png, readout30_exploded.png, readout30_spin.mp4   30-pin pair, stacked

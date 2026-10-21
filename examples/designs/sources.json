@@ -1,8 +1,8 @@
 {
  "_readme": [
   "Inputs for scripts/make_example_designs.py: the 31 sensors fabricated for the paper",
-  "(outline plus the fabricated board's taxel size, pitch and copper rules). Robot names were",
-  "recovered by matching outlines against the example STLs; boards 15, 16, 20 and 24 have no",
+  "(outline plus the fabricated board's taxel size, pitch and copper rules). Robot names come",
+  "from matching the outlines against the example STLs; boards 15, 16, 20 and 24 have no",
   "recorded robot."
  ],
  "designs": [

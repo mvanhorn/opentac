@@ -19,7 +19,8 @@ a = manifest.load(FIX / "grid_4mm.json")
 b = manifest.load(FIX / "flat_square.json")
 
 # A reads more than the 3 N pressed: at 4 mm pitch each taxel's window in the
-# foam model is 4.5 mm wide (docs/sim.md, "Known quirk").
+# foam model is 4.5 mm wide (https://opentac.github.io/sim/#foam-model,
+# "Integration-window convention").
 frame_a = Sensor(a).press("sphere", force_n=3.0, radius_mm=5.0)      # newtons on A
 frame_b = transfer(frame_a, a, b)                                      # centred on B, force conserved
 direct_b = Sensor(b).press("sphere", force_n=3.0, radius_mm=5.0)     # the same press, simulated on B

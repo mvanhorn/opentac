@@ -1,16 +1,12 @@
-// OpenTactile free-running stream -- sensor described by a provisioned config
+// OpenTac readout firmware -- free-running stream from a provisioned sensor
 // Target: STM32G431KBU6
 //
-// A variant of tactile_imu_fast_32x32 that stops assuming the skin is a full
-// 32x32 rectangle. The array size, the row and column hardware ordering, which
-// taxels exist and their physical pitch all come from a DeviceConfig held in
-// flash, which the host derives from the OpenTac manifest and sends once over
-// this same USB CDC link. Fabricate a skin, provision the board, and it
-// remembers across power cycles -- no recompile per sensor.
-//
-// The ADC path, shift-register walk, mux write, IMU handling, RGB and record
-// format are unchanged from tactile_imu_fast_32x32. What changed is only which
-// cells get visited and how many numbers a frame carries.
+// The skin need not be a full 32x32 rectangle. The array size, the row and
+// column hardware ordering, which taxels exist and their physical pitch all
+// come from a DeviceConfig held in flash, which the host derives from the
+// OpenTac manifest and sends once over this same USB CDC link. A provisioned
+// board keeps its config across power cycles, so no sensor needs its own
+// build.
 //
 // Records out, distinguished by their first field:
 //   V,<seq>,<ax,ay,az mg>                      one per FIFO sample
@@ -24,8 +20,8 @@
 //
 // Every F record states the config generation and the tactile mode that
 // produced it, so a recording is self-describing and a host decoding one
-// mode's data as another's is not a silent failure (v1/API.md 2.1). The M
-// record carries the same facts when tactile is switched off.
+// mode's data as another's is not a silent failure. The M record carries the
+// same facts when tactile is switched off.
 //
 // N is the config's active taxel count, and the samples are in the manifest's
 // `pixels` order, so sample k, pixels[k] and shear.b[k] are the same taxel.
@@ -39,9 +35,8 @@
 // command set, RGB -- but emits no F records at all. Guessing a geometry would
 // produce a plausible-looking frame that silently means nothing.
 //
-// Commands in, one per line, '\n' terminated (host side: opentac/device). The
-// letters follow v1/API.md's controller commands so one vocabulary covers the
-// bus nodes and this board:
+// Commands in, one per line, '\n' terminated (host side: opentac/device). A bus
+// node takes the same commands (see the bus node build below):
 //   ?            capabilities, then the whole parameter table
 //   G            report the stored sensor config
 //   X            erase the stored sensor config
@@ -62,25 +57,27 @@
 //
 // ----- Bus node build (-DOT_BUS_NODE) ----------------------------------------
 //
-// The same firmware as a node on the OpenTac bus (stm_test/v2): many boards
-// behind one Teensy 4.0 on I2C1 (SCL PA15, SDA PB7), auto-addressed by SMBus
-// ARP. Only the transport changes. The command lines above arrive over the bus
+// The same firmware as a node on the OpenTac bus: many boards behind one
+// Teensy 4.0 on I2C1 (SCL PA15, SDA PB7), auto-addressed by SMBus ARP. Only
+// the transport changes. The command lines above arrive over the bus
 // instead of USB and the replies go back the same way, so provisioning,
 // parameters and xampling are this file's code, not a copy of it. Frames are
 // published as binary (libraries/OpenTactileBus/src/ot_bus.h) and the
 // controller prints them as the F / X / V records above. The IMU moves to I2C2
-// on its own TwoWire, and boots OFF (VIB_ENABLE = ORIENT_ENABLE = 0) -- a host
+// on its own TwoWire, and boots off (VIB_ENABLE = ORIENT_ENABLE = 0) -- a host
 // that wants it asks. USB still answers `B` for reflashing.
 //
-// Build with -DOT_BUS_NODE -DOT_BOARD_NODE16 -DI2C_TXRX_BUFFER_SIZE=160; see
-// v2/README.md. Without OT_BUS_NODE this file compiles to exactly the USB
-// firmware it always was.
+// Build with -DOT_BUS_NODE -DOT_BOARD_NODE16 -DI2C_TXRX_BUFFER_SIZE=160
+// (`firmware/build.sh node16_bus`). Without OT_BUS_NODE this file compiles to
+// the USB firmware.
 //
 // ----- Hardware this assumes ------------------------------------------------
 //
 // Three boards share this file; see "Which board" below and ot_devcfg.h. The
-// 60-pin board (READOUT60) differs in its '595 pin order and adds a gain
-// switch (GAIN_SW); the description below holds for all three.
+// description below is that of the 70-pin readout (READOUT32). The 60-pin
+// board (READOUT60) has the same drive and mux, differs in its '595 pin order
+// and adds a gain switch (GAIN_SW). The 30-pin board (NODE16) has two '595
+// stages and a 16:1 mux on MUX0..MUX3; PB5 is not part of it.
 //
 // Drive: four cascaded 74HC595 stages, walked by a single travelling 1. Because
 // the 1 can only shift forward, the scan visits steps in order and reads, at
@@ -88,16 +85,16 @@
 // past without being sampled. Which side of the skin -- rows or columns -- sits
 // on the shift register is set by the readout board's connector and carried in
 // the config (see "Connector line codes" in ot_devcfg.h); on the 32x32 readout
-// it is the skin's COLUMNS that are driven.
+// it is the skin's columns that are driven.
 //
-// Columns: a 32:1 mux fed by MUX0..MUX4:
+// Sense: a 32:1 mux fed by MUX0..MUX4:
 //   MUX0 = PA6, MUX1 = PA7, MUX2 = PA10, MUX3 = PB3, MUX4 = PB5,
-// wired straight through to A0..A4 (user-confirmed 2026-08-31). PB5 also
-// carries CAN_RX on boards that populate the transceiver; leave CAN unused.
+// wired straight through to A0..A4. PB5 also carries CAN_RX on boards that
+// populate the transceiver; leave CAN unused.
 //
-// Column ordering now comes from the config's col_order, so MUX_NETS_REVERSED
-// is gone: a board that needs a different mapping is provisioned differently,
-// not rebuilt.
+// The order of the lines comes from the config's row_order and col_order, so
+// a board that needs a different mapping is provisioned differently, not
+// rebuilt.
 
 // ----- Which board ------------------------------------------------------------
 //
@@ -114,8 +111,8 @@
 #include <Adafruit_NeoPixel.h>
 
 #if defined(OT_BUS_NODE) && defined(OT_BOARD_READOUT60)
-// A 1024-taxel node needs more RAM for its frame buffers than the G431 build
-// has left; the bus node is the 30-pin board for now.
+// A 1024-taxel node needs more RAM for its frame buffers than the G431 has
+// left, so the bus node build is for the 30-pin board only.
 #error "The bus node build is for OT_BOARD_NODE16 only"
 #endif
 
@@ -185,7 +182,7 @@ constexpr uint8_t FIFO_DRAIN_ROW_INTERVAL = 16;
 
 // Xampling changes step far more often than raster -- every batch walks the
 // register again -- so it drains on time instead, at about the cadence a
-// 32x32 raster scan drains at. Counting step changes drained 3-5x as often.
+// 32x32 raster scan drains at. Counting step changes would drain 3-5x as often.
 constexpr uint32_t XAMP_FIFO_DRAIN_US = 8000;
 
 constexpr float RAD_TO_DEG_F = 57.2957795131f;
@@ -198,22 +195,22 @@ constexpr uint32_t NO_CONFIG_NOTICE_MS = 2000;
 
 // ----- Runtime parameters ---------------------------------------------------
 //
-// Session config: these are NOT persisted. The board boots to the defaults in
+// Session config: these are not persisted. The board boots to the defaults in
 // OT_PARAMS and the host asserts whatever it wants, so a board never silently
-// carries someone else's session settings (v1/API.md 2.7.1). Only the sensor
-// DeviceConfig, which describes the physical skin, survives a power cycle.
+// carries someone else's session settings. Only the sensor DeviceConfig, which
+// describes the physical skin, survives a power cycle.
 
 uint16_t paramValue[OT_PARAM_COUNT];
 
 // Incremented on every accepted config write, 0 at boot, echoed in every F and
 // M record. A host that sees it go backwards knows the board rebooted and its
-// session config went with it (v1/API.md 2.7).
+// session config went with it.
 uint16_t configGeneration = 0;
 
 static inline uint16_t param(uint8_t id) { return paramValue[otParamSlot(id)]; }
 
-// Same address on both boards (the node's comes from v1/ot_node.ino). On a bus
-// node, Wire is the bus, so the IMU gets I2C2 to itself as it did on v1 nodes.
+// The IMU has the same address on a USB board and on a bus node. On a bus
+// node, Wire is the bus, so the IMU gets I2C2 to itself.
 #if defined(OT_BUS_NODE)
 TwoWire WireImu(IMU_SDA, IMU_SCL);
 #define IMU_WIRE WireImu
@@ -290,7 +287,7 @@ uint32_t vibrationDropped = 0;
 uint16_t peakTactile = 0;
 
 // Statistics, zeroed by `z` so a host can measure over a window rather than
-// since boot (v1/API.md 2.6).
+// since boot.
 uint32_t statScanUsMax = 0;
 uint32_t statLoopUsMax = 0;
 uint32_t statFrames = 0;
@@ -308,7 +305,6 @@ uint8_t rgbStep = 0;
 
 // ----- DFU ------------------------------------------------------------------
 //
-// Carried over verbatim from v1/ot_node.ino, where it is hardware-validated:
 // `B` over CDC reboots into the STM32 system bootloader, so reflashing never
 // needs the BOOT0 button. The jump happens first thing after the reset, before
 // any peripheral is configured, which is what makes it reliable.
@@ -475,8 +471,7 @@ static void imuApplyParams() {
 
   // BDR 0 keeps the accelerometer out of the FIFO entirely. The FIFO itself is
   // still drained: it also carries the rotation vector, and gating the drain on
-  // the vibration flag would silently kill orientation -- the exact bug
-  // v1/API.md records under "per-modality enables".
+  // the vibration flag would silently stop orientation as well.
   imu.FIFO_Set_X_BDR(param(OT_P_VIB_ENABLE) ? vibOdr : 0.0f);
   imu.FIFO_Set_Mode(LSM6DSV16BX_STREAM_MODE);
 }
@@ -514,11 +509,11 @@ static bool gainApply() {
 }
 #endif
 
-// Extra wait after each IMU FIFO drain, in microseconds; 0 (the default) adds
-// none. On one 70-pin board the reads just after a drain spiked by 600-750
-// counts, within ~30-90 us of it (README, 2026-09-21). Building with
-// -DOT_POST_DRAIN_US=100 lets those settle before the scan reads on, at the
-// cost of the wait on every drain. Not yet tried on hardware.
+// Extra wait after each IMU FIFO drain, in microseconds; off by default (0).
+// On one 70-pin board the reads just after a drain spiked by 600-750 counts,
+// within ~30-90 us of it. Building with -DOT_POST_DRAIN_US=100 gives those
+// reads time to settle before the scan continues, at the cost of the wait on
+// every drain.
 #ifndef OT_POST_DRAIN_US
 #define OT_POST_DRAIN_US 0
 #endif
@@ -527,8 +522,8 @@ static void drainFifo() {
   if (!imuReady) return;
   // With both IMU streams off nothing is batched, and the FIFO status poll
   // alone is an I2C transaction of a few hundred microseconds -- called several
-  // times a frame, it was a fixed cost that stopped small xampling frames
-  // scaling with M.
+  // times a frame, it would be a fixed cost that keeps small xampling frames
+  // from scaling with M.
   if (!param(OT_P_VIB_ENABLE) && !param(OT_P_ORIENT_ENABLE)) return;
 
   uint16_t fifoSamples = 0;
@@ -646,8 +641,8 @@ static void scanTactileFrame(uint16_t extraSettleUs = 0) {
 // the lines it passes. A '595 shifts and latches separately, so the bit is
 // clocked to its step with the latch held low and latched once: the outputs go
 // straight from the old line to the new one. (Walking with rowWalkAdvance()
-// latched every step in between -- a ~20 ns pulse on each skipped line, and
-// step 0 on every rewind -- which raster, moving one step at a time, never
+// would latch every step in between -- a ~20 ns pulse on each skipped line,
+// and step 0 on every rewind -- which raster, moving one step at a time, never
 // does.) MR clears only the shift register, so the old line stays driven until
 // that single latch.
 // ROW_SETTLE is paid once per change of step, MUX_SETTLE once per taxel -- the
@@ -784,8 +779,7 @@ static void updateRgb() {
 // ----- Transport ------------------------------------------------------------
 //
 // Where command lines come from and where replies and records go. On USB that
-// is Serial, and these macros are exactly the calls this file always made. On
-// a bus node it is the two text rings in ot_bus.h, filled and drained by the
+// is Serial. On a bus node it is the two text rings in ot_bus.h, filled and drained by the
 // I2C interrupt below, and frames are published as binary instead of printed.
 
 #if !defined(OT_BUS_NODE)
@@ -854,7 +848,7 @@ static BusOut busOut;
 #define OTB_THIS_BOARD OTB_BOARD_READOUT32
 #endif
 
-// Addressing, as v1/ot_node.ino does it (validated on three nodes).
+// Addressing: SMBus ARP (see ot_bus.h).
 static uint8_t busUid[OTB_UID_BYTES];
 static uint8_t busUdid[OTB_UDID_LEN];
 static volatile uint8_t busAddr = 0;          // 0 = unassigned: answering 0x61 only
@@ -1362,7 +1356,8 @@ static void printFrameHeader() {
 #if defined(OT_BOARD_READOUT60)
     printLine("# no device config -- run: opentac setup <manifest>");
 #else
-    // Older wording, kept so these boards' binaries stay the released ones.
+    // The released 30-pin and 70-pin binaries print this older wording; the
+    // command is `opentac setup <manifest>`.
     printLine("# no device config -- run: opentac_device.py provision <manifest>");
 #endif
     return;
@@ -1671,7 +1666,7 @@ static void handleSetParam(const char *args) {
 
   // A reserved mode is refused outright rather than silently falling back to
   // raster: a host must never be able to believe it is reading xampled data
-  // while the board is producing something else (v1/API.md 2.1).
+  // while the board is producing something else.
   if (OT_PARAMS[slot].id == OT_P_TAC_MODE) {
     if (((OT_TAC_MODES_SUPPORTED >> value) & 1u) == 0u) {
       replyError("NOTIMPL");
@@ -1991,7 +1986,7 @@ void setup() {
   Serial.begin(115200);  // baud is ignored on USB CDC
 
   // Session config starts from the table's defaults every boot; only the
-  // sensor DeviceConfig survives a power cycle (v1/API.md 2.7.1).
+  // sensor DeviceConfig survives a power cycle.
   for (uint8_t i = 0; i < OT_PARAM_COUNT; ++i) paramValue[i] = OT_PARAMS[i].def;
 
   tactileBegin();
