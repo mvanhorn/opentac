@@ -1,10 +1,9 @@
-"""The readout has to be the inverse of itself, refuse the wrong units, and
-admit when a simulated press is outside what the calibration saw.
+"""The readout is the inverse of itself, refuses the wrong units, and reports
+when a simulated press is outside what the calibration covered.
 
-Ported from TactileSim's tests/test_readout.py; only the imports changed.
-
-The profiles are fitted from bench recordings that do not live in this repo, so
-nothing here re-derives a fit. These tests pin the model's contract instead.
+The profiles are fitted from bench recordings that are not in this repository,
+so nothing here re-derives a fit; these tests check the model's contract
+instead.
 """
 import os
 
@@ -100,11 +99,11 @@ def test_noise_is_seeded_and_never_negative(readout):
 
 
 def test_a_real_board_press_is_flagged_when_outside_the_calibration(readout):
-    """The sim's own README example, through a measured readout.
+    """A ball pressed on a real board, through a measured readout.
 
     A ball on bumps concentrates the load far beyond a flat press over a whole
-    square. That is not a failure of either model -- it is the thing a user
-    most needs to be told, so it must be visible, not silently extrapolated.
+    square. That is not a failure of either model, but it is what a user most
+    needs to know, so it is flagged rather than extrapolated without notice.
     """
     s = TactileSensor.from_manifest(os.path.join(FIX, "flat_square.json"))
     f = s.probe("sphere", force_n=8.0, radius_mm=40)

@@ -1,23 +1,20 @@
-"""The loader has to read a real OpenTac board correctly, and say so when it can't.
+"""The loader reads a real OpenTac board correctly, and says so when it cannot.
 
-Every bug this file pins down was found by hand and produced PLAUSIBLE output:
-a contact split into two blobs at opposite ends of the image, thirty bumps
-reported in contact when five were, a sensor placed perfectly on a surface in
-entirely the wrong place. None of them crashed anything. That is the whole
-argument for testing this layer rather than eyeballing a picture -- it is the
-same failure mode NOTES.md catalogues for MuJoCo.
+The failures these tests guard against produce plausible output rather than
+errors: a contact split into two blobs at opposite ends of the image, thirty
+bumps reported in contact when five are, a sensor placed on a surface in
+entirely the wrong place. None of them crashes anything, which is why this
+layer is tested rather than judged from a picture.
 
-Ported from TactileSim's tests/test_loader.py; only the imports changed.
-
-Fixtures are REAL manifests exported by OpenTac-CAD, not hand-written:
+Fixtures are real manifests exported by OpenTac-CAD, not hand-written:
 
   flat_square.json  48 taxels, 12 bumps, every 2x2 block full
   flat_disc.json    41 taxels, 15 bumps, 9 blocks cut short by the curved edge
 
-The disc is the important one. `bump_centers_from_taxels` invariant 2 says a
-partial block still gets a FULL-SIZE bump at the block's lattice centre, so
-those nine cells have fewer than four taxels and asymmetric offsets -- exactly
-what an idealised "four taxels at +/-pitch/2" model cannot express.
+The disc is the important one. `bump_centers_from_taxels` gives a partial
+block a full-size bump at the block's lattice centre, so those nine cells have
+fewer than four taxels and asymmetric offsets, which an idealised "four taxels
+at +/-pitch/2" model cannot express.
 """
 import copy
 import os
@@ -62,8 +59,8 @@ def test_counts_match_the_manifest(any_board):
 
 
 def test_positions_are_converted_to_metres(square):
-    """The manifest is mm and this package is SI. A 1000x error is silent:
-    a sensor that size still simulates, it just never touches anything."""
+    """The manifest is mm and this package is SI. A 1000x error raises nothing:
+    a sensor that size still simulates, but never touches anything."""
     man = square.manifest
     px = np.asarray([[p[0], p[1]] for p in man["pixels"]], dtype=float)
     assert np.allclose(square.xy, px * MM)
@@ -72,11 +69,11 @@ def test_positions_are_converted_to_metres(square):
     assert 1e-3 < square.pitch[0] < 1e-2
 
 
-def test_pitch_comes_from_pixel_SPACING_not_from_px_py(square):
+def test_pitch_comes_from_pixel_spacing_not_from_px_py(square):
     """px/py are pad-scan order; the manifest's own _readme says so.
 
     split_row_pin_order reverses the bottom half of the rows, so py can even
-    be negative. Deriving pitch from it silently mis-sizes every bump.
+    be negative. Deriving pitch from it would mis-size every bump.
     """
     man = square.manifest
     dx, dy = square.pitch
@@ -92,7 +89,7 @@ def test_pitch_comes_from_pixel_SPACING_not_from_px_py(square):
 
 
 def test_centre_lands_on_a_bump(any_board):
-    """The taxel centroid falls BETWEEN four bumps on a regular grid, which is
+    """The taxel centroid falls between four bumps on a regular grid, which is
     the worst possible contact point: an 8mm ball there reads exactly zero."""
     cx, cy = any_board.centre()
     d = np.hypot(any_board.bump_xy[:, 0] - cx, any_board.bump_xy[:, 1] - cy)
@@ -112,7 +109,7 @@ def test_offsets_are_relative_to_the_owning_bump(any_board):
 
 # --- partial blocks ------------------------------------------------------
 
-def test_the_disc_actually_has_partial_blocks(disc):
+def test_the_disc_has_partial_blocks(disc):
     """Guard the fixture itself: if the exporter ever stops producing them,
     every partial-block test below would pass vacuously."""
     sizes = disc.group_sizes()
@@ -122,8 +119,8 @@ def test_the_disc_actually_has_partial_blocks(disc):
 
 
 def test_partial_blocks_spread_load_over_only_their_own_taxels(disc):
-    """The failure this guards: assuming four taxels at +/-pitch/2 puts load
-    on taxels the outline removed, which do not exist on this board."""
+    """Assuming four taxels at +/-pitch/2 would put load on taxels the outline
+    removed, which do not exist on this board."""
     surf = sg.plane_surface(disc.p.height - 0.3e-3)
     f = disc.taxel_forces(surf)
     base = disc.surrogate.base_forces(surf)
@@ -198,9 +195,9 @@ def test_decode_shear_recovers_an_applied_moment(any_board):
 def test_no_shear_is_decoded_from_a_flat_press(any_board):
     """A uniform plane tips nothing, so the shear channel must read zero.
 
-    The disc is the case that matters. Its 9 cut-short blocks have taxels on
-    one side only, so referencing the bump centre made a pure normal press
-    decode as 18.4 N of shear that was not there.
+    The disc is the case that matters: its 9 cut-short blocks have taxels on
+    one side only, so a decoder referenced to the bump centre would read shear
+    from a pure normal press.
     """
     s = any_board
     f = s.taxel_forces(_pressed(s))
@@ -255,10 +252,10 @@ def _components(img, thr):
 
 
 def test_geometric_order_keeps_one_contact_in_one_piece(square):
-    """The bug: `pixels`' row/col is PAD order, and split_row_pin_order
-    reverses the bottom half of the rows, so a single round contact plots as
-    two blobs at opposite ends of the image -- and a convolution over that is
-    reading a scrambled picture, which is what a policy would be handed.
+    """`pixels`' row/col is pad order, and split_row_pin_order reverses the
+    bottom half of the rows, so in pad order a single round contact plots as
+    two blobs at opposite ends of the image, and a convolution over that, as
+    a policy would apply, reads a scrambled picture.
     """
     cx, cy = square.centre()
     surf = sg.sphere_surface(0.25, square.p.height - 0.4e-3, cx, cy)
@@ -270,7 +267,7 @@ def test_geometric_order_keeps_one_contact_in_one_piece(square):
 
 
 def test_scan_order_is_a_different_ordering(square):
-    """Guards the premise of the test above: the two orderings really differ,
+    """Guards the premise of the test above: the two orderings differ,
     so 'geometric' is not silently returning the manifest's own indices."""
     assert not np.array_equal(square.geometric_rc(), square.rc)
 
@@ -315,12 +312,11 @@ def test_a_manifest_without_the_shear_block_is_refused(square):
 
 
 def test_an_old_version_number_with_a_shear_block_is_accepted(square):
-    """Check the BLOCK, not the version number.
+    """The loader checks the block, not the version number.
 
-    A real export from a deployed OpenTac-CAD arrived carrying "v": 3 with
-    a complete shear block -- version numbers travel differently from
-    features. Gating on v >= 5 would have refused a sensor this package can
-    simulate perfectly.
+    Version numbers travel differently from features: an export can carry
+    "v": 3 with a complete shear block. Gating on v >= 5 would refuse a sensor
+    this package can simulate.
     """
     man = copy.deepcopy(square.manifest)
     man["v"] = 3
@@ -338,8 +334,8 @@ def test_a_manifest_with_no_bumps_is_refused(square):
 
 
 def test_a_desynchronised_shear_block_is_refused(square):
-    """'shear.b' is promised index-parallel to 'pixels'; a consumer will rely
-    on that silently, so a mismatch has to be loud."""
+    """'shear.b' is specified as index-parallel to 'pixels', and consumers rely
+    on that, so a mismatch is refused."""
     man = copy.deepcopy(square.manifest)
     man["shear"] = dict(man["shear"])
     man["shear"]["b"] = man["shear"]["b"][:-3]
@@ -349,10 +345,10 @@ def test_a_desynchronised_shear_block_is_refused(square):
 
 # --- probing -------------------------------------------------------------
 
-def test_probe_presses_to_a_FORCE_not_a_depth(square):
-    """NOTES puts this first among the two things to know: at a fixed depth
-    the object's own curvature decides which bumps it reaches, and 0.6mm of
-    flat plate on a real board is 916 N."""
+def test_probe_presses_to_a_force_not_a_depth(square):
+    """Probes press to a force, not a depth: at a fixed depth the object's own
+    curvature decides which bumps it reaches, and 0.6 mm of flat plate on a
+    real board is 916 N."""
     for target in (2.0, 8.0):
         img = square.probe("plane", force_n=target)
         assert np.isclose(img.sum(), target, rtol=1e-3)
@@ -366,7 +362,7 @@ def test_probe_rejects_an_unknown_shape(square):
 def test_a_twist_raises_the_shear_induced_checkering(square):
     """The claim the demo makes, as an assertion.
 
-    Against the BASELINE-subtracted measure: a ball's curvature already makes
+    Against the baseline-subtracted measure: a ball's curvature already makes
     a radial dipole in every off-centre cell, and the shear dipole is
     tangential, so the raw number dips before it climbs.
     """
@@ -382,14 +378,13 @@ def test_a_twist_raises_the_shear_induced_checkering(square):
 
 # --- randomisation hooks -------------------------------------------------
 
-def test_changing_stiffness_actually_changes_the_reading(square):
-    """The silent no-op this guards.
+def test_changing_stiffness_changes_the_reading(square):
+    """Assigning a new `p` changes the reading.
 
-    The surrogate caches stiffness at construction, so before `p` became a
-    property, `sensor.p = softer` changed nothing and said nothing. An RL loop
-    randomising per episode would have trained against one fixed stiffness
-    while believing it was sampling a range -- and every number would still
-    have looked entirely reasonable.
+    The surrogate caches stiffness at construction, so `p` is a property that
+    updates it. Otherwise `sensor.p = softer` would change nothing and report
+    nothing, and an RL loop randomising per episode would train against one
+    fixed stiffness while every number still looked reasonable.
     """
     import dataclasses
 
@@ -421,8 +416,7 @@ def test_set_params_returns_an_independent_sensor(square):
 
 
 def test_the_estimate_ranges_are_shipped_and_bracket_the_defaults():
-    """A user should not have to read NOTES to learn the headline number is a
-    guess. The defaults must at least lie inside the ranges we publish."""
+    """The estimate ranges are published and contain the defaults."""
     from opentac.sim.mujoco.params import ESTIMATE_RANGES
 
     d = BumpParams()
@@ -434,9 +428,9 @@ def test_the_estimate_ranges_are_shipped_and_bracket_the_defaults():
 # --- damping mode --------------------------------------------------------
 
 def test_damping_modes_measure_zeta_against_different_masses():
-    """The trap: `armature` inflates the joint's mass by ~260x, and the
-    default damping formula derives zeta from THAT mass. The real bump then
-    experiences something else entirely -- zeta=11.3 where 0.7 was asked for.
+    """`armature` inflates the joint's mass by about 260x, and the default
+    damping formula derives zeta from that mass, so the real bump experiences
+    a much higher damping ratio than requested (11.3 where 0.7 is asked for).
     """
     import dataclasses
     import math
@@ -452,15 +446,14 @@ def test_damping_modes_measure_zeta_against_different_masses():
     assert c_phys == pytest.approx(2 * stable.zeta * math.sqrt(k * stable.mass))
     assert c_stable == pytest.approx(2 * stable.zeta * k / stable.omega_max)
 
-    # The two disagree by exactly omega_true / omega_max -- the factor by
-    # which armature slowed the joint down. That identity is the bug in one
-    # line, and it is why the error grows with stiffness: 7.8x at 3.5 MPa,
-    # 16.1x at the 15 MPa default.
+    # The two disagree by exactly omega_true / omega_max, the factor by which
+    # armature slows the joint down. This identity is why the discrepancy
+    # grows with stiffness: 7.8x at 3.5 MPa, 16.1x at the 15 MPa default.
     omega_true = math.sqrt(k / stable.mass)
     assert c_stable / c_phys == pytest.approx(omega_true / stable.omega_max)
     assert c_stable > c_phys, "default over-damps the real bump"
 
-    # zeta as the REAL bump experiences it, against the 0.7 asked for.
+    # zeta as the real bump experiences it, against the 0.7 asked for.
     zeta_real = c_stable / (2 * math.sqrt(k * stable.mass))
     assert zeta_real == pytest.approx(
         stable.zeta * omega_true / stable.omega_max)
@@ -470,8 +463,8 @@ def test_damping_modes_measure_zeta_against_different_masses():
 
 def test_damping_mode_does_not_touch_statics():
     """Damping cannot move an equilibrium: at rest F = k*x and mass and
-    damping both drop out. So switching modes must leave every quasi-static
-    quantity -- which is every previously validated result -- untouched."""
+    damping both drop out. Switching modes therefore leaves every quasi-static
+    quantity, and with it every validated result, unchanged."""
     import dataclasses
 
     from opentac.sim.mujoco.params import BumpParams as BP
@@ -489,7 +482,7 @@ def test_damping_mode_does_not_touch_statics():
 
 
 def test_hinges_are_damped_against_rotational_inertia():
-    """A hinge's damping is N*m*s/rad, so it must use an INERTIA, not a mass.
+    """A hinge's damping is N*m*s/rad, so it uses an inertia, not a mass.
     Passing the bump's mass there would be dimensionally wrong."""
     import dataclasses
 

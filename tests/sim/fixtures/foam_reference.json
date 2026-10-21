@@ -1,6 +1,6 @@
 {
- "_readme": "Reference outputs of the original lab scripts, written by tests/sim/make_reference.py. Do not edit by hand.",
- "source": "opentac_indent_compare.sim_taxel_forces",
+ "_readme": "Reference per-taxel forces of the foam contact model, computed with the analysis code of the OpenTac paper on the inputs stored with each case. Do not edit by hand.",
+ "source": "OpenTac paper analysis code: foam contact model (sim_taxel_forces)",
  "cases": [
   {
    "skin": "flat_square.json",

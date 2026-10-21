@@ -132,7 +132,7 @@ def test_full_solver_twist_loads_the_shear_channel():
 
 
 def test_lattice_and_gripper_build():
-    """The regular-lattice studies TactileSim validated the model with still compile and run."""
+    """The regular-lattice studies the model was validated with build and run."""
     pytest.importorskip("mujoco")
     from opentac.sim.mujoco import BumpParams, Gripper, Lattice
 
@@ -140,7 +140,7 @@ def test_lattice_and_gripper_build():
     lat = Lattice(p, nx=3, ny=3, indenter="flat")
     depth, total = lat.press_to_force(5.0)
     assert total == pytest.approx(5.0, rel=0.05)
-    # TactileSim's stage-2 configuration
+    # The configuration of the parallel-jaw grip study
     g = Gripper(BumpParams(taxel_pitch_mm=(3.0, 3.0)), obj="sphere", obj_radius_mm=20.0, pad_half_mm=12.0)
     squeeze, grip = g.close_to_force(15.0)
     assert grip == pytest.approx(15.0, rel=0.05)
