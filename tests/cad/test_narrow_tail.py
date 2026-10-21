@@ -138,12 +138,12 @@ print(r.stats["total_pixels"], max(grew) * unit / 2**20)
 
 
 def test_narrowing_a_dense_grown_tail_does_not_spike_memory():
-    """A grown 26 x 26 board runs hundreds of wire pieces through the old tail.
-    Buffering them as one MultiLineString cost ~300 MB in GEOS (macOS 302 MB,
-    Linux 266 MB on a dense insole), enough to OOM-kill the 512 MB hosted server
-    mid-request ("Failed to fetch" on the page). Per piece it is a few MB.
-    Measured in a fresh process: ru_maxrss is a high-water mark, so a peak an
-    earlier test already reached would hide the spike."""
+    """A grown 26 x 26 board runs hundreds of wire pieces through the wide tail.
+    Buffered as one MultiLineString, they cost about 300 MB in GEOS on a dense
+    board, enough to exhaust the 512 MB hosted server mid-request; buffered
+    piece by piece, a few MB. Measured in a fresh process: ru_maxrss is a
+    high-water mark, so a peak that an earlier test already reached would hide
+    the spike."""
     import subprocess
     import sys
 

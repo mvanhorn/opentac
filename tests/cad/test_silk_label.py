@@ -21,7 +21,6 @@ import io
 import json
 import os
 import re
-import sys
 import zipfile
 from unittest import mock
 
@@ -87,7 +86,6 @@ def test_font_covers_every_character_a_name_can_contain():
         survivors.update(s)
     missing = sorted(c for c in survivors if c.upper() not in _GLYPHS)
     assert not missing, f"no glyph for {missing}"
-    print("test_font_covers_every_character_a_name_can_contain: OK")
 
 
 def test_glyphs_stay_in_their_cell_and_advance():
@@ -108,7 +106,6 @@ def test_glyphs_stay_in_their_cell_and_advance():
     assert text_width("ABC", 1.0) > text_width("AB", 1.0)
     assert text_width("A B", 1.0) == text_width("ABB", 1.0)
     assert text_strokes("", 1.0) == []
-    print("test_glyphs_stay_in_their_cell_and_advance: OK")
 
 
 # ---- the name ---------------------------------------------------------------
@@ -121,7 +118,6 @@ def test_sanitize_matches_the_frontend_rules():
     assert "/" not in sanitize_name("a/b")
     assert len(sanitize_name("a" * 200)) == 48
     assert sanitize_name(None) == ""
-    print("test_sanitize_matches_the_frontend_rules: OK")
 
 
 # ---- the board --------------------------------------------------------------
@@ -157,7 +153,6 @@ def test_label_is_on_the_board_and_off_the_connector():
         line = LineString([a, b])
         assert not any(line.intersects(pad) for pad in pads), \
             f"silk stroke {a}->{b} lands on a connector pad"
-    print("test_label_is_on_the_board_and_off_the_connector: OK")
 
 
 def test_label_sits_between_the_connector_and_the_array():
@@ -181,7 +176,6 @@ def test_label_sits_between_the_connector_and_the_array():
     rot = float(re.search(r'\(gr_text "fingertip_wrap" \(at [-\d.]+ [-\d.]+ '
                           r'(-?[\d.]+)\)', zf.read("board.kicad_pcb").decode()).group(1))
     assert -90.0 < rot <= 90.0, rot
-    print("test_label_sits_between_the_connector_and_the_array: OK")
 
 
 def test_preview_shows_exactly_what_the_gerber_carries():
@@ -204,7 +198,6 @@ def test_preview_shows_exactly_what_the_gerber_carries():
     # the glyph count is what gives it away.
     from opentac.cad.export.stroke_font import text_strokes
     assert len(svg_polys) == len(text_strokes(printed, 1.0))
-    print("test_preview_shows_exactly_what_the_gerber_carries: OK")
 
 
 def test_no_name_means_no_label_anywhere():
@@ -215,7 +208,6 @@ def test_no_name_means_no_label_anywhere():
         assert SILK_GERBER not in zf.namelist(), name
         assert 'class="silk"' not in data["svg"], name
     assert MIN_CHARS >= 3
-    print("test_no_name_means_no_label_anywhere: OK")
 
 
 def test_the_name_survives_a_round_trip_through_design_json():
@@ -232,22 +224,8 @@ def test_the_name_survives_a_round_trip_through_design_json():
     reopened = resp.json()
     assert reopened["edit_data"]["params"]["design_name"] == "thumb_pad_rev_B"
     assert reopened["params"].get("design_name") == "thumb_pad_rev_B"
-    print("test_the_name_survives_a_round_trip_through_design_json: OK")
 
 
 def test_a_tiny_board_drops_the_label_rather_than_overhanging():
     """There is a floor: below it the label is dropped, never shrunk further."""
     assert min(HEIGHTS_MM) >= 0.8, "silk below 0.8mm does not survive screen printing"
-    print("test_a_tiny_board_drops_the_label_rather_than_overhanging: OK")
-
-
-if __name__ == "__main__":
-    test_font_covers_every_character_a_name_can_contain()
-    test_glyphs_stay_in_their_cell_and_advance()
-    test_sanitize_matches_the_frontend_rules()
-    test_label_is_on_the_board_and_off_the_connector()
-    test_label_sits_between_the_connector_and_the_array()
-    test_preview_shows_exactly_what_the_gerber_carries()
-    test_no_name_means_no_label_anywhere()
-    test_the_name_survives_a_round_trip_through_design_json()
-    test_a_tiny_board_drops_the_label_rather_than_overhanging()

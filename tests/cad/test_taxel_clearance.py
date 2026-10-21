@@ -3,8 +3,6 @@ taxel's electrodes are combs, so a wire grazing a neighbouring taxel's frame
 shorts a column to a row. The tool's DRC checks it (drc_check taxels=), and the
 legacy router's smoothing keeps column shortcuts that far from every taxel."""
 
-import os
-import sys
 
 
 import numpy as np
@@ -36,12 +34,11 @@ def test_drc_flags_a_column_wire_grazing_another_columns_taxel():
 
 @pytest.mark.parametrize("router", ["legacy", "hug"])
 def test_fixed_board_ships_no_column_wire_against_a_taxel(router):
-    # The fabricated 17x09 board's outline and grid (20x35mm, 2mm taxels at
-    # 2mm pitch), 2 layers, fixed outline; the hug order falls back to the
-    # legacy router here. Its smoothing cut COL_0 and COL_1 across the
-    # corners of the bottom-left taxels (0.048mm and 0.18mm; needs 0.2mm).
-    # With the DRC check alone the hug run refused that fallback and shipped
-    # 65 taxels; with the smoothing keeping its distance it is 77, clean.
+    # The fabricated 17x09 board's outline and grid (20x35 mm, 2 mm taxels at
+    # 2 mm pitch), 2 layers, fixed outline; the hug order falls back to the
+    # legacy router here. Wire smoothing keeps its distance from the
+    # bottom-left taxels, whose corners COL_0 and COL_1 would otherwise cut
+    # (0.2 mm clearance is needed), so all 77 taxels ship with DRC 0.
     r = main.generate(main.GenerateRequest(
         outline=[[-10.0, 0.0], [10.0, 0.0], [10.0, 35.0], [-10.0, 35.0]], router=router,
         board_mode="fixed_keepout", pixel_w_mm=2.0, pixel_h_mm=2.0, pitch_x_mm=2.0, pitch_y_mm=2.0))
@@ -58,9 +55,9 @@ def test_fixed_board_ships_no_column_wire_against_a_taxel(router):
                                         (3.1, 3.1, 0.2, 0.2), (4.0, 4.0, 0.2, 0.2), (3.4, 2.8, 0.2, 0.2),
                                         (2.0, 2.08, 0.1, 0.1)])
 def test_taxel_row_via_clears_every_column_finger(w, h, tw, gap):
-    # The row via is wider than the row spine; a column finger at its height
-    # passed it at 0.04-0.11mm. That finger alone now stops center_clear short
-    # of the via; footprints that already cleared it are unchanged.
+    # The row via is wider than the row spine, so a column finger at its height
+    # stops center_clear short of the via; footprints whose fingers already
+    # clear it keep them at full length.
     from shapely.geometry import Point
     from opentac.cad.export.kicad_footprint import pixel_geometry
     cc, via = 0.2, 0.35

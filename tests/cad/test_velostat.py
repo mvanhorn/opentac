@@ -7,9 +7,7 @@ look the same.
 """
 import base64
 import io
-import os
 import re
-import sys
 import zipfile
 
 import ezdxf
@@ -75,9 +73,10 @@ def _uncovered_taxels(res):
                              (x - hw, y + hh)]).within(poly)]
 
 
-def test_cable_on_an_inner_edge_still_covers_every_taxel():
-    """Regression: clipping the board at the cable-edge LINE dropped the T's
-    whole right arm (20 taxels) when the cable sat on the stem's side."""
+def test_cable_on_an_inner_edge_covers_every_taxel():
+    """With the cable on the stem's side of a T, the velostat covers every
+    taxel, including the T's whole right arm: the board is not clipped at the
+    cable-edge line."""
     tee = [[-12, 0], [12, 0], [12, 34], [34, 34], [34, 52], [-34, 52], [-34, 34], [-12, 34]]
     res = _generate(tee[1:] + tee[:1])     # cable edge = (12,0)->(12,34)
     assert _uncovered_taxels(res) == []

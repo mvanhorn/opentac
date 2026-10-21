@@ -4,7 +4,7 @@ Two writers produce this project's manufacturing files: KiCad (kicad-cli plots
 the generated .kicad_pcb) and export/gerber.py + export/excellon.py, the
 pure-Python fallback the hosted service uses. Comparing their text says little
 -- KiCad flashes aperture macros where the fallback draws strokes and regions
--- so the parity tests compare what the files DRAW: each layer as a shapely
+-- so the parity tests compare what the files draw: each layer as a shapely
 geometry in the Gerber frame (mm, Y up), each drill file as a list of hits.
 
 Covers what either writer emits: %FS/%MO, circle/rectangle/obround/polygon

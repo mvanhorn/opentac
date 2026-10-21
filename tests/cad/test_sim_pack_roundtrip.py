@@ -1,14 +1,14 @@
-"""manifest v6 must place the REAL exported board back onto the real part.
+"""manifest v6 places the exported board back onto the real part.
 
-test_sim_embed.py checks the flat<->3D map in isolation. This is the round trip
-that matters: run an actual /generate on an outline that came off a curved
-part, then take the taxels the exporter wrote into the manifest and put them
-back on the mesh. Every one has to land on the surface, in the right place, at
-the right spacing.
+test_sim_embed.py checks the flat<->3D map in isolation. This file checks the
+full round trip: run /generate on an outline that came off a curved part, then
+take the taxels the exporter wrote into the manifest and put them back on the
+mesh. Every one lands on the surface, in the right place, at the right
+spacing.
 
-Same discipline as test_manifest_reproduces_board.py -- check the manifest
-against the ACTUAL export rather than against a re-derivation, because a bug
-that lives in the export path is invisible to a test that recomputes.
+As in test_manifest_reproduces_board.py, the manifest is checked against the
+export itself rather than against a re-derivation, because a defect in the
+export path is invisible to a test that recomputes.
 
 The half-cylinder is used because it is developable (so the unfold is exact and
 any error is the export's own) and because every quantity has a closed form.
@@ -16,8 +16,6 @@ any error is the export's own) and because every quantity has a closed form.
 import base64
 import io
 import json
-import os
-import sys
 import zipfile
 
 import numpy as np
@@ -105,17 +103,17 @@ def exported():
 
 
 def test_frame_is_verified_not_assumed(exported):
-    """The outline we projected with must be the one that made the board."""
+    """The outline used for the projection is the one that made the board."""
     _, sim3d, _ = exported
     assert sim3d["fit"]["outline_mm"] < FRAME_TOL_MM
     assert "warnings" not in sim3d, sim3d.get("warnings")
 
 
 def test_every_taxel_lands_on_the_part_surface(exported):
-    """The round trip INTEGRATION.md asked for.
+    """Every exported taxel, mapped back onto the part, lies on its surface.
 
-    A sensor placed a millimetre inside the finger still simulates happily and
-    still looks fine in a viewer, so this is the assertion that has to exist.
+    A sensor placed a millimetre inside the finger still simulates and still
+    looks correct in a viewer, so only this assertion detects it.
     """
     man, sim3d, _ = exported
     pos = np.asarray(sim3d["taxels3d"]["pos"], dtype=float)
@@ -131,7 +129,7 @@ def test_every_taxel_lands_on_the_part_surface(exported):
 
 
 def test_taxels3d_is_index_parallel_to_pixels(exported):
-    """The manifest promises it; a consumer will rely on it silently."""
+    """The manifest specifies this alignment, and consumers rely on it."""
     man, sim3d, _ = exported
     assert sim3d["taxels3d"]["rc"] == [[p[2], p[3]] for p in man["pixels"]]
     for key in ("pos", "normal", "tangent"):
@@ -212,7 +210,7 @@ def test_embedding_is_self_contained(exported):
 
 
 @pytest.mark.parametrize("label,mangle,expect", [
-    # A different vertex 0->1 is a different CABLE EDGE, so /generate would
+    # A different vertex 0->1 is a different cable edge, so /generate would
     # have chosen a different canonical frame. Caught by the outline check.
     ("cable edge moved", lambda o: o[1:] + o[:1], "outline_mm"),
     ("mirrored", lambda o: [[-x, y] for x, y in o], "outline_mm"),

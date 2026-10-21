@@ -2,21 +2,21 @@
 
 Every board ordered from the hosted service is made from export/gerber.py and
 export/excellon.py: the service image has no KiCad. With kicad-cli installed
-the same export is plotted by KiCad from the .kicad_pcb instead. The two once
-disagreed on the sign of Y -- every built-in layer and the drill file were the
-mirror image of the design, so boards ordered from the hosted files came back
-mirrored -- and the built-in top copper had no via rings.
+the same export is plotted by KiCad from the .kicad_pcb instead. The two must
+agree, among other things, on the sign of Y (a built-in layer or drill file
+mirrored with respect to the design would give mirrored boards from the hosted
+files) and on the via rings of the top copper.
 
 The parity tests generate each board once and keep both writers' output (the
 KiCad plot of the board file, and the built-in writer run on the same layout),
-then compare what the files DRAW, read back into geometry by
+then compare what the files draw, read back into geometry by
 tests/cad/gerber_geometry.py, not their text:
 
   * copper, mask, Edge.Cuts, B.Silkscreen, User.Drawings: the symmetric
     difference of the two drawings is at most 0.5 % of the layer's area and no
-    connected piece of it exceeds 0.05 mm^2. (Measured on the 31 example
-    designs x 2/4 layers x grow/fixed: at most 0.15 % and 0.0005 mm^2, all of
-    it on F.Cu, where KiCad plots the round finger ends as polygons.)
+    connected piece of it exceeds 0.05 mm^2. (On the 31 example designs x 2/4
+    layers x grow/fixed the difference is at most 0.15 % and 0.0005 mm^2, all
+    of it on F.Cu, where KiCad plots the round finger ends as polygons.)
   * drill: the same holes in the same sizes, every position within 0.01 mm.
   * F.Silkscreen: the design name in the same place, bounding-box centres
     within 0.5 mm. The glyphs differ by design: KiCad strokes the label with

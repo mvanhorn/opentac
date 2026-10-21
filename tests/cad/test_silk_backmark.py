@@ -1,28 +1,25 @@
-"""The back silkscreen has to describe the board that was actually exported.
+"""The back silkscreen describes the board that was exported.
 
-Three things can go wrong here and none of them are visible by looking at a
-board file:
+Three failures are possible, and none is visible by looking at a board file:
 
   1. The QR stops describing the board. It is derived from manifest.json, so a
      manifest change that the codec does not follow produces a mark that
-     decodes cleanly to the WRONG sensor -- worse than no mark at all. The
-     round-trip below rebuilds every taxel position out of the payload and
-     compares it against the manifest it came from.
+     decodes cleanly to the wrong sensor, which is worse than no mark at all.
+     The round trip below rebuilds every taxel position from the payload and
+     compares it with the manifest it came from.
 
-  2. Silk lands over the board edge. Clipping the line CENTRELINE to the
+  2. Silk lands over the board edge. Clipping the line centreline to the
      outline and then widening it puts the rect corners over the cut line
-     wherever the edge is sloped or curved; on a 40 mm square that was 19 of 21
-     grid rects. The fab clips it and nobody finds out until the boards arrive.
+     wherever the edge is sloped or curved. The fab clips such silk, and the
+     defect shows only on the delivered boards.
 
-  3. The mark takes the whole export down with it. A 22.4 mm pitch used to
-     raise out of the encoder (the pitch field was 10 bits) and turned into a
-     400 on /generate -- a legend costing the user their Gerbers. main.py takes
-     the same stance for the print PDF, and for the same reason.
+  3. The mark takes the whole export down with it. A problem with the legend,
+     such as a pitch too large for the encoder, must not become an error on
+     /generate that costs the user their Gerbers. main.py treats the print PDF
+     the same way, for the same reason.
 """
 import json
 import math
-import os
-import sys
 
 import pytest
 from shapely.geometry import Polygon, box
@@ -43,7 +40,7 @@ CASES = [
     ("square/expand", SQUARE, "expand", 2.0, 2.2),
     ("square/fixed", SQUARE, "fixed_keepout", 2.0, 2.2),
     ("u-notch/expand", U_NOTCH, "expand", 4.0, 4.2),
-    # 22.4 mm pitch: the geometry that used to raise out of the bit-packer.
+    # 22.4 mm pitch: a coarse pitch, which the encoder's pitch field holds.
     ("coarse pitch", [[-30, -30], [30, -30], [30, 30], [-30, 30]], "expand", 22.0, 22.4),
 ]
 
@@ -86,10 +83,10 @@ def test_qr_rebuilds_the_manifest_it_came_from(tag, outline, mode, pw, pitch):
 def test_the_pitch_label_sits_inside_one_grid_cell(tag, outline, mode, pw, pitch):
     """The grid lines are the dimension; the label only names it.
 
-    That only works if the text sits INSIDE a cell -- a number floating across a
-    line does not say which spacing it belongs to, and on a board with two line
-    weights that is the whole question. Sitting inside one cell also means the
-    label can never cross a grid line, so no keep-out is needed.
+    That works only if the text sits inside a cell: a number floating across a
+    line does not say which spacing it belongs to, which matters on a board
+    with two line weights. Sitting inside one cell also means the label cannot
+    cross a grid line, so no keep-out is needed.
     """
     manifest_json, _ = _manifest(outline, mode, pw, pitch)
     mark = backmark(manifest_json)
@@ -213,9 +210,8 @@ def test_artwork_clears_the_fab_silkscreen_limits():
     """JLCPCB flex: line >= 0.15 mm, hollow internal gap > 0.25 mm.
 
     A knocked-out QR is a hollow feature, so the knockout is the binding rule.
-    Lines under the minimum are silently WIDENED by the fab, which would undo
-    the pre-compensation without any warning -- so the ink has to clear it by
-    design, not by luck.
+    Lines under the minimum are widened by the fab without notice, which would
+    undo the pre-compensation, so the ink clears the minimum by design.
     """
     thinnest_ink = MODULE_MM - 2 * PRECOMP_MM
     smallest_knockout = MODULE_MM + 2 * PRECOMP_MM
@@ -260,7 +256,7 @@ def test_a_scan_rebuilds_a_usable_manifest(tag, outline, mode, pw, pitch):
 
 QR_ALNUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
 
-# The four QR-alphanumeric characters that get mangled SILENTLY -- each turns a
+# The four QR-alphanumeric characters that are mangled silently: each turns a
 # payload into a different valid payload rather than an error.
 SILENT_HAZARDS = {
     " ": "trimmed by scanners and clipboards",
@@ -271,12 +267,13 @@ SILENT_HAZARDS = {
 
 
 def test_the_alphabet_excludes_every_silently_mangled_character():
-    """base41, not RFC 9285's base45, and the four dropped characters are the point.
+    """The alphabet is base41, not RFC 9285's base45, without the four
+    characters that are mangled silently.
 
     Density is set by needing N**3 >= 65536 to pack two bytes into three
     characters, which holds down to 41. QR's alphanumeric set has 45, so there
-    are exactly four characters of headroom -- and exactly four that fail
-    silently. Dropping them is free.
+    are exactly four characters of headroom, and exactly four that fail
+    silently; dropping them costs no density.
     """
     assert len(B41) == 41 and len(set(B41)) == 41
     assert set(B41) <= set(QR_ALNUM), "alphabet leaves QR alphanumeric mode"
@@ -284,12 +281,12 @@ def test_the_alphabet_excludes_every_silently_mangled_character():
     for ch, why in SILENT_HAZARDS.items():
         assert ch not in B41, "%r is still in the alphabet (%s)" % (ch, why)
 
-    # and the density really is unchanged
+    # and the density is unchanged
     assert len(B41) ** 3 >= 65536 and len(B41) ** 2 >= 256
 
 
-def test_payloads_survive_the_transports_that_used_to_corrupt_them():
-    """Whitespace trimming, URL round-tripping and shell globbing are all no-ops now."""
+def test_payloads_survive_common_transports():
+    """Whitespace trimming, URL round-tripping and shell globbing leave the payload unchanged."""
     import glob
     import urllib.parse
 
@@ -319,7 +316,7 @@ def test_payloads_survive_the_transports_that_used_to_corrupt_them():
 
 
 def test_a_mangled_scan_fails_loudly():
-    """Every single-character substitution must be rejected.
+    """Every single-character substitution is rejected.
 
     A payload that decodes to a plausible-but-wrong pin mapping is worse than
     one that does not decode: someone wires a sensor up from it.

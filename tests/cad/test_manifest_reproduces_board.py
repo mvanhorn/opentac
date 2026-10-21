@@ -1,16 +1,16 @@
-"""The manifest must describe the board that is actually manufactured.
+"""The manifest describes the board that is manufactured.
 
 manifest.json is the one file a user is expected to keep: it has to carry the
 taxel placements, the taxel copper geometry, and the real cut boundary, so the
 same sensor can be rebuilt from it alone.
 
-The trap this pins down: `outline` is the shape the user DREW, which is not
-the board that gets made. The manufactured edge adds the grown board, the
+`outline` is the shape the user drew, which is not the board that is
+made. The manufactured edge adds the grown board, the
 cable tail and the connector envelope (a drawn 40x40mm square exports cuts of
 46.6 x 62.8mm), so `edge_cuts` is a separate field taken from the exporter's
 own stitching call rather than re-derived here.
 """
-import base64, io, json, re, sys, os
+import base64, io, json, re
 
 import numpy as np
 import pytest
@@ -52,14 +52,14 @@ def test_manifest_carries_the_real_board():
         resp = generate(GenerateRequest(
             outline=outline, router="hug", board_mode=mode,
             pixel_w_mm=4, pixel_h_mm=4, pitch_x_mm=4.2, pitch_y_mm=4.2))
-        z = zipfile = __import__("zipfile").ZipFile(io.BytesIO(base64.b64decode(resp.zip_b64)))
+        z = __import__("zipfile").ZipFile(io.BytesIO(base64.b64decode(resp.zip_b64)))
         man = json.loads(z.read("manifest.json"))
         tag = f"{len(outline)}-gon/{mode}"
 
         ec = np.asarray(man.get("edge_cuts") or [], dtype=float)
         assert len(ec) >= 3, f"{tag}: manifest has no edge_cuts"
 
-        # 1. edge_cuts IS the exported board outline (KiCad negates Y). A 1um
+        # 1. edge_cuts is the exported board outline (KiCad negates Y). A 1um
         #    tolerance, since KiCad writes 3 decimals and the manifest 4.
         kp = _board_edge_points(z.read("board.kicad_pcb").decode())
         mine = np.column_stack([ec[:, 0], -ec[:, 1]])
@@ -73,7 +73,7 @@ def test_manifest_carries_the_real_board():
         # 1b. the ring closes straight across the connector's open edge, which
         #     is horizontal in the manifest frame: the closing edge is the only
         #     one that is not an exported segment, and it is not a diagonal
-        #     chord across the tail (a corner used to be dropped there)
+        #     chord across the tail
         segs = [LineString([(float(m.group(1)), -float(m.group(2))), (float(m.group(3)), -float(m.group(4)))])
                 for m in re.finditer(r'\(gr_line\s*\(start ([-\d.]+) ([-\d.]+)\)\s*\(end ([-\d.]+) ([-\d.]+)\)',
                                      z.read("board.kicad_pcb").decode())]
@@ -103,7 +103,6 @@ def test_manifest_carries_the_real_board():
         poly = Polygon(ec).buffer(0.05)
         outside = [p for p in man["pixels"] if not poly.contains(Point(p[0], p[1]))]
         assert not outside, f"{tag}: {len(outside)} taxels outside edge_cuts"
-    print("test_manifest_carries_the_real_board: OK (4 shape/mode combinations)")
 
 
 def _manifest(**kw):
@@ -115,12 +114,12 @@ def _manifest(**kw):
 
 
 def test_manifest_says_which_taxels_share_a_shear_bump():
-    """The shear grouping has to be readable from the manifest alone.
+    """The shear grouping is readable from the manifest alone.
 
     Without it a consumer would have to re-derive the 2x2 blocks, and the only
-    indices in the file are PAD order — which is deliberately not geometric
-    order, so `index // 2` pairs taxels that are nowhere near each other. This
-    checks the published grouping is the one the bump sheet actually builds.
+    indices in the file are pad order, which is deliberately not geometric
+    order, so `index // 2` pairs taxels that are nowhere near each other. The
+    published grouping is the one the bump sheet builds.
     """
     man, edit_data = _manifest()
     sh = man.get("shear")
@@ -139,12 +138,12 @@ def test_manifest_says_which_taxels_share_a_shear_bump():
     assert d.max() < 1e-3, f"bump centres differ by {d.max():.4f}mm"
 
     # Groups are 2x2 blocks: at most four taxels, and each taxel within half a
-    # pitch of its own bump in each axis (i.e. actually under it).
+    # pitch of its own bump in each axis (i.e. under it).
     groups = {}
     for p, b in zip(man["pixels"], sh["b"]):
         groups.setdefault(b, []).append(p)
-    # This particular board is even x even, so nothing is orphaned. An odd
-    # line count would orphan one — that rule has its own test.
+    # A complete grid leaves no taxel without a bump (odd line counts:
+    # test_no_taxel_is_left_bumpless).
     assert -1 not in groups, "even x even array should leave no taxel bumpless"
     assert max(len(g) for g in groups.values()) <= 4, "a bump covers one 2x2 block"
     assert 4 in {len(g) for g in groups.values()}, "expected some complete blocks"
@@ -156,11 +155,12 @@ def test_manifest_says_which_taxels_share_a_shear_bump():
 
 @pytest.mark.parametrize("outline", [LSHAPE, SQ_45x38])
 def test_no_taxel_is_left_bumpless(outline):
-    """Invariant 2 of the bump sheet, checked from the manifest.
+    """Every taxel is under a bump, checked from the manifest.
 
-    An odd line count does NOT orphan anything on the taxel path: the leftover
-    line forms its own partial block and keeps a full-size bump. The L-shape
-    here comes out 11x9 — odd in both axes — and still covers every taxel.
+    A partial 2x2 block still gets a full-size bump at its lattice centre, so
+    an odd line count leaves no taxel without one: the leftover line forms its
+    own partial block. The L-shape here comes out 11x9, odd in both axes, and
+    every taxel is covered.
     """
     resp = generate(GenerateRequest(outline=outline, router="hug"))
     z = __import__("zipfile").ZipFile(io.BytesIO(base64.b64decode(resp.zip_b64)))
@@ -173,10 +173,3 @@ def test_no_taxel_is_left_bumpless(outline):
     bumpless = [p for p, b in zip(man["pixels"], sh["b"]) if b < 0]
     assert not bumpless, \
         f"{n_cols}x{n_rows} grid left {len(bumpless)} taxels bumpless"
-
-
-if __name__ == "__main__":
-    test_manifest_carries_the_real_board()
-    test_manifest_says_which_taxels_share_a_shear_bump()
-    for _o in (LSHAPE, SQ_45x38):
-        test_no_taxel_is_left_bumpless(_o)

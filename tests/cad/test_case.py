@@ -1,17 +1,15 @@
-"""Two-piece case: the invariants that only show up across board shapes.
+"""Two-piece case: properties that only show up across board shapes.
 
-Every assertion here corresponds to a bug found by sweeping shapes rather than
-by reasoning about one board. Keeping the sweep is the point: a single square
-board passes all of this even when the geometry is badly wrong.
+The tests sweep several board shapes, because a single square board passes all
+of them even when the geometry is wrong.
 """
 import base64
 import io
-import zipfile
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import MultiPolygon
 
 from opentac.cad import main
 from opentac.cad.pipeline.case import MIN_WEB_MM, CaseParams, _tail_neck, build_case
@@ -66,8 +64,8 @@ def test_both_halves_are_printable_solids(shape, bumps):
 def test_the_lid_stays_one_piece(shape, bumps):
     """An unbroken slot severs the lid; the rib gaps are what prevent it.
 
-    Measured on the square board, a continuous slot left the inner panel hanging
-    off a 1.4mm neck at the cable edge.
+    On the square board, a continuous slot would leave the inner panel attached
+    only by a 1.4 mm neck at the cable edge.
     """
     result, _ = _build(SHAPES[shape], bumps=bumps)
     assert result.stats["lid_pieces"] == 1, result.warnings
@@ -75,8 +73,9 @@ def test_the_lid_stays_one_piece(shape, bumps):
 
 @pytest.mark.parametrize("shape", sorted(SHAPES))
 def test_the_cable_edge_is_a_slot_not_an_open_side(shape):
-    """The cable line is NOT where the tail is — the board is still full width
-    there, so clipping at it opens a whole side of wall for a narrow tail."""
+    """The cable line is not where the tail is: the board is still full width
+    there, so clipping at it would open a whole side of wall for a narrow
+    tail."""
     result, _ = _build(SHAPES[shape])
     s = result.stats
     assert s["cable_edge"] == "slot", f"{shape} fell back to an open side: {result.warnings}"
@@ -86,7 +85,7 @@ def test_the_cable_edge_is_a_slot_not_an_open_side(shape):
 
 
 def test_neck_detection_is_not_a_fraction_of_board_width():
-    """A small board's tail is a LARGE fraction of it — 14.5 of 22.9mm — so any
+    """A small board's tail is a large fraction of it (14.5 of 22.9 mm), so any
     fixed fraction that catches a big board misses a small one."""
     found = {}
     for name, outline in SHAPES.items():
@@ -102,8 +101,9 @@ def test_neck_detection_is_not_a_fraction_of_board_width():
 
 
 def test_scan_line_takes_the_widest_run_not_the_extent():
-    """On an asymmetric outline the scan line hits two disjoint pieces; taking
-    the bounds of both reported the L-shape's tail as 33mm instead of 19.5."""
+    """On an asymmetric outline the scan line hits two disjoint pieces. The tail
+    is the widest single run, not the bounds of both (on the L-shape, 19.5 mm
+    rather than 33 mm)."""
     ed, _, _, cable_y = _board(SHAPES["lshape"])
     neck = _tail_neck(ed["final_outline"], cable_y)
     assert neck is not None
@@ -111,8 +111,9 @@ def test_scan_line_takes_the_widest_run_not_the_extent():
 
 
 def test_small_boards_keep_enough_bridges():
-    """A fixed period does not scale down. An early version used the gap as a
-    floor and so made the period LONGER on a small board, not shorter."""
+    """The rib period and gap shrink on a small board, so it keeps enough
+    bridges. A fixed period, or a period floored at the gap, does not scale
+    down."""
     result, _ = _build(SHAPES["small"])
     s = result.stats
     assert s["rib_period_mm"] < CaseParams().rib_period_mm
@@ -169,8 +170,8 @@ def test_endpoint_rejects_edit_data_without_a_board():
     assert "generate a board first" in r.json()["detail"].lower()
 
 
-def test_bump_sheet_still_works():
-    """The case is a separate endpoint precisely so this keeps working."""
+def test_bump_sheet_endpoint_works():
+    """The bump-sheet endpoint, separate from the case endpoint, returns a sheet."""
     ed, _, _, _ = _board(SHAPES["square"])
     r = client.post("/bump-sheet", json={"edit_data": ed})
     assert r.status_code == 200, r.text[:300]
@@ -180,9 +181,9 @@ def test_bump_sheet_still_works():
 # ---------------------------------------------------------------------------
 # Tail detection across board shapes and parameters.
 #
-# A 42x42 square passes every one of these even when the detector is badly
-# wrong: it was the only board tested when the search window was 9mm deep, and
-# a 65x65 broke it two different ways. The sweep is the test.
+# A 42x42 square passes every one of these even when the detector is wrong
+# (for example, with a search window only 9 mm deep), so the tests sweep board
+# sizes and parameters.
 # ---------------------------------------------------------------------------
 
 def _neck(outline, **extra):
@@ -211,17 +212,17 @@ def test_tail_found_across_board_sizes(size):
     ("no_smoothing", {"smooth_follow_padding": False}),
 ])
 def test_tail_found_across_parameters(label, extra):
-    """Two of these fell back when the scan only looked 9mm below the cable edge:
-    at 4mm follow padding the neck is at -9.25, and a 20x20 grid settles at -7.75
-    but needs samples to -9.75 to confirm it holds."""
+    """The scan looks more than 9 mm below the cable edge: at 4 mm follow
+    padding the neck is at -9.25, and a 20x20 grid settles at -7.75 but needs
+    samples to -9.75 to confirm it holds."""
     neck = _neck([[0, 0], [65, 0], [65, 65], [0, 65]], **extra)
     assert neck is not None, f"{label} fell back to an open cable edge"
 
 
 def test_full_width_board_falls_back_and_explains_why():
     """With follow padding off the outline is full width down to the connector:
-    the tail is INSIDE the board, not protruding, so an open edge is the only
-    thing the shape allows. The message has to say that, because the fix is a
+    the tail is inside the board, not protruding, so an open edge is the only
+    option the shape allows. The message says so, because the remedy is a
     different setting rather than a different tolerance."""
     from opentac.cad.pipeline.case import _no_tail_reason
     outline = [[0, 0], [65, 0], [65, 65], [0, 65]]
@@ -292,11 +293,11 @@ def test_case_over_the_connector_is_reported():
     assert "connector cannot plug in" in warn[0]
 
 
-def test_the_shortfall_we_report_actually_fixes_it():
-    """The number in the message is only useful if adding it clears the warning.
+def test_adding_the_reported_shortfall_clears_the_warning():
+    """Adding the shortfall stated in the message to the cable clears the warning.
 
-    Free tail moves one-for-one with cable length -- the neck, and so the clip,
-    does not move -- so the shortfall is directly the extension length needed.
+    Free tail moves one-for-one with cable length (the neck, and so the clip,
+    does not move), so the shortfall is directly the extension length needed.
     """
     outline = [[0, 0], [65, 0], [65, 65], [0, 65]]
     base = 12.0
@@ -317,10 +318,11 @@ def test_longer_cable_never_triggers_it():
 
 
 # ---------------------------------------------------------------------------
-# A drawn tail extension is NOT in the board outline: apply_tail_extension moves
-# the connector pads and re-routes to them, but final_outline_xy never changes.
-# Anything measuring the outline is blind to it, so a user who adds a 15mm
-# extension used to see the identical "cable too short" warning.
+# A drawn tail extension is not in the board outline: apply_tail_extension moves
+# the connector pads and re-routes to them, but final_outline_xy does not change.
+# The cable check therefore counts the extension separately; a check on the
+# outline alone would give a user who adds a 15 mm extension the same "cable too
+# short" warning.
 # ---------------------------------------------------------------------------
 import copy
 
@@ -363,7 +365,8 @@ def test_extension_counts_towards_the_cable_check():
 
 
 def test_drawing_the_reported_shortfall_clears_the_warning():
-    """Same contract as the cable-length message: the number has to work."""
+    """As with the cable-length message, drawing the reported shortfall clears
+    the warning."""
     ed = _short_board()
     base, warn = _case_stats(ed)
     short = base["tail_short_by_mm"]
@@ -397,9 +400,9 @@ def test_disabled_extension_is_ignored():
 
 
 def test_hatch_cuts_the_whole_grid_on_the_gallery_square():
-    """The gallery's 40 x 40 square, as the page generates it: its hatch came back
-    from shapely as a GeometryCollection, which was cut as one piece, so the
-    hatched lid lost 6 mm^3 instead of the whole grid (~390 mm^3)."""
+    """The gallery's 40 x 40 square, as the page generates it: shapely returns
+    its hatch as a GeometryCollection, and every member is cut, so the hatched
+    lid loses the whole grid (about 390 mm^3)."""
     outline = [[-20, -20], [20, -20], [20, 20], [-20, 20]]
     ed = client.post("/generate", json={"outline": outline}).json()["edit_data"]
     P = np.asarray(ed["layout"]["placements_xy"], dtype=float)
@@ -414,11 +417,9 @@ def test_hatch_cuts_the_whole_grid_on_the_gallery_square():
 
 def test_bottom_is_closed_as_an_stl_where_the_wall_meets_the_tail_slot():
     """The bottom is a stack (sheet, wall, rib). Stacked face to face, the
-    boolean left a pinch at the tail slot's corner on this board: closed in
-    memory, open once the STL's vertices were merged on load (16 of 310 boards
-    measured; the case ZIP then warned that the bottom may not slice). Each
-    layer now rises a little out of the one below."""
-    import io
+    boolean would leave a pinch at the tail slot's corner on this board: closed
+    in memory, but open once the STL's vertices are merged on load. Each layer
+    therefore rises a little out of the one below."""
     import json
     from pathlib import Path
 
