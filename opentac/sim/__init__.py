@@ -187,6 +187,11 @@ class MujocoSensor(_Base):
         solver="surrogate" (default) evaluates the bumps analytically, in
         microseconds. solver="mujoco" runs the full MuJoCo scene (sphere only;
         needs the `sim` extra) and takes about a second.
+
+        The surrogate's frame sums to force_n, including load on taxels with
+        no bump. It raises ValueError for a negative or non-finite force, for
+        a force that no position of the object reaches (an object beyond the
+        board), and for one that would compress a bump by its full height.
         """
         if angle_deg:
             raise ValueError("the mujoco model has no indenter angle; its cylinder runs along y")

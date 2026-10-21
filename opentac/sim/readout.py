@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 SO-101 MuJoCo Tactile contributors.
+# Input checks and profile lookup from TactileSim (tactilesim/readout.py); modified for OpenTac.
 """Taxel force -> ADC counts, from a measured velostat calibration.
 
 Everything else in this package ends in newtons per taxel. A real board streams
@@ -126,12 +129,31 @@ class Readout:
     calibrated_kpa: tuple = (0.0, np.inf)
     source: dict = field(default_factory=dict)
 
+    def __post_init__(self):
+        if not np.isfinite([self.b, self.k, self.adc_max]).all() or min(self.b, self.k, self.adc_max) <= 0:
+            raise ValueError("Readout exponent, gain coefficient and ADC ceiling must be positive and finite")
+        if not np.isfinite([self.s, self.noise_counts]).all() or self.noise_counts < 0:
+            raise ValueError("Readout area exponent and nonnegative noise must be finite")
+
+    @staticmethod
+    def _gain(gain):
+        gain = np.asarray(gain, dtype=float)
+        if not np.isfinite(gain).all() or np.any(gain <= 0):
+            raise ValueError("Readout gain must be positive and finite")
+        return gain
+
     # -- construction ----------------------------------------------------
 
     @classmethod
     def from_profile(cls, name_or_path):
-        """A shipped profile by name (see `available_profiles()`), or a JSON path."""
-        path = name_or_path if os.path.exists(name_or_path) else _find_profile(name_or_path)
+        """A shipped profile by name (see `available_profiles()`), or a JSON path.
+
+        A bare name (no directory, no .json) refers to a shipped profile even
+        when a file or folder of that name exists in the working directory.
+        """
+        bare = os.path.basename(name_or_path) == name_or_path and not name_or_path.endswith(".json")
+        path = ((_find_profile(name_or_path) if bare else None)
+                or (name_or_path if os.path.isfile(name_or_path) else None))
         if path is None:
             shipped = ", ".join(f"{k} ({v})" for k, v in available_profiles().items())
             raise FileNotFoundError(
@@ -153,7 +175,10 @@ class Readout:
         return self.k * _taxel_area_mm2(pitch) ** self.s
 
     def pressure_kpa(self, forces_n, pitch):
-        return np.asarray(forces_n, dtype=float) / _taxel_area_mm2(pitch) * 1e3
+        forces = np.asarray(forces_n, dtype=float)
+        if not np.isfinite(forces).all():
+            raise ValueError("Taxel forces must be finite")
+        return forces / _taxel_area_mm2(pitch) * 1e3
 
     def counts(self, forces_n, pitch, gain=1.0, rng=None, quantize=False):
         """Counts above baseline for per-taxel forces in newtons.
@@ -162,7 +187,7 @@ class Readout:
         `gain_range`. Pass `rng` (a numpy Generator) to add read noise.
         """
         p = np.clip(self.pressure_kpa(forces_n, pitch), 0.0, None)
-        c = gain * self.a(pitch) * p ** self.b
+        c = self._gain(gain) * self.a(pitch) * p ** self.b
         if rng is not None:
             c = c + rng.normal(0.0, self.noise_counts, size=c.shape)
         c = np.clip(c, 0.0, self.adc_max)
@@ -175,13 +200,15 @@ class Readout:
         saying how hard they are pressed. Taxels under 3x the noise read zero.
         """
         c = np.asarray(counts, dtype=float)
+        if not np.isfinite(c).all():
+            raise ValueError("ADC counts must be finite")
         c = np.where(c > 3.0 * self.noise_counts, c, 0.0)
-        p = (c / (gain * self.a(pitch))) ** (1.0 / self.b)
+        p = (c / (self._gain(gain) * self.a(pitch))) ** (1.0 / self.b)
         return p * _taxel_area_mm2(pitch) * 1e-3
 
     def saturation_force_n(self, pitch, gain=1.0):
         """Force on one taxel at which it reads adc_max."""
-        p = (self.adc_max / (gain * self.a(pitch))) ** (1.0 / self.b)
+        p = (self.adc_max / (self._gain(gain) * self.a(pitch))) ** (1.0 / self.b)
         return p * _taxel_area_mm2(pitch) * 1e-3
 
     def extrapolating(self, forces_n, pitch):

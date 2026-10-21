@@ -18,12 +18,13 @@ import numpy as np
 import mujoco
 
 from .params import BumpParams, MM
-from .mjcf import _bump_body, lattice_positions, IND_KP, IND_ARM, IND_KV
+from .mjcf import bump_bodies, bump_mesh, lattice_positions, IND_KP, IND_ARM, IND_KV
 
 
 def _pad(p, positions, sign, tag, plate_xy):
-    bodies = "".join(_bump_body(i, x, y, p, sign=sign, tag=tag)
-                     for i, (x, y) in enumerate(positions))
+    # The upper jaw's bumps point down: a mirrored mesh, not a rotated body,
+    # so that both jaws keep the same joint axes.
+    bodies = bump_bodies(positions, p, mesh="bumpmesh" if sign > 0 else "bumpmesh_down", tag=tag)
     t = p.sheet_thickness_mm * MM
     return f"""
       <geom name="{tag}plate" type="box" pos="0 0 {-sign * t / 2:.6f}"
@@ -75,6 +76,7 @@ def build_gripper(p: BumpParams, pad_half_mm=15.0, obj_radius_mm=12.0,
   <default>
     <geom solref="-3e7 -10000" solimp="0.999 0.9999 0.00001" condim="3"/>
   </default>
+  <asset>{bump_mesh(p)}{bump_mesh(p, name="bumpmesh_down", sign=-1)}</asset>
   <worldbody>
     <light pos="0 0 0.3" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>
     <body name="lower" pos="0 0 0">{lower}

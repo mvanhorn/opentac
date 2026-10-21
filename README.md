@@ -128,7 +128,7 @@ Where a command takes `--board`, the 60-pin board is `readout60` or `60pin`, the
 uv run --extra sim pytest -q     # about 6 min on a laptop
 ```
 
-`--extra sim` installs MuJoCo, which three tests need. On a fresh clone 11 tests skip because they
+`--extra sim` installs MuJoCo, which four tests need. On a fresh clone 12 tests skip because they
 need data that is not in the repository, and a few more without `node` or a C++ compiler.
 [CONTRIBUTING.md](CONTRIBUTING.md) lists what each optional test needs, and how to report a
 problem.
@@ -141,5 +141,9 @@ See [CITATION.cff](CITATION.cff) and the [paper page](https://opentac.github.io/
 
 Code: MIT ([LICENSE](LICENSE)). Hardware designs: CERN-OHL-P-2.0 ([LICENSE-hardware](LICENSE-hardware)).
 Documentation and media: CC BY 4.0 ([LICENSE-docs](LICENSE-docs)).
+The core of the bump model, `opentac/sim/mujoco/` `params.py`, `loader.py`, `surrogate.py` and
+`mjcf.py`, together with `opentac/sim/readout.py` and `tests/sim/test_bump_core.py`, derives from
+TactileSim (Jiafeng Gu) and is Apache-2.0 ([LICENSE-Apache-2.0](LICENSE-Apache-2.0));
+[NOTICE](NOTICE) carries TactileSim's notice.
 Third-party robot meshes in `examples/stl/` keep their own licenses, some of them non-commercial;
 see [examples/stl/end_effectors/SOURCES.md](examples/stl/end_effectors/SOURCES.md).

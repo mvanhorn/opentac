@@ -35,16 +35,17 @@ uv run --extra sim pytest -q
 ```
 
 About 6 minutes on a laptop; most of it is the CAD tests, which generate and route real boards.
-`uv run pytest tests/sim -q` runs one folder. On a fresh clone 11 tests skip, because they need
+`uv run pytest tests/sim -q` runs one folder. On a fresh clone 12 tests skip, because they need
 data that is not in the repository. Optional tests and what they need:
 
 | Tests | Need | Without it |
 |---|---|---|
-| the MuJoCo tests in `tests/sim/test_sensor.py` (3) | `--extra sim` (MuJoCo) | skipped |
+| the MuJoCo tests in `tests/sim/test_sensor.py` (3) and `tests/sim/test_bump_core.py` (1) | `--extra sim` (MuJoCo) | skipped |
 | design-chat tests in `tests/cad/test_chat_*.py` | `--extra demo` (google-genai) | skipped |
 | `tests/test_qr_page.py` | `node` on the PATH | skipped |
 | the firmware's config parser, in `tests/readout/test_config.py` | a C++ compiler (`c++`) | skipped |
 | `tests/sim/test_paper_numbers.py` (9) | `OPENTAC_PAPER_RESULTS=/path/to/results_pose.json`, the paper's scored hand-press rows (29 MB, not in the repository) | skipped |
+| the published example designs in `tests/sim/test_bump_core.py` (1) | the website checkout: `OPENTAC_SITE_ROOT`, or `../opentac.github.io` | skipped |
 | the lab-manifest sweeps in `tests/readout/` (2) | `OPENTAC_STM_TEST=/path/to/stm_test`, the 30 manifests the firmware was developed against, and the original config tool | skipped; four of those manifests are in `tests/readout/fixtures/stm_test/` and always run |
 
 CI (`.github/workflows/tests.yml`) installs `--extra demo --extra sim` and runs the whole suite on
@@ -60,7 +61,8 @@ git clone https://github.com/opentac/opentac.github.io ../opentac.github.io
 uv run --extra docs python ../opentac.github.io/scripts/preview_site.py
 ```
 
-The QR integration test is skipped when no website checkout is available. CI always
+The QR integration test, and the test that loads the website's example designs into the bump
+model (`tests/sim/test_bump_core.py`), are skipped when no website checkout is available. CI always
 provides one and runs both the QR and transfer consistency checks. The xampling
 checker still needs the external lab sources described in its own docstring.
 

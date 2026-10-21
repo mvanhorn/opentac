@@ -1,0 +1,36 @@
+OpenTac
+
+Parts of this repository are derived from TactileSim (opentac/opentac-sim,
+Jiafeng Gu) and are licensed under the Apache License, Version 2.0; the text
+of that license is in LICENSE-Apache-2.0. These files were modified for
+OpenTac:
+
+  opentac/sim/mujoco/params.py
+  opentac/sim/mujoco/loader.py
+  opentac/sim/mujoco/surrogate.py
+  opentac/sim/mujoco/mjcf.py
+  opentac/sim/readout.py
+  tests/sim/test_bump_core.py
+
+The rest of the repository is licensed as stated in README.md: code under the
+MIT License (LICENSE), hardware designs under CERN-OHL-P-2.0
+(LICENSE-hardware), documentation and media under CC BY 4.0 (LICENSE-docs).
+
+The NOTICE file of TactileSim follows; its name for OpenTac-CAD is updated.
+
+--------------------------------------------------------------------------------
+
+TactileSim
+Copyright 2026 SO-101 MuJoCo Tactile contributors.
+
+The lumped tactile mechanics, sensor interface and Velostat readout originated
+in TactileSim work attributed to Arik in the source workspace, and were adapted
+and integrated by the SO-101 MuJoCo Tactile contributors. This branch further
+modifies their parameters, validation, interfaces and packaging.
+
+OpenTac-CAD (formerly OpenTactileCAD) defines the sensor manifest conventions used by the loader.
+Packaged signal profiles retain their original calibration-source metadata.
+
+Elastic nodal-force assembly follows MuJoCo 3.12's mj_flexPassiveStretch in
+src/engine/engine_passive.c, Copyright DeepMind Technologies Limited,
+licensed under Apache-2.0: https://github.com/google-deepmind/mujoco.

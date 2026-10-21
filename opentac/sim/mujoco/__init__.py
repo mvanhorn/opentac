@@ -12,6 +12,12 @@ Two ways to get a reading:
 - `SensorScene` (scene.py) builds the full MuJoCo scene for the same board
   and presses a ball into it. Needs `mujoco` (the `sim` extra).
 
+The core (params.py, loader.py, surrogate.py, and the bump body of mjcf.py)
+is TactileSim's lumped model by Jiafeng Gu, under the Apache License 2.0 (see
+NOTICE). It checks the manifest and the parameters on loading, solves the
+press for the requested total force over a bracketing interval, and splits
+each bump's base moment over its taxels by least squares.
+
 `Lattice` (lattice.py) and `Gripper` (grip.py) are the regular-lattice studies
 the model was validated with. Comments that cite NOTES.md or "Stage N" refer to
 TactileSim's research notes and scripts, which are not part of this package.

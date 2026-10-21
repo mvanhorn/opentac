@@ -1,15 +1,24 @@
-"""MJCF generation for a bump lattice.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 SO-101 MuJoCo Tactile contributors.
+# The bump body (frustum_vertices, add_bump) is from TactileSim
+# (tactilesim/lumped/mjcf.py); the scene builders are OpenTac's. Modified for OpenTac.
+"""MJCF generation for bump lattices, the gripper and real sensors.
 
-Every bump is a rigid geom on a 3-DoF compliant joint: slide along Z (press)
-plus two hinges at the base (tip about X and Y).  Tipping is what turns a
-sideways load into a differential normal load across the 2x2 taxel block
-underneath, which is the mechanism OpenTac's bump sheet was designed around.
+Every bump is a rigid elliptical frustum on a compliant joint: a slide along Z
+(press), two lateral slides (shear) and two hinges at the base (tip about X
+and Y). Tipping and shear turn a sideways load into a differential normal
+load across the 2x2 taxel block underneath, which is the mechanism OpenTac's
+bump sheet was designed around. One builder, `add_bump`, makes every bump of
+every scene, at full double precision.
 
-GEOMETRY IS BUILT FROM PARAMETERS, NEVER FROM THE EXPORTED STL.  MuJoCo takes
-the convex hull of a mesh, and the hull of the whole bump sheet is a
-featureless slab -- every bump silently erased, and it still looks fine in the
-viewer.  See NOTES.md, "Never feed it the sheet STL".
+Geometry is built from parameters, never from the exported STL. MuJoCo
+collides the convex hull of a mesh: a single frustum is convex, so its hull
+is itself, while the hull of the whole bump sheet is a featureless slab with
+every bump erased.
 """
+import xml.etree.ElementTree as ET
+
+import numpy as np
 
 from .params import BumpParams, MM
 
@@ -19,44 +28,61 @@ IND_ARM = 0.11          # kg, caps the servo at ~3000 rad/s like the bumps
 IND_KV = 600.0          # N*s/m, ~0.9 damping ratio against IND_ARM
 
 
-def _bump_body(idx, x, y, p: BumpParams, sign=1, tag="b"):
-    """One bump.  `sign` = -1 builds it pointing DOWN, for the upper jaw.
+def numbers(x):
+    """Space-separated values at full double precision, for MJCF attributes."""
+    return " ".join(format(float(v), ".17g") for v in np.asarray(x).ravel())
 
-    The mirror is done by offsetting the GEOM, never by putting a quat on the
-    body: a body quat rotates the joint axes with it (see the indenter comment
-    below), which would silently invert the shear DoFs on one jaw only.
+
+def frustum_vertices(rb, rt, h, segments=24):
+    """Vertices of an elliptical frustum for a convex MuJoCo mesh, in metres; z = 0 at the base, h at the top."""
+    angles = np.linspace(0.0, 2.0 * np.pi, segments, endpoint=False)
+    base = np.column_stack([rb[0] * np.cos(angles), rb[1] * np.sin(angles), np.zeros(segments)])
+    top = np.column_stack([rt[0] * np.cos(angles), rt[1] * np.sin(angles), np.full(segments, h)])
+    return np.vstack([base, top])
+
+
+def bump_mesh(p: BumpParams, name="bumpmesh", sign=1, segments=24):
+    """`<mesh>` asset of one bump; sign = -1 points it down (the upper jaw of the gripper)."""
+    v = frustum_vertices(p.r_base, p.r_top, p.height, segments) * [1.0, 1.0, sign]
+    return f'<mesh name="{name}" vertex="{numbers(v)}"/>'
+
+
+#: Joint suffixes of a bump, in the order press, shear x, shear y, tip about x, tip about y.
+JOINTS = ("z", "sx", "sy", "x", "y")
+
+
+def add_bump(parent, idx, x, y, p: BumpParams, mesh="bumpmesh", tag="b"):
+    """Add one frustum bump under `parent` on its five compliant joints; returns the body.
+
+    Names are `{tag}ump_{idx}` for the body, `{tag}z_{idx}`, `{tag}sx_{idx}`,
+    `{tag}sy_{idx}`, `{tag}x_{idx}` and `{tag}y_{idx}` for the joints, and
+    `{tag}g_{idx}` for the geom. A mirrored bump (the upper jaw) takes a
+    mirrored mesh rather than a rotated body: a body rotation would rotate
+    the joint axes with it and invert the shear coordinates of that jaw only.
     """
-    kz, ktx, kty = p.k_axial, p.k_tip_x, p.k_tip_y
-    ksx, ksy = p.k_shear_x, p.k_shear_y
-    rt_x, rt_y = p.r_top
-    # Circular cylinder at the mean top radius stands in for the elliptical
-    # frustum.  The taper is structural and we have already lumped structure
-    # into the joint stiffnesses, so the geom only has to get the CONTACT face
-    # and the lever arm right.  Fidelity upgrade path is in NOTES.md.
-    r = 0.5 * (rt_x + rt_y)
-    h = p.height
-    return f"""
-    <body name="{tag}ump_{idx}" pos="{x:.6f} {y:.6f} 0">
-      <joint name="{tag}z_{idx}" type="slide" axis="0 0 1"
-             stiffness="{kz:.6g}" damping="{p.damping(kz):.6g}" armature="{p.armature(kz):.6g}"/>
-      <!-- Lateral shear.  A flat object cannot tip a flat-topped bump, it
-           shears it over; without these two joints the shear channel is dead.
-           The rigid body translating means its BASE slides across the sheet
-           too, which a real bump's base does not do -- a ~0.3mm geometric
-           fiction on an 8.4mm pitch.  The base LOADS, which is all the sensing
-           layer reads, are unaffected. -->
-      <joint name="{tag}sx_{idx}" type="slide" axis="1 0 0"
-             stiffness="{ksx:.6g}" damping="{p.damping(ksx):.6g}" armature="{p.armature(ksx):.6g}"/>
-      <joint name="{tag}sy_{idx}" type="slide" axis="0 1 0"
-             stiffness="{ksy:.6g}" damping="{p.damping(ksy):.6g}" armature="{p.armature(ksy):.6g}"/>
-      <joint name="{tag}x_{idx}" type="hinge" axis="1 0 0"
-             stiffness="{ktx:.6g}" damping="{p.damping(ktx, p.rot_inertia):.6g}" armature="{p.armature(ktx):.6g}"/>
-      <joint name="{tag}y_{idx}" type="hinge" axis="0 1 0"
-             stiffness="{kty:.6g}" damping="{p.damping(kty, p.rot_inertia):.6g}" armature="{p.armature(kty):.6g}"/>
-      <geom name="{tag}g_{idx}" type="cylinder" size="{r:.6f} {h/2:.6f}" pos="0 0 {sign*h/2:.6f}"
-            mass="{p.mass:.8f}" friction="{p.mu} 0.005 0.0001" rgba="0.25 0.55 0.85 1"
-            contype="1" conaffinity="4"/>
-    </body>"""
+    body = ET.SubElement(parent, "body", name=f"{tag}ump_{idx}", pos=numbers([x, y, 0]))
+    for suffix, kind, axis, stiffness, inertia in (
+        ("z", "slide", "0 0 1", p.k_axial, None),
+        ("sx", "slide", "1 0 0", p.k_shear_x, None),
+        ("sy", "slide", "0 1 0", p.k_shear_y, None),
+        ("x", "hinge", "1 0 0", p.k_tip_x, p.rot_inertia),
+        ("y", "hinge", "0 1 0", p.k_tip_y, p.rot_inertia),
+    ):
+        ET.SubElement(body, "joint", name=f"{tag}{suffix}_{idx}", type=kind, axis=axis,
+                      stiffness=repr(float(stiffness)), damping=repr(float(p.damping(stiffness, inertia))),
+                      armature=repr(float(p.armature(stiffness))))
+    ET.SubElement(body, "geom", name=f"{tag}g_{idx}", type="mesh", mesh=mesh, mass=repr(float(p.mass)),
+                  friction=numbers([p.mu, .005, .0001]), rgba="0.30 0.62 0.90 1",
+                  contype="1", conaffinity="4")
+    return body
+
+
+def bump_bodies(positions, p: BumpParams, mesh="bumpmesh", tag="b"):
+    """MJCF text of the bumps at `positions` (metres), for the string-built scenes."""
+    holder = ET.Element("holder")
+    for i, (x, y) in enumerate(positions):
+        add_bump(holder, i, x, y, p, mesh=mesh, tag=tag)
+    return "".join("\n    " + ET.tostring(b, encoding="unicode") for b in holder)
 
 
 def lattice_positions(nx, ny, p: BumpParams):
@@ -99,7 +125,7 @@ INDENTERS = {
 
 def build_mjcf(p: BumpParams, nx=5, ny=5, indenter="sphere", timestep=1e-4):
     positions = lattice_positions(nx, ny, p)
-    bodies = "".join(_bump_body(i, x, y, p) for i, (x, y) in enumerate(positions))
+    bodies = bump_bodies(positions, p)
 
     gtype, gsize, drop, quat = INDENTERS[indenter]
     # Sitting the indenter exactly on the bump tops makes first contact
@@ -123,6 +149,7 @@ def build_mjcf(p: BumpParams, nx=5, ny=5, indenter="sphere", timestep=1e-4):
   <option timestep="{timestep}" integrator="implicitfast" cone="elliptic"
           noslip_iterations="10" gravity="0 0 -9.81"/>
   <visual><global offwidth="1280" offheight="960"/></visual>
+  <asset>{bump_mesh(p)}</asset>
 
   <default>
     <!-- DIRECT solref (negative pair = stiffness, damping in N/m and N*s/m).
@@ -220,50 +247,6 @@ BALL_RKV = 8.0
 BALL_RARM = 2.0e-3
 
 
-def _frustum_vertices(rb, rt, h, segments=24):
-    """Vertex soup for one elliptical frustum, z = 0 at the base.
-
-    Safe as a mesh where the bump SHEET would not be: MuJoCo collides the
-    convex hull, and a single frustum IS convex, so the hull is the shape
-    itself. The hull of the whole sheet is a featureless slab with every bump
-    erased -- see NOTES.md, "Never feed it the sheet STL".
-
-    This is also the fidelity upgrade mjcf.py's cylinder comment points at:
-    the real bumps are ELLIPTICAL where a 2x2 block is not square, and a
-    cylinder at the mean top radius cannot express that.
-    """
-    import numpy as _np
-    a = _np.linspace(0.0, 2.0 * _np.pi, segments, endpoint=False)
-    base = _np.column_stack([rb[0] * _np.cos(a), rb[1] * _np.sin(a),
-                             _np.zeros(segments)])
-    top = _np.column_stack([rt[0] * _np.cos(a), rt[1] * _np.sin(a),
-                            _np.full(segments, h)])
-    v = _np.vstack([base, top])
-    return " ".join(f"{x:.6f}" for x in v.reshape(-1))
-
-
-def _bump_body_mesh(idx, x, y, p: BumpParams, mesh="bumpmesh"):
-    """Same five compliant DoFs as _bump_body, with the real frustum geom."""
-    kz, ktx, kty = p.k_axial, p.k_tip_x, p.k_tip_y
-    ksx, ksy = p.k_shear_x, p.k_shear_y
-    return f"""
-    <body name="bump_{idx}" pos="{x:.6f} {y:.6f} 0">
-      <joint name="bz_{idx}" type="slide" axis="0 0 1"
-             stiffness="{kz:.6g}" damping="{p.damping(kz):.6g}" armature="{p.armature(kz):.6g}"/>
-      <joint name="bsx_{idx}" type="slide" axis="1 0 0"
-             stiffness="{ksx:.6g}" damping="{p.damping(ksx):.6g}" armature="{p.armature(ksx):.6g}"/>
-      <joint name="bsy_{idx}" type="slide" axis="0 1 0"
-             stiffness="{ksy:.6g}" damping="{p.damping(ksy):.6g}" armature="{p.armature(ksy):.6g}"/>
-      <joint name="bx_{idx}" type="hinge" axis="1 0 0"
-             stiffness="{ktx:.6g}" damping="{p.damping(ktx, p.rot_inertia):.6g}" armature="{p.armature(ktx):.6g}"/>
-      <joint name="by_{idx}" type="hinge" axis="0 1 0"
-             stiffness="{kty:.6g}" damping="{p.damping(kty, p.rot_inertia):.6g}" armature="{p.armature(kty):.6g}"/>
-      <geom name="bg_{idx}" type="mesh" mesh="{mesh}" mass="{p.mass:.8f}"
-            friction="{p.mu} 0.005 0.0001" rgba="0.30 0.62 0.90 1"
-            contype="1" conaffinity="4"/>
-    </body>"""
-
-
 def sheet_visual_stl(stl_path, p: BumpParams, out_path,
                      recess_depth_mm=OTC_RECESS_DEPTH_MM):
     """Strip the bumps off OpenTac's bump-sheet STL, keeping the real base.
@@ -333,7 +316,7 @@ def build_sensor_mjcf(bump_xy, p: BumpParams, ball_r_m, centre_xy,
     xy = _np.asarray(bump_xy, dtype=float)
     rb, rt, h = p.r_base, p.r_top, p.height
 
-    bodies = "".join(_bump_body_mesh(i, x, y, p) for i, (x, y) in enumerate(xy))
+    bodies = bump_bodies(xy, p)
 
     lo = xy.min(axis=0) - _np.array(rb) - 0.0015
     hi = xy.max(axis=0) + _np.array(rb) + 0.0015
@@ -399,7 +382,7 @@ def build_sensor_mjcf(bump_xy, p: BumpParams, ball_r_m, centre_xy,
     <headlight ambient="0.45 0.45 0.45" diffuse="0.55 0.55 0.55"/>
   </visual>
   <asset>
-    <mesh name="bumpmesh" vertex="{_frustum_vertices(rb, rt, h, segments)}"/>
+    {bump_mesh(p, segments=segments)}
     {sheet_asset}
     <texture name="grid" type="2d" builtin="checker" rgb1="0.16 0.17 0.20"
              rgb2="0.20 0.21 0.25" width="300" height="300"/>

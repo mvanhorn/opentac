@@ -2,7 +2,7 @@
 
 Ported from TactileSim's `scripts/stage3_sim_video.py` (class SensorLattice),
 without the rendering. Every bump is an elliptical frustum at its real position
-from the manifest, on the five compliant DoFs of `mjcf._bump_body_mesh`, and a
+from the manifest, on the five compliant DoFs of `mjcf.add_bump`, and a
 ball on position servos is pressed into them and twisted.
 
 Why the bumps are meshes here and the sheet never is: MuJoCo collides the
@@ -75,7 +75,12 @@ class SensorScene:
         return out
 
     def taxel_forces(self):
-        return self.s.taxel_forces_from_wrench(self.base_forces(),
+        """Normal force per taxel, from each bump's joint wrench.
+
+        A bump the ball lifts reads a small tensile base force; a taxel cannot
+        pull, so that load is taken as zero.
+        """
+        return self.s.taxel_forces_from_wrench(np.clip(self.base_forces(), 0.0, None),
                                                self.base_moments())
 
     def yaw(self):
