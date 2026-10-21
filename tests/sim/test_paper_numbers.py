@@ -8,7 +8,7 @@ OPENTAC_PAPER_RESULTS at it to run this check; otherwise it is skipped:
 Each number is the median "shape F1" over every scored frame of that
 predictor: how well the predicted contact patch overlaps the measured one, with
 intensity taken out. The foam model function that produced the "sim" rows is
-the one tests/sim/test_foam.py checks the port against.
+the one tests/sim/test_foam.py checks against its reference outputs.
 """
 import json
 import os
@@ -67,8 +67,9 @@ def _median(results, predictor, field):
 
 
 def test_sim_centroid_and_area(results):
-    """docs/sim.md: the foam model places the contact centre closer than a
-    repeat press (1.56 vs 2.29 mm) but predicts 1.44x the area."""
+    """As https://opentac.github.io/sim/ reports, the foam model places the
+    contact centre closer than a repeat press (1.56 vs 2.29 mm) but predicts
+    1.44x the area."""
     assert round(_median(results, "sim", "centroid_mm"), 2) == 1.56
     assert round(_median(results, "ceiling", "centroid_mm"), 2) == 2.29
     assert round(_median(results, "sim", "area_ratio"), 2) == 1.44

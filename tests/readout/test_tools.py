@@ -114,7 +114,7 @@ def test_cli_setup_dry_run(tmp_path, capsys):
                  "--board", "readout60", "--out", str(out)]) == 0
     text = capsys.readouterr().out
     assert "rows    -> mux channels 7..0" in text and "columns -> shift-register steps 31..26" in text
-    golden = json.loads((Path(__file__).parent / "fixtures" / "configs_from_opentac_device.json").read_text())
+    golden = json.loads((Path(__file__).parent / "fixtures" / "reference_configs.json").read_text())
     assert out.read_bytes().hex() == golden["finger_8x6_60pin.json"]["READOUT60"]
     assert main(["setup", str(EXAMPLES / "finger_8x6_60pin.json"), "--dry-run", "--board", "node16"]) == 1
 
@@ -137,7 +137,7 @@ def test_cli_with_a_board_attached(tmp_path, monkeypatch, capsys):
     assert main(["setup", str(EXAMPLES / "square_9x9_60pin.json")]) == 0
     out = capsys.readouterr().out
     assert "READOUT60 on /dev/fake now holds square_9x9_60pin.json" in out
-    assert "not yet been checked by pressing" in out
+    assert "not yet been checked" not in out
     assert main(["info"]) == 0
     out = capsys.readouterr().out
     assert "9 x 9, 81 taxels" in out and "GAIN_SW" in out and "(10000 ohm feedback)" in out

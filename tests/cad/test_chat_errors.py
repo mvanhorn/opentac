@@ -2,7 +2,7 @@
 
 The hosted page is cross-origin (GitHub Pages -> Render), so a response without
 CORS headers, or no response at all, shows up in the browser only as
-"TypeError: Failed to fetch". These pin the paths that used to do that: an
+"TypeError: Failed to fetch". These tests cover the paths that could do that: an
 unhandled exception (Starlette's plain-text 500 sits outside CORSMiddleware), a
 tool that raises, a model call that raises, and a reply FastAPI cannot encode.
 They also pin the chat tool's defaults (grow mode, explicit copper layers) and
@@ -88,7 +88,7 @@ OUTLINE_CALL = ("build_sensor_outline", {"shape": "rectangle", "width_mm": 30,
 
 def test_tool_that_raises_comes_back_as_text(chat, monkeypatch):
     def broken_generate(req):
-        raise RuntimeError("router exploded")
+        raise RuntimeError("routing failed")
 
     monkeypatch.setattr(main, "generate", broken_generate)
     monkeypatch.setattr(chat, "provider", lambda: FakeProvider([
@@ -99,7 +99,7 @@ def test_tool_that_raises_comes_back_as_text(chat, monkeypatch):
     assert r.status_code == 200
     assert r.headers.get("access-control-allow-origin") == ORIGIN
     body = r.json()
-    assert "router exploded" in body["text"]
+    assert "routing failed" in body["text"]
     assert body["request_id"] == "r1"
 
 

@@ -1,9 +1,7 @@
-"""The ported transfer must give the same numbers as the original.
+"""The transfer gives the reference numbers.
 
-The reference numbers in fixtures/transfer_reference.json were computed by the
-lab script `opentac_transfer.py` (Transfer, placement_cop) and
-`opentac_device.derive_pitch_um` (see make_reference.py), on the inputs stored
-beside them.
+The reference numbers in fixtures/transfer_reference.json were computed with
+the analysis code of the OpenTac paper, on the inputs stored beside them.
 """
 import json
 from pathlib import Path
@@ -24,13 +22,13 @@ def _layout(name):
 
 
 @pytest.mark.parametrize("skin", sorted(REF["pitch_um"]))
-def test_pitch_matches_the_original(skin):
+def test_pitch_matches_the_reference(skin):
     px, py = pixel_pitch_mm(manifest.load(FIX / skin))
     assert [round(px * 1000), round(py * 1000)] == REF["pitch_um"][skin]
 
 
 @pytest.mark.parametrize("case", REF["cases"], ids=lambda c: f"{c['src']}->{c['dst']}-{c['kernel']}")
-def test_port_matches_the_original(case):
+def test_matches_the_reference(case):
     la, lb = _layout(case["src"]), _layout(case["dst"])
     fa = np.asarray(case["fa_n"])
     place = case["placement"]
@@ -54,7 +52,7 @@ def test_force_is_conserved_where_b_has_taxels():
 
 
 def test_reference_cases_are_not_trivial():
-    """Guard the fixture: the centred cases keep most of the force."""
+    """Guards the fixture: the centred cases keep most of the force."""
     kept = [sum(c["fb_n"]) / sum(c["fa_n"]) for c in REF["cases"] if c["placement"].get("centered")]
     assert len(kept) >= 3 and min(kept) > 0.8, kept
 

@@ -1,20 +1,18 @@
-"""The flat<->3D map has to put taxels back where they physically land.
+"""The flat<->3D map puts taxels back where they physically land.
 
 manifest v6 promises a simulator that a taxel drawn at (x, y) on the flat board
 sits at a specific point on the part's surface, with a specific normal and a
-specific tangent. Nothing downstream can check that -- a sim will happily place
-a sensor a few millimetres inside the finger, or rotated 90 degrees, and still
-produce plausible-looking readings. So it gets pinned here.
+specific tangent. Nothing downstream can check that: a simulator will place a
+sensor a few millimetres inside the finger, or rotated 90 degrees, and still
+produce plausible-looking readings. These tests check it.
 
 The half-cylinder is the case worth having: it is developable, so the unfold is
-exact, and every quantity has a closed form to compare against. Crucially the
-tolerances below are DERIVED from the mesh's own faceting (an inscribed
+exact, and every quantity has a closed form to compare against. The
+tolerances below are derived from the mesh's own faceting (an inscribed
 40-segment polygon sits a sagitta of R*(1-cos(dtheta/2)) inside the true
-cylinder), not tuned until the test passed -- so if the projection ever starts
-landing off-surface for a real reason, this fails instead of absorbing it.
+cylinder), not tuned to make the test pass, so a projection that lands off the
+surface fails the test instead of being absorbed by its tolerance.
 """
-import os
-import sys
 
 import numpy as np
 import pytest
@@ -87,7 +85,7 @@ def test_unfold_covers_every_face(cyl):
 def test_flat_extents_match_arc_length(cyl):
     """A cylinder unfolds to a rectangle: arc length by height.
 
-    The unfold preserves EDGE lengths, so it reproduces the inscribed
+    The unfold preserves edge lengths, so it reproduces the inscribed
     polygon's perimeter, which is shorter than the true arc by the usual
     chord deficit. That is correct behaviour, not error.
     """
@@ -162,10 +160,10 @@ def test_tangent_follows_the_requested_flat_direction(cyl):
 
 
 def test_unfold_is_isometric(cyl):
-    """Distance in the flat frame must equal geodesic distance on the part.
+    """Distance in the flat frame equals geodesic distance on the part.
 
-    This is the property the whole export rests on: it is why a taxel pitch
-    drawn flat is the pitch you get once the sheet is on the finger.
+    The export rests on this property: a taxel pitch drawn flat is the pitch
+    obtained once the sheet is on the finger.
     """
     _, _, _, emb = cyl
     pts, nv = interior_grid(emb)
@@ -191,11 +189,11 @@ def test_point_off_the_patch_is_reported_not_hidden(cyl):
 
 
 def test_embedding_is_in_the_cable_frame():
-    """uv must come back in the same frame the manifest's taxels live in.
+    """uv comes back in the same frame the manifest's taxels live in.
 
-    Get this wrong and the sensor is rotated on the part with nothing to
-    catch it -- every projected point is still ON the surface, just in the
-    wrong place. So: transform an outline with rotate_for_cable, build the
+    In a wrong frame the sensor is rotated on the part with nothing to detect
+    it: every projected point is still on the surface, only in the wrong
+    place. So: transform an outline with rotate_for_cable, build the
     embedding with the matching cable_transform, and require that a flat
     point tracks the rotated outline rather than the raw one.
     """

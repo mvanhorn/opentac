@@ -1,9 +1,9 @@
-"""Designs saved before the anchor-hole feature was removed must still open.
+"""Designs that carry the removed anchor-hole parameters still open.
 
-edit_data and design.json written by earlier builds carry the five anchor_hole*
-params and the internal pack_pattern_* keys. Loading drops them; a design that
-actually had anchor holes switched on is refused, because rebuilding it without
-its cutouts would silently produce a different board.
+edit_data and design.json written by earlier versions can carry the five
+anchor_hole* params and the internal pack_pattern_* keys. Loading drops them; a
+design that had anchor holes switched on is refused, because rebuilding it
+without its cutouts would produce a different board.
 """
 import base64
 import io

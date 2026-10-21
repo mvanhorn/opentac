@@ -43,7 +43,7 @@ def square(**params):
 @pytest.mark.parametrize("height", [2., 4., 5.])
 def test_force_solver_brackets_tall_bumps(height):
     """The search interval widens with the bump height: on 4 and 5 mm bumps a fixed -1 to 3 mm
-    interval gives 337.65 N and 556.60 N instead of 5 N."""
+    interval would give 337.65 N and 556.60 N instead of 5 N."""
     s = square(bump_height_mm=height)
     assert s.probe("plane", force_n=5., as_image=False).sum() == pytest.approx(5., rel=1e-7)
 
@@ -55,7 +55,7 @@ def test_force_solver_rejects_invalid_targets(force):
 
 
 def test_force_target_outside_lumped_compression_domain_is_rejected():
-    """1e6 N would compress the bumps past their height, where a clipped total (1766 N) is no answer."""
+    """1e6 N would compress the bumps past their height, where a clipped total (1766 N) is not a valid answer."""
     with pytest.raises(ValueError, match="flatten"):
         square().press("plane", force_n=1e6)
 

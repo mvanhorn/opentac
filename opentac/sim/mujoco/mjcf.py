@@ -89,9 +89,9 @@ def lattice_positions(nx, ny, p: BumpParams):
     """Bump centres on a regular lattice, centred on the origin.
 
     OpenTac's `bump_centers_from_taxels` also handles partial 2x2 blocks and
-    irregular board edges (invariant 2: a partial block still gets a FULL-size
-    bump at the block's lattice centre).  Stage 3 swaps this function out for
-    real centres read from a design; the rest of the model does not change.
+    irregular board edges (a partial block still gets a full-size bump at the
+    block's lattice centre).  `build_sensor_mjcf` takes real centres read from
+    a design instead; the rest of the model is the same.
     """
     px, py = p.bump_pitch
     xs = [(i - (nx - 1) / 2.0) * px for i in range(nx)]
@@ -102,7 +102,7 @@ def lattice_positions(nx, ny, p: BumpParams):
 INDENTERS = {
     # name: (geom type, size, drop from body origin to lowest point, quat)
     #
-    # Sized against the BUMP pitch, which is 8.4mm -- twice the taxel pitch,
+    # Sized against the bump pitch, which is 8.4mm -- twice the taxel pitch,
     # because OpenTac puts one bump per 2x2 taxel block.  That pitch is coarse: a
     # 15mm ball at 1mm indentation only spans +/-5.5mm, so it never reaches a
     # neighbouring bump no matter how soft the bumps are.  Anything meant to
@@ -141,44 +141,33 @@ def build_mjcf(p: BumpParams, nx=5, ny=5, indenter="sphere", timestep=1e-4):
        lets these stiff bumps run at 1e-4 rather than 1e-6. -->
   <!-- noslip_iterations: MuJoCo solves friction as a soft constraint, which
        creeps under sustained tangential load.  Without the noslip pass a
-       sliding bump saturated at ~0.13*Fn instead of mu*Fn, i.e. an effective
-       mu of 0.13 when mu was set to 1.0 -- friction quietly ~8x too low, which
-       for a grasping study is the whole result.  Verified: mu_eff = 1.03 at
-       mu = 1.0 with elliptic cone + noslip.  Low mu (<0.5) still floors out
-       around 0.13; see NOTES.md, "Friction needs validating". -->
+       sliding bump saturates near 0.13*Fn instead of mu*Fn, an effective mu
+       of 0.13 at mu = 1.0.  With the elliptic cone and the noslip pass,
+       mu_eff = 1.03 at mu = 1.0.  Below mu = 0.5 the effective friction
+       floors near 0.13. -->
   <option timestep="{timestep}" integrator="implicitfast" cone="elliptic"
           noslip_iterations="10" gravity="0 0 -9.81"/>
   <visual><global offwidth="1280" offheight="960"/></visual>
   <asset>{bump_mesh(p)}</asset>
 
   <default>
-    <!-- DIRECT solref (negative pair = stiffness, damping in N/m and N*s/m).
-         The default (timeconst, dampratio) form scales contact stiffness with
-         the effective mass, and armature has inflated that mass by ~1e3x, so
-         the contact would have come out ~40x SOFTER than the bump joint and we
-         would have been measuring the contact model instead of the bump. -->
-    <!-- Collision masks, NOT MuJoCo's automatic parent-child filter.  A bump
-         body is a child of the pad body, so the pad/bump pair looks like it
-         should be filtered automatically -- it is not.  The bump geom's base
-         sits flush on the plate at z=0, so the instant the joint compressed,
-         the bump sank into the plate and the PLATE carried the load straight
-         to ground, bypassing the spring.  Measured stiffness came out at
-         exactly half of analytic with ~120 N of equal-and-opposite contact
-         force cancelling invisibly inside the pad.  Bumps (1/4) and plate
-         (1/4) therefore cannot see each other; the object (4/1) sees both.
-         This also switches off bump-bump contact, which at an 8.4mm pitch and
-         4.7mm diameter needs a ~40deg tilt to occur. -->
-    <!-- Near-rigid contact, on purpose.  ALL compliance is supposed to live
-         in the bump joint; any softness left in the contact model shows up as
-         a series spring and silently reduces the measured bump stiffness.
-         The default (timeconst, dampratio) solref scales contact stiffness
-         with effective mass, and armature has inflated that by ~1e3x, so the
-         default came out ~40x softer than the joint: measured stiffness was
-         55% of analytic and drifted with depth.  The direct (negative) form
-         removes the mass dependence.  Tuned to 100.0% of analytic with zero
-         residual jitter at dt=1e-4, holding across E_eff = 3 and 30 MPa.
-         The tradeoff is that a rigid contact cannot dimple locally -- see
-         NOTES.md, "Where the lumped model breaks". -->
+    <!-- Collision masks, not MuJoCo's automatic parent-child filter.  A bump
+         body is a child of the pad body, but the pad/bump pair is not
+         filtered automatically.  The bump geom's base sits flush on the plate
+         at z=0, so without the masks a compressed bump sinks into the plate
+         and the plate carries the load to ground, bypassing the spring (the
+         measured stiffness is then half the analytic value).  Bumps (1/4)
+         and plate (1/4) therefore do not collide; the object (4/1) collides
+         with both.  This also disables bump-bump contact, which at an 8.4mm
+         pitch and 4.7mm diameter would need a ~40deg tilt to occur. -->
+    <!-- Near-rigid contact, on purpose.  All compliance belongs in the bump
+         joint; any softness left in the contact model acts as a series spring
+         and reduces the measured bump stiffness.  The default (timeconst,
+         dampratio) solref scales contact stiffness with the effective mass,
+         which the armature inflates by orders of magnitude.  The direct
+         (negative) form, stiffness and damping in N/m and N*s/m, removes the
+         mass dependence.  The trade-off is that a rigid contact cannot dimple
+         locally. -->
     <geom solref="-3e7 -10000" solimp="0.999 0.9999 0.00001" condim="3"/>
   </default>
 
@@ -189,22 +178,18 @@ def build_mjcf(p: BumpParams, nx=5, ny=5, indenter="sphere", timestep=1e-4):
             size="{plate_x:.6f} {plate_y:.6f} {p.sheet_thickness_mm*MM/2:.6f}"
             rgba="0.2 0.2 0.25 1" contype="1" conaffinity="4"/>{bodies}
     </body>
-    <!-- A SERVOED body, deliberately not a mocap body.  MuJoCo takes contact
+    <!-- A servoed body, deliberately not a mocap body.  MuJoCo takes contact
          velocity from qvel, and a mocap body has no DoFs, so its velocity is
-         always zero no matter how fast mocap_pos is changed.  Normal force
-         still works (penetration is positional) but friction NEVER mobilises:
-         a block on a mocap slab dragged 4mm moves 0.000mm.  That silently
-         removes the entire shear channel, which is the one thing the bumps
-         exist for.  Three slide joints under a stiff position servo restore
-         real velocities; armature conditions them the same way it does the
-         bumps.  Position error under load is ~10um at 10N, so depth is read
-         back from qpos rather than trusted from the command. -->
-    <!-- Orientation goes on the GEOM, never on the body: a body quat rotates
-         the body FRAME, and the three slide joints are defined in that frame,
-         so tilting the body 90deg made the "z" servo push sideways.  The
-         cylinder indenter silently never touched anything (0.02N at 1.8mm of
-         commanded depth) while the 1deg plate was too small an error to
-         notice. -->
+         always zero however fast mocap_pos changes.  Normal force is still
+         produced (penetration is positional), but friction never mobilises,
+         which removes the shear channel the bumps exist for.  Three slide
+         joints under a stiff position servo provide real velocities; armature
+         conditions them as it does the bumps.  Position error under load is
+         ~10um at 10N, so depth is read back from qpos rather than taken from
+         the command. -->
+    <!-- Orientation goes on the geom, never on the body: a body quat rotates
+         the body frame, in which the three slide joints are defined, so a
+         tilted body would make the "z" servo push sideways. -->
     <body name="indenter" pos="0 0 {z0:.6f}">
       <joint name="ix" type="slide" axis="1 0 0" armature="{IND_ARM}"/>
       <joint name="iy" type="slide" axis="0 1 0" armature="{IND_ARM}"/>
@@ -225,18 +210,18 @@ def build_mjcf(p: BumpParams, nx=5, ny=5, indenter="sphere", timestep=1e-4):
     return xml, positions, z0, drop
 
 
-# --- Stage 3: a scene built from a REAL OpenTac design -------------------------
-# lattice_positions() above is the placeholder this replaces. Everything else
-# -- joint stiffnesses, collision masks, the direct solref, the servoed
-# (never mocap) driver -- is reused unchanged, because all of it was tuned
+# --- A scene built from a real OpenTac design ----------------------------------
+# Real bump centres take the place of lattice_positions(). Everything else
+# (joint stiffnesses, collision masks, the direct solref, the servoed rather
+# than mocap driver) is the same as in build_mjcf, because all of it was tuned
 # against the analytic stiffness and none of it depends on the layout.
 
-# OpenTac's BumpParams.recess_depth_mm default. NOT a field on TactileSim's
-# BumpParams, which mirrors only what the MECHANICS needs -- the recess is
-# pure sheet geometry and no stiffness depends on it. It matters here only
-# to locate the sheet's top plane, so it is an argument with OpenTac's default
-# rather than an invented parameter. A user who changed it when printing
-# has to say so.
+# The default of the bump sheet's BumpParams.recess_depth_mm (opentac.cad). It
+# is not a field of the simulation's BumpParams, which holds only what the
+# mechanics needs: the recess is sheet geometry, and no stiffness depends on
+# it. It is used here only to locate the sheet's top plane, so it is an
+# argument with the sheet's default rather than a model parameter. A sheet
+# printed with a different recess depth must pass its own value.
 OTC_RECESS_DEPTH_MM = 1.0
 
 BALL_KP = 2.0e6         # N/m, ball position servo (stiffer: bigger contact)
@@ -253,19 +238,18 @@ def sheet_visual_stl(stl_path, p: BumpParams, out_path,
 
     The exported sheet is the true part: the board's own outline, the skirt
     that stiffens its rim, the recess the sensor drops into, and the slits
-    that cut every bump free of its neighbours (bump_sheet invariant 3). All
-    of that is worth showing, and none of it is reproducible from parameters.
+    that cut every bump free of its neighbours. All of that is worth showing,
+    and none of it is reproducible from parameters.
 
-    Its BUMPS are not wanted here: this scene already has a physics bump at
+    Its bumps are not wanted here: this scene already has a physics bump at
     every one of those positions, and drawing both means the moving frustum
     sinks into a static grey shell of itself. So slice at the sheet's top
     plane and keep what is below.
 
-    VISUAL ONLY. This mesh must never become a collision geom: MuJoCo collides
+    Visual only. This mesh must never become a collision geom: MuJoCo collides
     the convex hull, and the hull of a sheet is a featureless slab with every
-    bump erased -- and it still looks right in the viewer. See NOTES.md,
-    "Never feed it the sheet STL". A visual geom is not collided, so the true
-    triangles are what get drawn.
+    bump erased, although it still looks correct in the viewer. A visual geom
+    is not collided, so the true triangles are drawn.
 
     Returns the z offset (mm) applied, so the caller can place it.
     """
@@ -280,7 +264,7 @@ def sheet_visual_stl(stl_path, p: BumpParams, out_path,
 
     # Drop every face with a vertex above the plane, rather than cutting at it.
     # trimesh's slice_plane imports shapely unconditionally, and a true cut is
-    # not needed: the bumps are UNIONED into the sheet, so its top face is
+    # not needed: the bumps are unioned into the sheet, so its top face is
     # already closed across each bump footprint, and every triangle belonging
     # to a frustum has at least one vertex above the plane. What is left is the
     # slab with its skirt and slits, which is the part worth showing.
@@ -291,7 +275,7 @@ def sheet_visual_stl(stl_path, p: BumpParams, out_path,
         raise ValueError(f"slicing {stl_path} at z={top} left nothing")
     out = trimesh.Trimesh(vertices=v, faces=f[keep], process=False)
     out.remove_unreferenced_vertices()
-    # Put the sheet's TOP at z=0, which is where the bumps' bases sit here.
+    # Put the sheet's top at z=0, which is where the bumps' bases sit here.
     out.apply_translation((0.0, 0.0, -top))
     out.export(out_path, file_type="stl")
     return top
@@ -302,19 +286,19 @@ def build_sensor_mjcf(bump_xy, p: BumpParams, ball_r_m, centre_xy,
                       ball_mode="servo", ball_mass=0.05, drop_h_m=0.0):
     """A scene for one real sensor: its own bumps, and a ball above them.
 
-    `bump_xy` is in METRES, already in the sensor's own frame -- straight from
+    `bump_xy` is in metres, already in the sensor's own frame -- straight from
     a manifest. The ball gets three slide DoFs and a twist hinge, all under
     position servos, because a mocap body has no DoFs and therefore no
-    velocity: normal force would still work while friction NEVER mobilised,
-    silently deleting the shear channel the bumps exist for.
+    velocity: normal force would still be produced while friction never
+    mobilised, which would remove the shear channel the bumps exist for.
 
-    The twist hinge is declared LAST. Joints compose in order, so a hinge
+    The twist hinge is declared last. Joints compose in order, so a hinge
     before the slides would rotate the slide axes with it and the "z" servo
     would push sideways once the ball turned.
     """
     import numpy as _np
     xy = _np.asarray(bump_xy, dtype=float)
-    rb, rt, h = p.r_base, p.r_top, p.height
+    rb, h = p.r_base, p.height
 
     bodies = bump_bodies(xy, p)
 
@@ -330,7 +314,7 @@ def build_sensor_mjcf(bump_xy, p: BumpParams, ball_r_m, centre_xy,
     # "servo" drives the ball through position actuators -- deliberately not a
     # mocap body, which has no DoFs and therefore no velocity, so friction
     # would never mobilise. "free" gives it a free joint and lets gravity do
-    # the work: the only way to get a real IMPACT, since a position servo
+    # the work: the only way to get a real impact, since a position servo
     # would simply hold its commanded height through the collision.
     if ball_mode == "free":
         ball_joints = '<freejoint name="ballfree"/>'
@@ -349,8 +333,8 @@ def build_sensor_mjcf(bump_xy, p: BumpParams, ball_r_m, centre_xy,
     else:
         raise ValueError(f"ball_mode must be 'servo' or 'free', not {ball_mode!r}")
 
-    # The real sheet if we have it, a plain slab if not. The slab stays the
-    # COLLIDER either way: the sheet is visual-only (see sheet_visual_stl),
+    # The real sheet when one is given, a plain slab otherwise. The slab is the
+    # collider in both cases: the sheet is visual-only (see sheet_visual_stl),
     # because MuJoCo would collide its convex hull -- a featureless slab.
     plate_geom = (f'<geom name="plate" type="box" '
                   f'pos="{cx_p:.6f} {cy_p:.6f} {-plate_t/2:.6f}" '
@@ -387,7 +371,7 @@ def build_sensor_mjcf(bump_xy, p: BumpParams, ball_r_m, centre_xy,
     <texture name="grid" type="2d" builtin="checker" rgb1="0.16 0.17 0.20"
              rgb2="0.20 0.21 0.25" width="300" height="300"/>
     <material name="gridmat" texture="grid" texrepeat="6 6" reflectance="0.05"/>
-    <!-- Translucent so the bumps compressing UNDER the contact stay visible.
+    <!-- Translucent so the bumps compressing under the contact stay visible.
          The deformation is the thing worth watching and an opaque ball hides
          exactly the region where it happens. -->
     <material name="ballmat" rgba="0.97 0.52 0.26 0.22" specular="0.3" shininess="0.3"/>

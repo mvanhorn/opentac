@@ -2,9 +2,7 @@
 
 JLCPCB matches the placement file (CPL) to the BOM by designator. A part in
 the CPL with no BOM line makes the order stop with "designator don't exist in
-the BOM file" (the Tag-Connect programming pads J2 did this until they were
-excluded from the position files too); a BOM line with no placement is never
-placed.
+the BOM file"; a BOM line with no placement is never placed.
 """
 import csv
 from pathlib import Path

@@ -72,10 +72,9 @@ def _with_extension(edit_data, angle_deg, length=20.0):
                                                      ("60pin", "fixed_keepout", 4)])
 @pytest.mark.parametrize("angle", [-45, -135, -90])
 def test_a_diagonal_extension_is_as_clean_as_a_straight_one(name, board_mode, layers, angle, tmp_path):
-    """Each lane used to be the path offset square to its first segment, so on a
-    diagonal it started beside its pad and was joined to it by a jump across
-    its neighbours (a 60-pin finger: 125 pipeline DRC violations, KiCad 6 track
-    crossings and 40 copper-to-edge)."""
+    """Each lane starts at its own pad. A lane offset square to the path's first
+    segment would, on a diagonal, start beside its pad and need a jump across
+    its neighbours to reach it."""
     g = _gen(name, board_mode, copper_layers=layers)
     ed = _with_extension(g["edit_data"], angle)
     r = client.post("/export-edited", json={"edit_data": ed, "routes": g["edit_data"]["routes"]})
@@ -114,8 +113,8 @@ def test_a_short_wire_run_moves_the_turn_down_the_tail():
 @pytest.mark.parametrize("angle", [0, 180])
 def test_a_sideways_extension_on_a_short_tail_is_clean(angle):
     """The inside of a right-angle turn after a short straight run: the
-    corridor's offset centre line used to fold back on itself there and leave
-    the lanes outside the board."""
+    corridor's offset centre line does not fold back on itself there, so the
+    lanes stay on the board."""
     g = _gen("60pin", "fixed_keepout", copper_layers=4, cable_length_mm=6.0)
     ed = _with_extension(g["edit_data"], angle)
     r = client.post("/redo-padding", json={"edit_data": ed, "routes": g["edit_data"]["routes"]})

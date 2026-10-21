@@ -246,6 +246,12 @@ def view(sensors, bus=None, shear=False, vmax=4095.0, save=None, description="",
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    # 's' and 'c' are the viewer's shear and clear keys; matplotlib also binds
+    # them by default to save and back, which would open a save dialog or step
+    # the view back. Release them before the figure is made.
+    for name, key in (("keymap.save", "s"), ("keymap.back", "c")):
+        matplotlib.rcParams[name] = [k for k in matplotlib.rcParams[name] if k != key]
+
     sensors = [s for s in sensors if s.manifest is not None]
     if not sensors:
         raise ValueError("no sensor here has a manifest on this computer: run "

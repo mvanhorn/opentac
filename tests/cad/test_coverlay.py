@@ -11,7 +11,6 @@ import base64
 import io
 import re
 import shutil
-import subprocess
 import zipfile
 from unittest import mock
 

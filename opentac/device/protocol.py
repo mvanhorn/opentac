@@ -10,8 +10,8 @@ Every line is a record whose first field says what it is:
     # ...                           a notice for people
 
 The 13 IMU fields are accel (mg, 3), gyro (mdps, 3), quaternion (w, x, y, z)
-and Euler angles (roll, pitch, yaw, degrees). docs/reference/protocol.md has
-the whole command set.
+and Euler angles (roll, pitch, yaw, degrees). The whole command set is at
+https://opentac.github.io/reference/protocol/.
 """
 from __future__ import annotations
 

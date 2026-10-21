@@ -14,7 +14,7 @@ from .fakeboard import FakeBoard, FakeBus
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "examples" / "manifests"
-GOLDEN = json.loads((Path(__file__).parent / "fixtures" / "configs_from_opentac_device.json").read_text())
+GOLDEN = json.loads((Path(__file__).parent / "fixtures" / "reference_configs.json").read_text())
 
 
 @pytest.fixture(autouse=True)
@@ -48,8 +48,10 @@ def test_open_asserts_a_known_session():
 def test_setup_stores_the_same_bytes_and_caches_the_manifest(opentac_home):
     fake = FakeBoard("READOUT60")
     s = open_sensor(fake)
-    with pytest.warns(UserWarning, match="not yet been checked"):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         stored = s.setup(EXAMPLES / "square_9x9_60pin.json")
+    assert not [w for w in caught if "not yet been checked" in str(w.message)]
     assert fake.flash.hex() == GOLDEN["square_9x9_60pin.json"]["READOUT60"]
     assert stored["config_id"] == s.manifest.config_id and stored["active"] == 81
     cached = cache_path(stored["config_id"])
@@ -58,6 +60,19 @@ def test_setup_stores_the_same_bytes_and_caches_the_manifest(opentac_home):
     # The same skin again writes nothing to flash.
     setup_quietly(s, EXAMPLES / "square_9x9_60pin.json")
     assert fake.commits == 1
+
+
+def test_setup_warns_for_a_board_not_checked_on_hardware(monkeypatch):
+    """A board whose wiring has not been checked by pressing a skin warns at setup."""
+    from dataclasses import replace
+
+    from opentac.device import config as cfg
+
+    unchecked = replace(cfg.board("readout60"), hardware_checked=False)
+    monkeypatch.setattr(cfg, "board", lambda name: unchecked)
+    s = open_sensor(FakeBoard("READOUT60"))
+    with pytest.warns(UserWarning, match="not yet been checked"):
+        s.setup(EXAMPLES / "square_9x9_60pin.json")
 
 
 def test_a_new_session_finds_the_manifest_by_the_boards_id():
@@ -119,7 +134,7 @@ def test_gain_on_the_60pin_board():
 
 def test_parameters_clamp_and_names():
     s = open_sensor(FakeBoard("NODE16"))
-    assert s.set("MUX_SETTLE_US", 500) == 50          # the board clamps; we report what it stored
+    assert s.set("MUX_SETTLE_US", 500) == 50          # the board clamps; set() returns what it stored
     assert s.set("LED_MODE", "manual") == 1
     with pytest.raises(DeviceError, match="no parameter"):
         s.set("NOPE", 1)

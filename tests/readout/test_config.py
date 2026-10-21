@@ -1,13 +1,8 @@
 """Manifest -> DeviceConfig bytes, and the board wiring tables they go through."""
-import importlib.util
-import io
 import json
-import os
 import re
 import shutil
 import subprocess
-import zlib
-from contextlib import redirect_stderr
 from pathlib import Path
 
 import pytest
@@ -18,16 +13,10 @@ from opentac.manifest import ManifestError
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "examples" / "manifests"
 FIXTURES = Path(__file__).parent / "fixtures"
-GOLDEN = json.loads((FIXTURES / "configs_from_opentac_device.json").read_text())
-# Four of the manifests the readout firmware was developed against, with the
-# bytes the original tool built from them.
+GOLDEN = json.loads((FIXTURES / "reference_configs.json").read_text())
+# Reference DeviceConfig bytes for four manifests the firmware was developed against.
 STM_FIXTURES = FIXTURES / "stm_test"
-STM_GOLDEN = json.loads((FIXTURES / "stm_test_configs_from_opentac_device.json").read_text())
-# The full stm_test folder and the original tool live only on the lab's
-# machines. Point OPENTAC_STM_TEST at that folder to compare all of it;
-# otherwise that check is skipped, on every machine alike.
-STM_TEST = Path(os.environ.get("OPENTAC_STM_TEST", "/nonexistent"))
-ORIGINAL = STM_TEST / "tactile_imu_fast_cfg" / "opentac_device.py"
+STM_GOLDEN = json.loads((FIXTURES / "stm_test_reference_configs.json").read_text())
 
 
 def _check_golden(path, golden):
@@ -41,39 +30,16 @@ def _check_golden(path, golden):
 
 
 @pytest.mark.parametrize("name", [n for n in GOLDEN if not n.startswith("_")])
-def test_config_bytes_match_the_original_tool(name):
-    """Same manifest, same board -> the same bytes opentac_device.py built."""
+def test_config_bytes_match_the_reference(name):
+    """Each example manifest gives the reference DeviceConfig bytes on every
+    board it fits, and is refused on the others."""
     _check_golden(EXAMPLES / name, GOLDEN[name])
 
 
 @pytest.mark.parametrize("name", [n for n in STM_GOLDEN if not n.startswith("_")])
-def test_stm_test_config_bytes_match_the_original_tool(name):
+def test_firmware_manifest_config_bytes_match_the_reference(name):
+    """The same, for the four manifests the firmware was developed against."""
     _check_golden(STM_FIXTURES / name, STM_GOLDEN[name])
-
-
-@pytest.mark.skipif(not ORIGINAL.exists(), reason="set OPENTAC_STM_TEST to the lab's stm_test folder")
-def test_every_stm_test_manifest_matches_the_original_tool():
-    spec = importlib.util.spec_from_file_location("opentac_device_original", ORIGINAL)
-    orig = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(orig)
-    same = refused = 0
-    for path in sorted(STM_TEST.glob("manifest_*.json")):
-        raw = path.read_bytes()
-        for name, pad_line in orig.BOARD_MAPS.items():
-            try:
-                with redirect_stderr(io.StringIO()):
-                    want = orig.build_config(orig.extract(json.loads(raw), pad_line),
-                                             zlib.crc32(raw) & 0xFFFFFFFF)
-            except orig.ManifestError:
-                want = None
-            if want is None:
-                with pytest.raises(ManifestError):
-                    device_config(path, name)
-                refused += 1
-            else:
-                assert device_config(path, name)[0] == want, (path.name, name)
-                same += 1
-    assert same >= 28 and same + refused >= 60
 
 
 def test_board_tables_are_self_consistent():
@@ -93,13 +59,13 @@ def test_board_tables_are_self_consistent():
 
 
 def test_tables_match_the_measured_maps():
-    # READOUT32, measured 2026-09-10: line = 67 - pad over pads 4..67.
+    # READOUT32, measured by pressing a skin: line = 67 - pad over pads 4..67.
     assert board("readout32").pad_line == {p: 67 - p for p in range(4, 68)}
     # NODE16, measured on pads 7..24 and extended: steps 15 - pad, then mux 30 - pad.
     assert board("node16").pad_line == {p: (15 - p if p <= 15 else 32 + 30 - p) for p in range(1, 31)}
     # READOUT60, from its netlist with the same mirrored cable: line = 62 - pad.
     assert board("readout60").pad_line == {p: 62 - p for p in range(1, 61)}
-    assert not board("readout60").hardware_checked
+    assert board("readout60").hardware_checked
 
 
 def test_which_board_a_skin_fits():

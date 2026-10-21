@@ -34,15 +34,14 @@ def test_instructions_build_and_carry_the_rules():
 
 def test_tools_and_skill_agree_on_grow_mode_and_copper_layers():
     """The skill says grow mode unless the outline is a hard limit, and 4 layers
-    when packing matters; the tool must default to grow and accept the layers,
-    or the model is told about an option it cannot use (a "4-layer insole"
-    request used to be rejected as an unsupported parameter)."""
+    when packing matters; the tool defaults to grow and accepts the layers, so
+    the model is not told about an option it cannot use."""
     from opentac.cad.chat import context, tools
 
     text = context.system_instructions()
     assert "grow mode, the default" in text
     assert "use 4 layers, in grow" in text
-    assert "hexagon" in text and "30-pin board" in text   # the other Arik rules
+    assert "hexagon" in text and "30-pin board" in text   # the hexagon-packing and 30-pin-board rules
 
     assert tools.DEFAULT_BOARD_MODE == "expand"
     gen = next(s for s in tools.TOOL_SPECS if s["name"] == "generate_sensor_board")

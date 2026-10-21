@@ -4,8 +4,6 @@ independently of how it builds its wires: every wire stays under the taxels
 foreign via and a trace pitch from every other wire, starts and ends where it
 must, and the same input always gives the same copper."""
 
-import os
-import sys
 
 
 import numpy as np

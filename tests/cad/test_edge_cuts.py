@@ -1,12 +1,12 @@
 """The exported Edge.Cuts close into one outline with every line on it once.
 
 The board's outline is exported cut open at the connector, and the connector
-footprint's own Edge.Cuts draw the tab from the two open ends. A board whose
-wires run to the outermost connector pins used to have its tail padded past the
-tab's sides (post-route containment round the outermost wires) down to the pad
-drills: the footprint's tab-side lines then lay inside the board, and a fab
-mills them as slits. KiCad's DRC passes such a board (it folds a slit into the
-outline as a zero-width notch), so these tests read the exported KiCad file
+footprint's own Edge.Cuts draw the tab from the two open ends. If a board whose
+wires run to the outermost connector pins had its tail padded past the tab's
+sides down to the pad drills (post-route containment around the outermost
+wires), the footprint's tab-side lines would lie inside the board, and a fab
+would mill them as slits. KiCad's DRC passes such a board (it folds a slit into
+the outline as a zero-width notch), so these tests read the exported KiCad file
 itself and run export/edge_cuts_check.py on it.
 """
 import base64
@@ -76,8 +76,9 @@ def test_full_width_tail_ends_at_the_connector(name):
 
 
 def test_drc_reports_a_tail_padded_past_the_tab(monkeypatch):
-    # The old behaviour: post-route containment pads the tail's own wires too,
-    # and nothing clips the board to the tab past the connector's opening.
+    # With the tail-wire hold and the clip to the tab disabled, post-route
+    # containment pads the tail's own wires too, and nothing clips the board to
+    # the tab past the connector's opening; the DRC reports the result.
     monkeypatch.setattr(main, "tail_wire_hold", lambda layout: None)
     monkeypatch.setattr(main, "_clip_board_to_connector_tab", lambda *a, **k: False)
     resp = _generate(**FULL_WIDTH["30pin_15x15"])
@@ -164,7 +165,6 @@ def test_case_neck_is_not_the_connector():
     # A tail wider than the connector steps in to the tab at its end: the case
     # must not take the tab for the cable and seal the connector inside.
     from opentac.cad.pipeline.case import _tail_neck
-    board = [(-20, 0), (20, 0), (20, 40), (-20, 40)]
     tail = [(-18, 0), (-18, -14.75), (-15.25, -14.75), (-15.25, -18), (15.25, -18), (15.25, -14.75),
             (18, -14.75), (18, 0)]
     outline = [(-20, 0), *tail, (20, 0), (20, 40), (-20, 40)]
@@ -181,8 +181,8 @@ def _ring(points, src="board"):
 def _tab_board(slit=False):
     """A board cut open at y=0 between x=-5 and 5, and a 'connector' tab below
     it from those two open ends. slit: the board runs on 4 mm past the opening
-    beside the tab, as the bug did, and back up to the open end 0.02 mm from
-    the tab's side."""
+    beside the tab and back up to the open end 0.02 mm from the tab's side,
+    which a fab would mill as a slit."""
     def lines(points, src):
         return [(np.array(a, float), np.array(b, float), src) for a, b in zip(points[:-1], points[1:])]
 

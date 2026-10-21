@@ -6,8 +6,6 @@ manifest), keeps them through an edited export and a re-padding, and a
 
 import base64
 import io
-import os
-import sys
 import zipfile
 
 
@@ -95,10 +93,10 @@ def test_drc_checks_each_copper_layer_on_its_own():
 
 
 def test_a_near_miss_drops_the_taxel_beside_it_not_the_grid():
-    # T at 3mm, 4 layers, fixed outline: the densest grid (127) has one column
-    # wire 0.055mm too near the tail shoulder. Giving up the taxel beside it
-    # keeps the grid (126); regrowing the band and re-packing used to ship 121,
-    # fewer than the same board on 2 layers (123).
+    # T at 3 mm, 4 layers, fixed outline: the densest grid (127 taxels) has one
+    # column wire 0.055 mm too near the tail shoulder. Giving up the taxel
+    # beside it keeps the grid (126 taxels), more than the same board carries
+    # on 2 layers; regrowing the band and re-packing would ship fewer.
     four = _generate(4, "fixed_keepout")
     two = _generate(2, "fixed_keepout")
     assert four.drc["violations"] == 0
@@ -112,8 +110,8 @@ ROBOT_09X26 = [[-37.5, 0.0], [37.5, -0.0], [37.5, 28.37], [-37.5, 28.37], [-37.9
 @pytest.mark.parametrize("layers", [2, 4])
 def test_bent_tail_then_bigger_connector_exports(layers):
     # A bent tail extension, then a bigger connector on the routed board, then
-    # the export: the shoulder's corner fill came back with a bare line in it
-    # and the export crashed ('LineString' object has no attribute 'exterior').
+    # the export: the export succeeds when the shoulder's corner fill contains
+    # a bare line rather than a polygon.
     import math
     r = main.generate(main.GenerateRequest(outline=ROBOT_09X26, router="hug", board_mode="expand",
                                            pixel_w_mm=3.0, pixel_h_mm=3.0,

@@ -1,7 +1,7 @@
 {
  "_readme": [
-  "DeviceConfig bytes (hex) built by the original stm_test/tactile_imu_fast_cfg/opentac_device.py (2026-09-29) from each example manifest's file bytes. NODE16 and READOUT32 use its own BOARD_MAPS; READOUT60 uses its extract() with the pad map line = 62 - pad. null = refused.",
-  "2026-10-16: finger_8x6_60pin and square_9x9_60pin gained the edge_cuts corner the exporter used to drop; their READOUT60 config_id (crc32 of the file bytes) and trailing crc were recomputed, the only bytes that depend on the file."
+  "Reference DeviceConfig bytes (hex) for each example manifest in examples/manifests/ on each board, built from the manifest's file bytes. READOUT60 uses the pad map line = 62 - pad. null = refused.",
+  "The config_id field (CRC-32 of the manifest's file bytes) and the trailing CRC depend on the exact bytes of the file, so any edit to an example manifest changes them."
  ],
  "finger_8x6_60pin.json": {
   "NODE16": null,

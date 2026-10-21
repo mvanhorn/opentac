@@ -1,22 +1,17 @@
-"""A board exported before the design block must still be usable.
+"""A board exported without a design block is still usable.
 
-Real boards were fabricated from manifests that carry geometry and nothing
-else. Their owner needs a case and a bump sheet for the boards on the bench —
-which is a question about geometry, and geometry is exactly what those files
-have.
+Boards have been fabricated from manifests that carry geometry and nothing
+else. A case and a bump sheet for such a board are a question of geometry,
+which those files contain.
 
-The thing being defended here is FIDELITY, not merely "it loads". The
-temptation is to re-generate the board from what can be inferred and hand back
-something that looks right. That was tried and measured: taxel centres come
-back bit-exact, but the cut boundary does not (452 stored points against 492
-fresh, because the outline stitching changed), so a case printed from it would
-fit a board that is subtly not the one that was manufactured. Every assertion
-below is therefore against the STORED geometry, not against a regenerated one.
+The property tested here is fidelity, not merely that the file loads.
+Re-generating the board from what can be inferred gives bit-exact taxel
+centres but a different cut boundary, so a case printed from it would fit a
+board that differs slightly from the one manufactured. Every assertion below
+is therefore against the stored geometry, not against a regenerated one.
 """
 import copy
 import json
-import sys
-import os
 
 
 import numpy as np
@@ -35,7 +30,7 @@ LSHAPE = [[0, 0], [40, 0], [40, 18], [18, 18], [18, 40], [0, 40]]
 
 
 def _v3(outline, **kw):
-    """A current export, stripped back to what a pre-2026-09 manifest held."""
+    """A current export, stripped back to a version 3 manifest (no design block)."""
     import base64, io, zipfile
     resp = generate(GenerateRequest(outline=outline, router="hug",
                                     board_mode="expand", **kw))
@@ -59,8 +54,8 @@ def test_it_opens_in_geometry_mode(legacy):
     # The caller must be told what it cannot do, not left to discover it.
     joined = " ".join(op.warnings).lower()
     assert "route" in joined and ("gerber" in joined or "export" in joined)
-    # Nothing to re-generate from: offering params here would invite exactly
-    # the regeneration this path exists to avoid.
+    # Nothing to re-generate from: offering params here would invite the
+    # regeneration that this path avoids.
     assert op.params == {} and op.routes == []
 
 
@@ -93,11 +88,9 @@ def test_the_board_is_the_stored_one_not_a_regenerated_one(legacy):
 def test_it_carries_the_preview_box_the_editor_needs(legacy):
     """The route editor converts mm to SVG through edit_data["preview"].
 
-    It does that on load() even when there is nothing to edit, so a recovered
-    board without this key threw `Cannot read properties of undefined
-    (reading 'xmin')` the instant it reached the canvas -- caught only by
-    driving the real page. The box must also match the SVG's own viewBox, or
-    every overlay lands somewhere else.
+    It does so on load() even when there is nothing to edit, so a recovered
+    board needs this key. The box also matches the SVG's own viewBox;
+    otherwise every overlay would land in the wrong place.
     """
     op = open_design(OpenDesignRequest(file=legacy))
     box = op.edit_data.get("preview")
@@ -116,10 +109,10 @@ def test_it_carries_the_preview_box_the_editor_needs(legacy):
 
 
 def test_pitch_comes_from_the_taxels_not_from_px_py(legacy):
-    """px/py are pad-ordered and py can be negative — the manifest says so.
+    """px/py are pad-ordered and py can be negative, as the manifest states.
 
-    Reading them as the pitch is the obvious mistake, and on a board whose row
-    pads are split it silently produces a case with the wrong taxel spacing.
+    Read as the pitch, they would give a board whose row pads are split a case
+    with the wrong taxel spacing.
     """
     poisoned = copy.deepcopy(legacy)
     poisoned["px"] = 99.0
@@ -135,7 +128,8 @@ def test_pitch_comes_from_the_taxels_not_from_px_py(legacy):
     (LSHAPE, dict(pixel_w_mm=3, pixel_h_mm=3, pitch_x_mm=3.2, pitch_y_mm=3.2)),
 ])
 def test_a_recovered_board_builds_a_case_and_a_bump_sheet(outline, kw):
-    """The whole point: a physical part for a board that already exists."""
+    """A recovered board yields a case and a bump sheet: physical parts for a
+    board that already exists."""
     ed = open_design(OpenDesignRequest(file=_v3(outline, **kw))).edit_data
 
     c = case(CaseRequest(edit_data=ed))
@@ -149,11 +143,11 @@ def test_a_recovered_board_builds_a_case_and_a_bump_sheet(outline, kw):
 
 
 def test_the_case_is_built_on_the_stored_board():
-    """A case for a fabricated board must follow the fabricated edge.
+    """A case for a fabricated board follows the fabricated edge.
 
-    Pinned by moving the stored boundary and checking the case moves with it:
-    if the recovery quietly re-derived the outline instead of using the file's,
-    this would produce the same case either way.
+    The test moves the stored boundary and checks that the case moves with it:
+    a recovery that re-derived the outline instead of using the file's would
+    produce the same case either way.
     """
     man = _v3(SQUARE, pixel_w_mm=4, pixel_h_mm=4, pitch_x_mm=4.2, pitch_y_mm=4.2)
     grown = copy.deepcopy(man)
@@ -166,13 +160,12 @@ def test_the_case_is_built_on_the_stored_board():
 
 
 def test_the_ring_cleanup_is_checked_not_trusted():
-    """The cleanup must refuse to move a real edge.
+    """The cleanup does not move a real edge.
 
-    shapely's own hausdorff_distance returned NaN on some of these real
-    boundaries, and NaN fails every `>` comparison — so a guard written the
-    obvious way waves every cleanup through without ever checking it. Here the
-    stored ring is given a genuine 2mm spike: keeping it is fine, quietly
-    smoothing it away is not.
+    shapely's hausdorff_distance can return NaN on such boundaries, and NaN
+    fails every `>` comparison, so a guard written as a plain comparison would
+    accept every cleanup unchecked. Here the stored ring is given a 2 mm spike,
+    which the cleanup keeps.
     """
     man = _v3(SQUARE, pixel_w_mm=4, pixel_h_mm=4, pitch_x_mm=4.2, pitch_y_mm=4.2)
     ring = [list(p) for p in man["edge_cuts"]]
@@ -188,7 +181,7 @@ def test_the_ring_cleanup_is_checked_not_trusted():
 
 
 def test_a_current_export_is_untouched_by_this_path():
-    """A modern ZIP must still restore exactly, not fall into geometry mode."""
+    """A current ZIP restores exactly and does not fall into geometry mode."""
     import base64, io, zipfile
     resp = generate(GenerateRequest(outline=SQUARE, router="hug", board_mode="expand",
                                     pixel_w_mm=4, pixel_h_mm=4,
@@ -198,7 +191,7 @@ def test_a_current_export_is_untouched_by_this_path():
     assert open_design(OpenDesignRequest(file=json.loads(z.read("manifest.json")))).mode == "recipe"
 
 
-def test_junk_still_says_why():
+def test_invalid_file_says_why():
     with pytest.raises(HTTPException) as e:
         open_design(OpenDesignRequest(file={"pixels": [[0, 0, 0, 0]], "outline": [[0, 0]]}))
     assert e.value.status_code == 400 and "outline" in e.value.detail.lower()

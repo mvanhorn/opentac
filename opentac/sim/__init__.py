@@ -15,11 +15,11 @@ Two models:
   2x2 taxels. Not validated against hardware.
 
 The manifest cannot tell the two apart: OpenTac-CAD writes a `shear` block
-(where bumps WOULD go) on every export, printed sheet or not. So the default
+(where bumps would go) on every export, printed sheet or not. So the default
 is always "foam"; pass model="mujoco" if you print the bump sheet.
 
 Frames come back in newtons ("N"), or in ADC counts if you give a `readout`.
-See docs/sim.md.
+See https://opentac.github.io/sim/.
 """
 from __future__ import annotations
 
@@ -38,8 +38,8 @@ __all__ = ["Sensor", "FoamSensor", "MujocoSensor", "Readout", "available_profile
 
 MODELS = ("foam", "mujoco")
 
-# Full-solver twist: the ball turns in steps of 1/3 degree, 26 solver steps
-# each -- the rate TactileSim's stage-3 run used (14 degrees over 42 steps).
+# Full-solver twist: the ball turns in steps of 1/3 degree (14 degrees over
+# 42 steps), 26 solver steps each.
 _TWIST_STEP_DEG = 14.0 / 42.0
 _TWIST_SOLVER_STEPS = 26
 
@@ -214,7 +214,7 @@ class MujocoSensor(_Base):
         breakaway and slip appear in order.
 
         The surrogate holds the normal force constant while the object turns.
-        The full solver holds the ball's HEIGHT, so its normal force can drift
+        The full solver holds the ball's height, so its normal force can drift
         (12.3 N -> 16.6 N over 14 degrees on tests/sim/fixtures/flat_square.json
         at e_eff_mpa=3.5).
         """

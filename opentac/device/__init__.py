@@ -7,7 +7,8 @@
     frame = s.read()             # opentac.frame.Frame, taxels in manifest `pixels` order
 
 Bus nodes (many boards behind one Teensy 4.0): `Sensor(node=2)`, or `Bus()` for
-all of them. See docs/use/sensor.md and docs/reference/protocol.md.
+all of them. See https://opentac.github.io/use/sensor/ and
+https://opentac.github.io/reference/protocol/.
 """
 from opentac.device.config import Board, board, boards, build_config, device_config, extract, fits
 from opentac.device.protocol import BoardFrame, DeviceError, parse_frame

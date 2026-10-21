@@ -128,7 +128,7 @@ def not_found(what: str, found: dict, hint: str = "") -> NoDeviceError:
                f"no other program (a viewer) holding its port?")
         if "board" in what:
             msg += (" A new board has no firmware yet: put it on with `opentac flash` "
-                    "(docs/use/flash.md).")
+                    "(https://opentac.github.io/use/flash/).")
     return NoDeviceError(msg, found)
 
 
