@@ -1,7 +1,7 @@
 """Outline construction and validation for OpenTac-CAD.
 
 Everything here exists to keep a generated outline out of the failure modes
-documented in NOTES.md ("The cable edge must be a real edge") and in
+documented in SKILL.md ("The cable edge must be a real edge") and in
 pipeline/geometry.py's winding handling. Build outlines with these functions
 rather than emitting raw coordinate lists.
 """
@@ -61,7 +61,7 @@ def resample_closed(pts: np.ndarray, n: int = 240, smooth: bool = True) -> np.nd
             # A spline through sparse vertices overshoots between them. That is
             # what you want on control points sketching an organic shape, and
             # destructive on geometry that already has real straight edges: an
-            # 8-vertex face unrolled from an STL went from 28x79mm to 51x83mm.
+            # 8-vertex face unrolled from an STL grows from 28x79mm to 51x83mm.
             # If the curve leaves the source outline's envelope, it is
             # inventing shape, so keep the corners instead.
             grew = np.ptp(curve, axis=0) / np.maximum(np.ptp(pts, axis=0), 1e-9)
@@ -91,13 +91,13 @@ def with_flat_cable_edge(pts: np.ndarray, side: str = "bottom",
     to lay that edge horizontal. Sample a curve naively and edge 0->1 is a
     short chord at whatever angle the sampling happened to land on — the board
     rotates by that angle and the axis-aligned taxel grid skews across the
-    shape. Measured on a 270mm insole: a 20.4 degree accidental rotation cost
-    40% of the taxels, grew the board from 100mm to 147mm wide, and produced
-    61 DRC violations.
+    shape. On a 270mm insole, a 20.4 degree accidental rotation costs 40% of
+    the taxels, widens the board from 100mm to 147mm, and produces 61 DRC
+    violations.
 
-    So the flat edge is cut, not hoped for: slice the shape with a straight
-    line far enough in that the cut is `width_mm` wide, keep the larger piece,
-    and rotate the vertex array so that cut is edge 0->1.
+    So the flat edge is cut explicitly: slice the shape with a straight line
+    far enough in that the cut is `width_mm` wide, keep the larger piece, and
+    rotate the vertex array so that cut is edge 0->1.
     """
     if side not in _SIDES:
         raise ValueError(f"side must be one of {sorted(_SIDES)}, got {side!r}")
@@ -190,7 +190,8 @@ def validate(pts: np.ndarray, rows: int | None = None, cols: int | None = None,
     """Return a list of problems with this outline. Empty list means good.
 
     Runs before generating, because every check here costs microseconds and
-    the generate it guards costs 7-40 seconds.
+    the generate it guards takes about 1-6 s in grow mode and 10-45 s in
+    fixed mode on a laptop.
     """
     problems: list[str] = []
     pts = np.asarray(pts, float)
