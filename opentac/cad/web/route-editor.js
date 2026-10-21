@@ -647,10 +647,10 @@ export function createRouteEditor({
   async function exportEdited({ download = false, renderPreview = false } = {}) {
     if (!hasEditableRoutes()) return false;
     setStatus(download
-      ? "Building edited ZIP..."
+      ? "Building edited ZIP…"
       : renderPreview
-        ? "Building tail extension preview..."
-        : "Checking edited-route DRC...");
+        ? "Building tail extension preview…"
+        : "Checking edited-route DRC…");
     const sig = boardSignature();
     const resp = await fetch(`${apiBase}/export-edited`, {
       method: "POST",
@@ -693,7 +693,7 @@ export function createRouteEditor({
 
   async function redoPadding() {
     if (!hasEditableRoutes()) return;
-    setStatus("Recalculating final board padding from current routes...");
+    setStatus("Recalculating final board padding from current routes…");
     const resp = await fetch(`${apiBase}/redo-padding`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
