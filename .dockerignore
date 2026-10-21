@@ -1,7 +1,6 @@
 .git
 .venv
 **/__pycache__
-docs
 hardware
 # firmware sources stay out; the prebuilt binaries are package data (pyproject force-include)
 firmware/*
