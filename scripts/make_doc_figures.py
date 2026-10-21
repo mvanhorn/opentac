@@ -148,9 +148,8 @@ def draw_taxels(ax, xy, w, h, values, cmap, vmin, vmax, outline=None, edge="none
 # ------------------------------------------------- design: board modes ----
 
 def fig_modes():
-    """The Arch example three ways: grow/2 layers, fixed/2 layers, fixed/4 layers, at one scale."""
-    runs = [("expand", 2, "Grow, 2 layers"), ("fixed_keepout", 2, "Fixed outline, 2 layers"),
-            ("fixed_keepout", 4, "Fixed outline, 4 layers")]
+    """The Arch example in grow mode (the default) on 2 and on 4 copper layers, at one scale."""
+    runs = [("expand", 2, "Grow, 2 layers"), ("expand", 4, "Grow, 4 layers")]
     panels = []
     for mode, layers, label in runs:
         svg, man, stats, drc = generate(ARCH, board_mode=mode, copper_layers=layers, **GRID_3MM)
@@ -163,7 +162,7 @@ def fig_modes():
                            label=label, drc=drc["violations"]))
         log(f"  arch {label}: {stats['total_pixels']} taxels, DRC {drc['violations']}, tail "
             f"{stats.get('tail_length_mm')} mm ({stats.get('tail_length_reason')})")
-    # One scale (mm) for all three, with the tops of the drawn shapes on one line.
+    # One scale (mm) for both, with the tops of the drawn shapes on one line.
     gap, head = 6.0, 15.0
     base = max(p["top"] for p in panels)
     H = head + max(base - p["top"] + p["h"] for p in panels)
