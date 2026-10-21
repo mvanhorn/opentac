@@ -3,3 +3,6 @@ contact_links:
   - name: Documentation
     url: https://opentac.github.io/get-started/
     about: Designing, ordering, assembling and reading a sensor, step by step.
+  - name: Questions and discussion
+    url: https://github.com/opentac/opentac/discussions
+    about: Ask how to design, build or use a sensor, or share what you made.

@@ -76,6 +76,10 @@ the reason is not obvious. Examples from the history:
 Documentation is plain: what to do, what was measured, with numbers. If a page states a number,
 say where it comes from.
 
+## Ask a question
+
+Ask questions and share designs in [GitHub Discussions](https://github.com/opentac/opentac/discussions).
+
 ## Report a problem
 
 Open an issue with the bug report form. For a problem with a board or a sensor, include:
