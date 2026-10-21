@@ -1,13 +1,13 @@
 {
   "_readme": [
-    "OpenTactileCAD sensor manifest. Lengths in mm.",
+    "OpenTac-CAD sensor manifest. Lengths in mm.",
     "Coordinates are Y-UP and share one frame (cable edge horizontal at the bottom), so 'outline', 'edge_cuts' and 'pixels' overlay directly. The KiCad export negates Y.",
-    "'edge_cuts' is the board that gets MANUFACTURED (grown board + cable tail + connector envelope). 'outline' is only the shape the user drew - smaller, and not the cut boundary.",
+    "'edge_cuts' is the board that gets manufactured (grown board + cable tail + connector envelope). 'outline' is only the shape the user drew - smaller, and not the cut boundary.",
     "'pixels' is [x, y, row_index, col_index] per active taxel and is the authority on where taxels physically sit.",
-    "'ox'/'oy'/'px'/'py'/'m'/'rp'/'cp' are for MCU scan order, NOT geometry: their row index is pad order, which is deliberately not geometric order, so 'py' can be negative and ox+ci*px does not reproduce positions. Use 'pixels' for geometry.",
+    "'ox'/'oy'/'px'/'py'/'m'/'rp'/'cp' are for MCU scan order, not geometry: their row index is pad order, which is deliberately not geometric order, so 'py' can be negative and ox+ci*px does not reproduce positions. Use 'pixels' for geometry.",
     "'w'/'h' are one taxel's footprint size; 'footprint' holds the rest of the parameters needed to redraw its interdigitated copper.",
-    "'shear' says which taxels share a shear bump. 'shear.bumps' are bump centres in the same frame as 'pixels'; 'shear.b' is parallel to 'pixels' and gives each taxel's bump index, or -1 for a taxel with no bump above it (pressure only, no shear). Shear direction is the differential across the taxels of one group, signed by (pixel - bump centre); a group of fewer than 4 is a block the outline cut short and is degenerate on any axis with taxels on one side only. The bump SHEET is optional and its height/taper are chosen when it is built, so they are not here - this is only where bumps would go.",
-    "'design' is the RECIPE: every input OpenTactileCAD needs to rebuild this board. Open this file in the app to keep editing the design. Everything above it describes the RESULT and is ignored on import. design.json, beside this file in the ZIP, additionally restores hand-edited routes and is tied to the pipeline version that wrote it; 'design' here survives a version change."
+    "'shear' says which taxels share a shear bump. 'shear.bumps' are bump centres in the same frame as 'pixels'; 'shear.b' is parallel to 'pixels' and gives each taxel's bump index, or -1 for a taxel with no bump above it (pressure only, no shear). Shear direction is the differential across the taxels of one group, signed by (pixel - bump centre); a group of fewer than 4 is a block the outline cut short and is degenerate on any axis with taxels on one side only. The bump sheet is optional and its height/taper are chosen when it is built, so they are not here - this is only where bumps would go.",
+    "'design' is the recipe: every input OpenTac-CAD needs to rebuild this board. Open this file in the app to keep editing the design. Everything above it describes the result and is ignored on import. design.json, beside this file in the ZIP, additionally restores hand-edited routes and is tied to the pipeline version that wrote it; 'design' here survives a version change."
   ],
   "v": 6,
   "units": "mm",
@@ -1248,7 +1248,7 @@
     "111111"
   ],
   "design": {
-    "app": "OpenTactileCAD",
+    "app": "OpenTac-CAD",
     "schema": 1,
     "pipeline": "2026.09.04",
     "router": "hug",

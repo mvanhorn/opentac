@@ -1,13 +1,13 @@
 {
  "_readme": [
-  "Sensor manifest IMPORTED from a KiCad board that OpenTactileCAD did not generate (see 'source'). Same keys and meanings as an OTC export; lengths in mm.",
+  "Sensor manifest imported from a KiCad board that OpenTac-CAD did not generate (see 'source'). Same keys and meanings as an OpenTac-CAD export; lengths in mm.",
   "Frame is Y-UP, rotated so the cable tail points down; x=0 is the connector, y=0 the lowest point of the board edge. 'outline', 'edge_cuts' and 'pixels' overlay directly.",
-  "'edge_cuts' is the manufactured board edge, curves flattened to <=0.1 mm segments. There is no separately drawn shape for a board made outside OTC, so 'outline' is the same ring.",
+  "'edge_cuts' is the manufactured board edge, curves flattened to <=0.1 mm segments. There is no separately drawn shape for a board made outside OpenTac-CAD, so 'outline' is the same ring.",
   "'pixels' is [x, y, row_index, col_index] per taxel, at the taxel copper centre, and is the authority on where taxels sit.",
   "'w'/'h' are one taxel's copper bounding box, read from its footprint. If 'pixel_rot_deg' is non-zero, every taxel is rotated by that angle (CCW) about its centre in this frame.",
-  "Scan order is OTC's: row_index/col_index are the rank of the net's CONNECTOR PAD among the row (column) pads, in ascending pad order - not the net name's number, not position. 'rp'/'cp' are those pad numbers; 'rn'/'cn' the net names in the same order. Pads are numbered by POSITION in OTC's convention - pad 1 at the left end with the tail down, seen from the top - because that is how the readout meets them. Where the board's footprint numbers them otherwise, its own numbers are in 'rp_footprint'/'cp_footprint'.",
-  "'ox'/'oy'/'px'/'py' are derived exactly as OTC derives them, for older MCU code. They are not geometry and on a hand-laid board ox+ci*px will not reproduce positions. Use 'pixels'.",
-  "'shear' groups taxels that share a bump: 2x2 blocks ASSIGNED on a uniform grid, pairing lattice rows and columns from the grid's edge. The layout has no gaps to recover them from; the grouping comes from the bump sheet. 'shear.bumps' are block centres; 'shear.b' is parallel to 'pixels' and gives each taxel's block, or -1 if none. Shear direction is the differential within a block, signed by (pixel - bump centre)."
+  "Scan order is OpenTac-CAD's: row_index/col_index are the rank of the net's connector pad among the row (column) pads, in ascending pad order - not the net name's number, not position. 'rp'/'cp' are those pad numbers; 'rn'/'cn' the net names in the same order. Pads are numbered by position in OpenTac-CAD's convention - pad 1 at the left end with the tail down, seen from the top - because that is how the readout meets them. Where the board's footprint numbers them otherwise, its own numbers are in 'rp_footprint'/'cp_footprint'.",
+  "'ox'/'oy'/'px'/'py' are derived exactly as OpenTac-CAD derives them, for older MCU code. They are not geometry and on a hand-laid board ox+ci*px will not reproduce positions. Use 'pixels'.",
+  "'shear' groups taxels that share a bump: 2x2 blocks assigned on a uniform grid, pairing lattice rows and columns from the grid's edge. The layout has no gaps to recover them from; the grouping comes from the bump sheet. 'shear.bumps' are block centres; 'shear.b' is parallel to 'pixels' and gives each taxel's block, or -1 if none. Shear direction is the differential within a block, signed by (pixel - bump centre)."
  ],
  "v": 5,
  "units": "mm",
@@ -15,7 +15,7 @@
   "file": "MD_sensor_32x32_FPC_connector.kicad_pcb",
   "sha256": "6d3b6b32a5b4e39b7d406ec5079b7c9d8df35c82c10e132936f2cb7887cd677c",
   "kicad": "9.0",
-  "importer": "kicad_to_manifest.py",
+  "importer": "KiCad board import",
   "taxel_footprint": "KiCAD Library:sensor_2mmx2mm",
   "connector_footprint": "KiCAD Library:70_pos_0.5mm_FPC",
   "connector_numbering": "renumbered_by_position"
