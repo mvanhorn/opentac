@@ -1,7 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 SO-101 MuJoCo Tactile contributors.
-# From TactileSim (tests/tactilesim/test_contracts.py, test_logic_audit.py, test_loader.py,
-# test_readout.py); modified for OpenTac.
 """The bump model's core (opentac.sim.mujoco): force solve, input checks, moment split, readout checks.
 
 Each test pins a case in which an unchecked model returns a plausible but

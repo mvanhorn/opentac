@@ -1,7 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 SO-101 MuJoCo Tactile contributors.
-# The bump body (frustum_vertices, add_bump) is from TactileSim
-# (tactilesim/lumped/mjcf.py); the scene builders are OpenTac's. Modified for OpenTac.
 """MJCF generation for bump lattices, the gripper and real sensors.
 
 Every bump is a rigid elliptical frustum on a compliant joint: a slide along Z

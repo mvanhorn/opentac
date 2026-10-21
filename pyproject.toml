@@ -4,8 +4,7 @@ version = "0.1.0.dev0"
 description = "OpenTac: design, build, read and simulate custom tactile sensors"
 readme = "README.md"
 requires-python = ">=3.12"
-# MIT, except the files that NOTICE lists (from TactileSim), which are Apache-2.0
-license = "MIT AND Apache-2.0"
+license = "MIT"
 keywords = [
     "tactile sensing", "tactile sensor", "robotics", "flex PCB", "PCB design",
     "KiCad", "piezoresistive", "velostat", "simulation", "MuJoCo",

@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 SO-101 MuJoCo Tactile contributors.
-# From TactileSim (tactilesim/lumped/surrogate.py); modified for OpenTac.
 """Quasi-static bump loads (an analytic Winkler foundation) and a Coulomb brush model for shear.
 
 Bumps are mechanically independent: the slits of OpenTac-CAD's bump sheet cut

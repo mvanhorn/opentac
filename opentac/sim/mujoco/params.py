@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 SO-101 MuJoCo Tactile contributors.
-# From TactileSim (tactilesim/sensor/params.py); modified for OpenTac.
 """Bump geometry and the lumped-element stiffnesses derived from it; lengths in mm.
 
 Geometry names mirror OpenTac-CAD's `pipeline/bump_sheet.py::BumpParams`, so a

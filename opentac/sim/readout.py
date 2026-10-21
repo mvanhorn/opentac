@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 SO-101 MuJoCo Tactile contributors.
-# Input checks and profile lookup from TactileSim (tactilesim/readout.py); modified for OpenTac.
 """Taxel force -> ADC counts, from a measured velostat calibration.
 
 Everything else in this package ends in newtons per taxel. A real board streams

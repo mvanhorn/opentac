@@ -13,8 +13,7 @@ Two ways to get a reading:
   and presses a ball into it. Needs `mujoco` (the `sim` extra).
 
 The core (params.py, loader.py, surrogate.py, and the bump body of mjcf.py)
-is TactileSim's lumped model by Jiafeng Gu, under the Apache License 2.0 (see
-NOTICE). It checks the manifest and the parameters on loading, solves the
+is the TactileSim lumped model by Ariel Slepyan and Jiafeng Gu. It checks the manifest and the parameters on loading, solves the
 press for the requested total force over a bracketing interval, and splits
 each bump's base moment over its taxels by least squares.
 

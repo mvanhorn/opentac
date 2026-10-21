@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 SO-101 MuJoCo Tactile contributors.
-# From TactileSim (tactilesim/sensor/loader.py); modified for OpenTac.
 """A real OpenTac-CAD sensor from its manifest, with the analytic bump readout.
 
 A real board is not a regular lattice: it has an irregular outline, removed

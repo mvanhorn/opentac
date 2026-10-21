@@ -141,9 +141,5 @@ See [CITATION.cff](CITATION.cff) and the [paper page](https://opentac.github.io/
 
 Code: MIT ([LICENSE](LICENSE)). Hardware designs: CERN-OHL-P-2.0 ([LICENSE-hardware](LICENSE-hardware)).
 Documentation and media: CC BY 4.0 ([LICENSE-docs](LICENSE-docs)).
-The core of the bump model, `opentac/sim/mujoco/` `params.py`, `loader.py`, `surrogate.py` and
-`mjcf.py`, together with `opentac/sim/readout.py` and `tests/sim/test_bump_core.py`, derives from
-TactileSim (Jiafeng Gu) and is Apache-2.0 ([LICENSE-Apache-2.0](LICENSE-Apache-2.0));
-[NOTICE](NOTICE) carries TactileSim's notice.
 Third-party robot meshes in `examples/stl/` keep their own licenses, some of them non-commercial;
 see [examples/stl/end_effectors/SOURCES.md](examples/stl/end_effectors/SOURCES.md).
